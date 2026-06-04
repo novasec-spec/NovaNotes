@@ -7,6 +7,8 @@ import {
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { useNavigation } from '@react-navigation/native';
+import DeveloperInfoModal from './DeveloperInfoModal';
 
 const { width: W } = Dimensions.get('window');
 
@@ -25,21 +27,21 @@ const MESSAGES_FROM_ME: SecretNote[] = [
     id:       'from-me-001',
     title:    'Just thinking of you 💭',
     text:     'I wanted you to find this. You are the most beautiful thing that has ever happened to me. I love you more than any words in here could ever explain.',
-    date:     '2025-01-01T08:00:00.000Z',
+    date:     '2026-06-04T08:00:00.000Z',
     category: 'love',
     fromMe:   true,
     pinned:   true,
   },
   // ── ADD MORE MESSAGES HERE — they appear in her vault automatically ──────
-  // {
-  //   id:       'from-me-002',
-  //   title:    'Happy birthday my love 🎂',
-  //   text:     'Today is your day...',
-  //   date:     '2025-06-15T00:00:00.000Z',
-  //   category: 'milestone',
-  //   fromMe:   true,
-  //   pinned:   false,
-  // },
+   {
+     id:       'from-me-002',
+     title:    'Happy birthday my love 🎂',
+     text:     'Today is your day...',
+     date:     '2026-06-05T00:00:00.000Z',
+     category: 'milestone',
+     fromMe:   true,
+     pinned:   false,
+   },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -160,6 +162,7 @@ function NoteCard({
 
 // ══════════════════════════════════════════════════════════════════════════════
 export default function SecretVaultScreen() {
+ const [modalVisible, setModalVisible] = useState(false);
 
   // ── YOUR ORIGINAL STATE ───────────────────────────────────────────────────
   const [isUnlocked,      setIsUnlocked]      = useState(false);
@@ -167,8 +170,10 @@ export default function SecretVaultScreen() {
   const [secretMessages,  setSecretMessages]  = useState<SecretNote[]>([]);
   const [newMessage,      setNewMessage]      = useState('');
   const [showAddModal,    setShowAddModal]     = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
+ 
 
-  // ── NEW STATE ─────────────────────────────────────────────────────────────
+ // ── NEW STATE ─────────────────────────────────────────────────────────────
   const [filterCat,       setFilterCat]       = useState<string>('all');
   const [viewingNote,     setViewingNote]     = useState<SecretNote | null>(null);
   const [newTitle,        setNewTitle]        = useState('');
@@ -184,7 +189,7 @@ export default function SecretVaultScreen() {
   useEffect(() => {
     if (isUnlocked) loadSecretMessages();
   }, [isUnlocked]);
-
+   
   useEffect(() => {
     // Lock screen entrance animation
     Animated.parallel([
@@ -363,6 +368,15 @@ export default function SecretVaultScreen() {
           <TouchableOpacity style={styles.iconBtn} onPress={lockVault}>
             <Icon name="lock-closed" size={18} color={PINK} />
           </TouchableOpacity>
+      <TouchableOpacity
+      style={styles.iconBtn}   
+      onPress={() => setModalVisible(true)}>
+      <Icon name="information" size={18} color={PINK} />
+      </TouchableOpacity>
+      <DeveloperInfoModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+      />
         </View>
       </View>
 
@@ -485,7 +499,7 @@ export default function SecretVaultScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-            </ScrollView>
+               </ScrollView>
 
             {/* YOUR ORIGINAL buttons */}
             <View style={styles.modalButtons}>
@@ -533,6 +547,7 @@ export default function SecretVaultScreen() {
                     </View>
                   )}
 
+
                   {/* Content */}
                   <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
                     <Text style={styles.viewerTitle}>{viewingNote.title}</Text>
@@ -541,6 +556,8 @@ export default function SecretVaultScreen() {
                     </Text>
                     <Text style={styles.viewerText}>{viewingNote.text}</Text>
                   </ScrollView>
+
+
                 </View>
               );
             })()}
@@ -548,7 +565,111 @@ export default function SecretVaultScreen() {
         </View>
       </Modal>
 
+<InfoModalContent
+        visible={showInfoModal}
+        onClose={() => setShowInfoModal(false)}
+      />
+
     </SafeAreaView>
+  );
+}
+
+function InfoModalContent({ visible, onClose }) {
+  const technologies = [
+    { name: 'React Native', icon: 'logo-react', color: '#61DAFB', desc: 'Core framework' },
+    { name: 'Expo', icon: 'rocket', color: '#4630EB', desc: 'Build & deployment' },
+    { name: 'TypeScript', icon: 'code-slash', color: '#3178C6', desc: 'Type safety' },
+    { name: 'Supabase', icon: 'server', color: '#3ECF8E', desc: 'Backup & storage' },
+    { name: 'SecureStore', icon: 'lock-closed', color: '#FF6B9D', desc: 'PIN protection' },
+  ];
+
+  const features = [
+    '❤️ Daily mood tracking with emojis',
+    '📝 Private love notes section',
+    '📸 Shared memories gallery',
+    '🔒 Secret vault with PIN protection',
+    '🎵 Daily affirmations & quotes',
+    '💌 Push notifications from me',
+    '☁️ Cloud backup (your memories are safe)',
+  ];
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={infoStyles.overlay}>
+        <View style={infoStyles.modalContainer}>
+          {/* Header */}
+          <View style={infoStyles.header}>
+            <Text style={infoStyles.headerTitle}>✨ Developer Info</Text>
+            <TouchableOpacity onPress={onClose} style={infoStyles.closeButton}>
+              <Icon name="close" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Heart Icon */}
+            <View style={infoStyles.heartContainer}>
+              <Icon name="heart" size={50} color={PINK} />
+            </View>
+
+            {/* Main Message */}
+            <View style={infoStyles.messageBox}>
+              <Text style={infoStyles.messageTitle}>Made with 💕 for You</Text>
+              <Text style={infoStyles.messageText}>
+                Every line of code in this app was written with you in mind.
+                From the mood tracker to our secret vault, everything is designed
+                to remind you how much you're loved.
+              </Text>
+            </View>
+
+            {/* Developer Info */}
+            <View style={infoStyles.section}>
+              <Text style={infoStyles.sectionTitle}>👨‍💻 Created by</Text>
+              <Text style={infoStyles.devName}>Your Man</Text>
+              <Text style={infoStyles.devMessage}>
+                "You inspire me to learn, create, and love harder every day.
+                This app is my digital love letter to you."
+              </Text>
+            </View>
+
+            {/* Technologies Used */}
+            <View style={infoStyles.section}>
+              <Text style={infoStyles.sectionTitle}>🛠️ Built With</Text>
+              <View style={infoStyles.techGrid}>
+                {technologies.map((tech, index) => (
+                  <View key={index} style={infoStyles.techCard}>
+                    <Icon name={tech.icon} size={28} color={tech.color} />
+                    <Text style={infoStyles.techName}>{tech.name}</Text>
+                    <Text style={infoStyles.techDesc}>{tech.desc}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* Features List */}
+            <View style={infoStyles.section}>
+              <Text style={infoStyles.sectionTitle}>✨ Features</Text>
+              {features.map((feature, index) => (
+                <View key={index} style={infoStyles.featureItem}>
+                  <Text style={infoStyles.featureText}>{feature}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Version Info */}
+            <View style={infoStyles.versionBox}>
+              <Text style={infoStyles.versionText}>Version 1.0.0</Text>
+              <Text style={infoStyles.versionDate}>Released with love • June 2024</Text>
+              <Text style={infoStyles.versionDate}>For my special girl 💕</Text>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -631,4 +752,140 @@ const styles = StyleSheet.create({
   viewerTitle:      { fontSize: 24, fontWeight: '800', color: DARK, marginBottom: 6, lineHeight: 30 },
   viewerDate:       { fontSize: 13, color: SOFT, marginBottom: 18 },
   viewerText:       { fontSize: 16, color: DARK, lineHeight: 26 },
+});
+// Info Modal styles
+const infoStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    backgroundColor: '#FFF5F7',
+    borderRadius: 25,
+    width: '90%',
+    maxHeight: '85%',
+    overflow: 'hidden',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  closeButton: {
+    padding: 5,
+  },
+  heartContainer: {
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  messageBox: {
+    backgroundColor: '#FFE4E9',
+    padding: 20,
+    margin: 15,
+    borderRadius: 20,
+  },
+  messageTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: PINK,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  messageText: {
+    fontSize: 14,
+    color: '#555',
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  section: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 15,
+  },
+  devName: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: PINK,
+    marginBottom: 8,
+  },
+  devMessage: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+    lineHeight: 20,
+  },
+  techGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  techCard: {
+    width: '31%',
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  techName: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 8,
+    color: '#333',
+    textAlign: 'center',
+  },
+  techDesc: {
+    fontSize: 9,
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  featureItem: {
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  featureText: {
+    fontSize: 14,
+    color: '#555',
+  },
+  versionBox: {
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    padding: 20,
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 30,
+  },
+  versionText: {
+    fontSize: 12,
+    color: '#888',
+    marginBottom: 5,
+  },
+  versionDate: {
+    fontSize: 11,
+    color: '#aaa',
+    marginBottom: 3,
+  },
 });

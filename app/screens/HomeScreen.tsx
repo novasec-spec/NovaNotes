@@ -216,7 +216,7 @@ const navigation = useNavigation();
         >
           <View style={styles.headerLeft}>
             <Text style={styles.greeting}>{greeting}, My Love! 💕</Text>
-            <Text style={styles.subtitle}>You mean the world to me</Text>
+            <Text style={styles.subtitle}>You mean the world to me 🤣</Text>
           </View>
 
           {/* ── BACKUP BUTTON → moved to top-right corner icon ── */}
