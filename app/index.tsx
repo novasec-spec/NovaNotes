@@ -12,6 +12,7 @@ import NotesScreen from './screens/NotesScreen';
 import MemoriesScreen from './screens/MemoriesScreen';
 import VibeScreen from './screens/VibeScreen';
 import SecretVaultScreen from './screens/SecretVaultScreen';
+import Info from './screens/Info.tsx';
 import { testConnection } from '../utils/test';
 
 const Tab = createBottomTabNavigator();
@@ -47,9 +48,11 @@ export default function App() {
     return cleanup;
   };
 
+
   // Rest of your App component stays the same...
 
   return (
+    <SafeAreaProvider>
       <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
@@ -76,5 +79,6 @@ export default function App() {
         <Tab.Screen name="Vibe" component={VibeScreen} options={{ title: ' Today\'s Vibe' }} />
         <Tab.Screen name="Vault" component={SecretVaultScreen} options={{ title: ' Secret Vault' }} />
       </Tab.Navigator>
+</SafeAreaProvider>
   );
 }

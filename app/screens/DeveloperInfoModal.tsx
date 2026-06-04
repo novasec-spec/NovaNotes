@@ -1,5 +1,5 @@
 // DeveloperInfoModal.tsx
-import React from 'react';
+import React, {useState} from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 const PINK = '#FF6B9D';
 const { width } = Dimensions.get('window');
@@ -31,6 +32,25 @@ export default function DeveloperInfoModal({ visible, onClose }: DeveloperInfoMo
     { name: 'SecureStore', icon: 'lock-closed', color: '#FFB347', desc: 'PIN protection' },
     { name: 'React Navigation', icon: 'map', color: '#8E44AD', desc: 'Smooth navigation' },
   ];
+const [secretMessage, setSecretMessage] = useState('');
+
+const easterEggMessages = [
+  '💕 You clicked! I love you!',
+  '✨ Did you know? You make me smile every day',
+  '🌸 You\'re the best thing that happened to me',
+  '💫 This app exists because of YOU',
+  '🎀 Tap again for another surprise!',
+  '🌟 Every day with you is my favorite day',
+  '💝 You deserve all the happiness in the world',
+];
+
+const handleSecretTap = () => {
+  const random = easterEggMessages[Math.floor(Math.random() * easterEggMessages.length)];
+  setSecretMessage(random);
+  setTimeout(() => setSecretMessage(''), 3000);
+};
+
+
 
   const features = [
     '❤️ Daily mood tracking with emojis',
@@ -56,6 +76,8 @@ export default function DeveloperInfoModal({ visible, onClose }: DeveloperInfoMo
     { name: 'GitHub', icon: 'logo-github', url: 'https://github.com/novasec-spec', color: '#333' },
     { name: 'Portfolio', icon: 'globe', url: 'https://example.com', color: PINK },
   ];
+
+
 
   return (
     <Modal
@@ -163,7 +185,7 @@ export default function DeveloperInfoModal({ visible, onClose }: DeveloperInfoMo
 
             {/* Love Notes Section */}
             <View style={styles.loveNotesBox}>
-              <Icon name="cog" size={40} color={PINK} />
+              <Icon name="heart" size={40} color={PINK} />
               <Text style={styles.loveNotesTitle}>A Note From My Heart</Text>
               <Text style={styles.loveNotesText}>
                 Every time you open this app, remember that someone out there 
@@ -196,10 +218,14 @@ export default function DeveloperInfoModal({ visible, onClose }: DeveloperInfoMo
 
             {/* Version Info */}
             <View style={styles.versionBox}>
-              <Icon name="rocket" size={16} color="#aaa" />
-              <Text style={styles.versionText}>Version 1.0.0</Text>
-              <View style={styles.versionDivider} />
-              <Text style={styles.versionDate}>Released with love • December 2024</Text>
+<TouchableOpacity onPress={handleSecretTap}>
+  <Text style={styles.versionText}>Version 1.0.0</Text>
+ <Icon name="rocket" size={16} color="#aaa" />
+</TouchableOpacity>
+{secretMessage !== '' && (
+  <Text style={styles.secretMessage}>{secretMessage}</Text>
+)}
+              <Text style={styles.versionDate}>Released with love • June 2026</Text>
               <Text style={styles.versionSpecial}>✨ Made especially for my special girl ✨</Text>
               <View style={styles.heartsContainer}>
                 <Icon name="heart" size={12} color={PINK} />
@@ -253,7 +279,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  title: {
+  
+secretMessage: {
+  fontSize: 14,
+  color: PINK,
+  marginTop: 10,
+  textAlign: 'center',
+  fontWeight: '500',
+},
+
+title: {
     fontSize: 18,
     fontWeight: '600',
     color: PINK,

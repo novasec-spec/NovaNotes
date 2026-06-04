@@ -371,7 +371,7 @@ export default function SecretVaultScreen() {
       <TouchableOpacity
       style={styles.iconBtn}   
       onPress={() => setModalVisible(true)}>
-      <Icon name="information" size={18} color={PINK} />
+      <Icon name="cog" size={18} color={PINK} />
       </TouchableOpacity>
       <DeveloperInfoModal
         visible={modalVisible}

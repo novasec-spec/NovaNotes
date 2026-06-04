@@ -21,7 +21,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SupabaseBackup } from '../../services/supabaseBackup';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
-
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+// In DeveloperInfoModal.tsx
+import { ThemeProvider, useTheme } from '../../context/ThemeContext';
 
 const { width: W } = Dimensions.get('window');
 
@@ -192,6 +194,8 @@ const navigation = useNavigation();
 
   // ─────────────────────────────────────────────
   return (
+<ThemeProvider>
+<SafeAreaProvider>
     <View style={styles.root}>
 
       {/* ── Toast notification (replaces inline backup status) ── */}
@@ -338,8 +342,10 @@ const navigation = useNavigation();
 
         <View style={styles.bottomPadding} />
       </ScrollView>
-    </View>
-  );
+   </View>
+</SafeAreaProvider>
+</ThemeProvider> 
+ );
 }
 
 // ── Styles ────────────────────────────────────
