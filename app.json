@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "NovaNote",
@@ -27,13 +28,8 @@
       "jsEngine": "jsc",
       "package": "com.novasec.notes",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
+      "predictiveBackGestureEnabled": true,
       "permissions": [
-        "android.permission.INTERNET",
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.INTERNET",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
