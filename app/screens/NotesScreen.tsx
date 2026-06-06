@@ -43,12 +43,12 @@ import {
   Platform,
   KeyboardAvoidingView,
   StatusBar,
-  SafeAreaView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon   from 'react-native-vector-icons/Ionicons';
 import MCIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import FAIcon from 'react-native-vector-icons/FontAwesome5';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker   from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
 
@@ -555,6 +555,7 @@ function NoteCard({
   const sticker  = item.stickerIndex != null ? STICKER_OPTIONS[item.stickerIndex] : null;
 
   return (
+<SafeAreaView style={styles.root} edges={['top']}>
     <Animated.View
       style={[
         styles.noteCard,
@@ -654,6 +655,7 @@ function NoteCard({
         </View>
       </View>
     </Animated.View>
+</SafeAreaView>
   );
 }
 

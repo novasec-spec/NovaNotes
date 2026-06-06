@@ -3,13 +3,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet,
   Alert, Modal, Animated, ScrollView, KeyboardAvoidingView,
-  Platform, SafeAreaView, Dimensions,
+  Platform,  Dimensions,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import DeveloperInfoModal from './DeveloperInfoModal';
-
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 const { width: W } = Dimensions.get('window');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ function NoteCard({
   const cat = getCat(item.category);
 
   return (
-    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
+   <Animated.View style={{ opacity, transform: [{ translateY }] }}>
       <TouchableOpacity
         style={[styles.noteCard, { borderLeftColor: cat.color }]}
         onPress={onPress}
@@ -353,8 +353,7 @@ export default function SecretVaultScreen() {
   //  UNLOCKED SCREEN
   // ────────────────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: BG }}>
-
+<SafeAreaView style={styles.container} edges={['top']}>
       {/* ── Header ── */}
       <View style={styles.header}>
         <View>

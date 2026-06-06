@@ -26,6 +26,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "jsEngine": "jsc",
+      "googleServicesFile": "./google-services.json",
       "package": "com.novasec.notes",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": true,

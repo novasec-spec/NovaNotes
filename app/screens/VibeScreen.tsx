@@ -3,12 +3,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   Dimensions, Alert, TextInput, Modal, Animated,
-  KeyboardAvoidingView, Platform, SafeAreaView,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
 import MoodTracker from '../../components/MoodTracker';
-
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 const { width: W } = Dimensions.get('window');
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -280,7 +280,7 @@ export default function VibeScreen() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: BG }}>
+<SafeAreaView style={styles.container} edges={['top']}> 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
 
         {/* ── Header ── */}

@@ -22,7 +22,6 @@ import { SupabaseBackup } from '../../services/supabaseBackup';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-// In DeveloperInfoModal.tsx
 import { ThemeProvider, useTheme } from '../../context/ThemeContext';
 
 const { width: W } = Dimensions.get('window');
@@ -196,8 +195,7 @@ const navigation = useNavigation();
   return (
 <ThemeProvider>
 <SafeAreaProvider>
-    <View style={styles.root}>
-
+<SafeAreaView style={styles.root} edges={['top']}>
       {/* ── Toast notification (replaces inline backup status) ── */}
       {showBackupToast && (
         <Animated.View style={[styles.toast, { opacity: toastAnim }]}>
@@ -342,7 +340,7 @@ const navigation = useNavigation();
 
         <View style={styles.bottomPadding} />
       </ScrollView>
-   </View>
+</SafeAreaView>
 </SafeAreaProvider>
 </ThemeProvider> 
  );

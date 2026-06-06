@@ -3,11 +3,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, FlatList, Image, TouchableOpacity, StyleSheet,
   Modal, TextInput, Alert, ScrollView, Animated, Dimensions,
-  KeyboardAvoidingView, Platform, SafeAreaView,
+  KeyboardAvoidingView, Platform, 
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: W } = Dimensions.get('window');
 
@@ -212,8 +213,7 @@ export default function MemoriesScreen() {
 
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.container}>
-
+<SafeAreaView style={styles.root} edges={['top']}>
       {/* ── Header ── */}
       <View style={styles.header}>
         <View>
