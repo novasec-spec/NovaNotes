@@ -54,7 +54,7 @@ import NotesScreen       from './screens/NotesScreen';
 import MemoriesScreen    from './screens/MemoriesScreen';
 import VibeScreen        from './screens/VibeScreen';
 import SecretVaultScreen from './screens/SecretVaultScreen';
-import TokenManagerScreen from './screens/TokenManagerScreen';
+import Token from './screens/Token';
 
 // ── Service imports (YOUR ORIGINALS — untouched) ──────────────────────────────
 import { NotificationService } from '../services/notificationService';
@@ -74,7 +74,7 @@ const TAB_CONFIG: Record<string, {
   Memories:     { icon: 'images-outline',         iconActive: 'images',           iconLib: 'ion', color: '#F97316', label: '📸 Memories' },
   Vibe:         { icon: 'happy-outline',          iconActive: 'happy',            iconLib: 'ion', color: '#22C55E', label: '🎵 Vibe'     },
   Vault:        { icon: 'lock-closed-outline',    iconActive: 'lock-closed',      iconLib: 'ion', color: '#3B82F6', label: '🔒 Vault'    },
-  TokenManager: { icon: 'construct-outline',      iconActive: 'construct',        iconLib: 'ion', color: '#F59E0B', label: '🔧 Dev'      },
+  Token: { icon: 'construct-outline',      iconActive: 'construct',        iconLib: 'ion', color: '#F59E0B', label: '🔧 Dev'      },
 };
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               />
             </Animated.View>
             <Text style={[styles.tabLabel, { color, fontWeight: focused ? '800' : '500' }]} numberOfLines={1}>
-              {route.name === 'TokenManager' ? 'Dev' : route.name}
+              {route.name === 'Token' ? 'Dev' : route.name}
             </Text>
           </TouchableOpacity>
         );
@@ -405,8 +405,8 @@ export default function App() {
           {/* YOUR ORIGINAL conditional dev tab — untouched */}
           {isSecretVisible && (
             <Tab.Screen
-              name="TokenManager"
-              component={TokenManagerScreen}
+              name="Token"
+              component={Token}
               options={{ title: '🔧 Dev Tools' }}
             />
           )}
