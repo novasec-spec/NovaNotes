@@ -818,7 +818,7 @@ function NoteEditor({
           {/* Body input — YOUR ORIGINAL TextInput enhanced */}
           <TextInput
             style={styles.bodyInput}
-            placeholder="Write a sweet note..."
+            placeholder="Write a  note..."
             placeholderTextColor={TEXT_SOFT}
             value={body}
             onChangeText={t => t.length <= MAX_CHARS && setBody(t)}

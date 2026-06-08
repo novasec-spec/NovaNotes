@@ -5,7 +5,7 @@ import {
   Alert, Modal, Animated, ScrollView, KeyboardAvoidingView,
   Platform,  Dimensions,
 } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import DeveloperInfoModal from './DeveloperInfoModal';
@@ -227,7 +227,7 @@ export default function SecretVaultScreen() {
 
   // ── YOUR ORIGINAL loadSecretMessages — merges OTA messages from you ──────
   const loadSecretMessages = async () => {
-    const saved = await SecureStore.getItemAsync('secretMessages');
+    const saved = await AsyncStorage.getItem('secretMessages');
     const userNotes: SecretNote[] = saved ? JSON.parse(saved) : [];
 
     // Merge OTA messages — deduplicated by id so re-installs don't duplicate
@@ -238,7 +238,7 @@ export default function SecretVaultScreen() {
     // Save any new OTA messages into secure store so they persist
     if (newOTA.length > 0) {
       const all = [...userNotes, ...newOTA];
-      await SecureStore.setItemAsync('secretMessages', JSON.stringify(all));
+      await AsyncStorage.setItem('secretMessages', JSON.stringify(all));
     }
 
     setSecretMessages(merged);
@@ -260,7 +260,7 @@ export default function SecretVaultScreen() {
     // Persist only user-written notes (not OTA ones — those come from code)
     const userNotes = secretMessages.filter(n => !n.fromMe);
     const updatedUser = [note, ...userNotes];
-    await SecureStore.setItemAsync('secretMessages', JSON.stringify(updatedUser));
+    await AsyncStorage.setItem('secretMessages', JSON.stringify(updatedUser));
 
     // Re-merge with OTA for display
     setSecretMessages([...MESSAGES_FROM_ME, ...updatedUser]);
@@ -279,7 +279,7 @@ export default function SecretVaultScreen() {
           const userNotes    = secretMessages.filter(n => !n.fromMe && n.id !== id);
           const otaNotes     = secretMessages.filter(n => n.fromMe);
           const updatedUser  = secretMessages.filter(n => !n.fromMe && n.id !== id);
-          await SecureStore.setItemAsync('secretMessages', JSON.stringify(updatedUser));
+          await AsyncStorage.setItem('secretMessages', JSON.stringify(updatedUser));
           setSecretMessages([...otaNotes, ...updatedUser]);
           setViewingNote(null);
         },
@@ -353,7 +353,7 @@ export default function SecretVaultScreen() {
   //  UNLOCKED SCREEN
   // ────────────────────────────────────────────────────────────────────────
   return (
-<SafeAreaView style={styles.container} edges={['top']}>
+ <SafeAreaView style={styles.container} edges={['top']}>
       {/* ── Header ── */}
       <View style={styles.header}>
         <View>

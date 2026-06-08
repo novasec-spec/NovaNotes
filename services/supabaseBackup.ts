@@ -14,11 +14,12 @@ export class SupabaseBackup {
       console.log('📤 Starting backup for user:', this.userId);
       
       // Get all local data
-      const [notes, memories, moodHistory, secretMessages] = await Promise.all([
+      const [notes, memories, moodHistory, secretMessages, journalEntries] = await Promise.all([
         AsyncStorage.getItem('loveNotes'),
         AsyncStorage.getItem('memories'),
         AsyncStorage.getItem('moodHistory'),
-        AsyncStorage.getItem('secretMessages')
+        AsyncStorage.getItem('secretMessages'),
+        AsyncStorage.getItem('journalEntries')
       ]);
 
       const backupData = {
@@ -27,6 +28,7 @@ export class SupabaseBackup {
         memories: memories ? JSON.parse(memories) : [],
         mood_history: moodHistory ? JSON.parse(moodHistory) : [],
         secret_messages: secretMessages ? JSON.parse(secretMessages) : [],
+        journal_entries: journalEntries ? JSON.parse(journalEntries) : [],
         last_backup: new Date().toISOString(),
       };
 
@@ -119,7 +121,8 @@ async getPushToken(): Promise<string | null> {
         if (data.mood_history) await AsyncStorage.setItem('moodHistory', JSON.stringify(data.mood_history));
         if (data.secret_messages) await AsyncStorage.setItem('secretMessages', JSON.stringify(data.secret_messages));
         if (data.memories) await AsyncStorage.setItem('memories', JSON.stringify(data.memories));
-        
+        if (data.journal_entries) await AsyncStorage.setItem('journalEntries', JSON.stringify(data.journal_entries));
+
         console.log('✅ Restore successful!');
         return true;
       }

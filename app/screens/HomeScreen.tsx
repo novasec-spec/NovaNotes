@@ -26,15 +26,109 @@ import { ThemeProvider, useTheme } from '../../context/ThemeContext';
 
 const { width: W } = Dimensions.get('window');
 
-// ── Rotating love quotes ──────────────────────
-const QUOTES = [
+ const QUOTES = [
   { text: "Every day with you is my favourite day", author: "Your Person 💕" },
   { text: "You are my sunshine on a cloudy day", author: "Always & Forever 🌸" },
   { text: "In a room full of art, I'd still stare at you", author: "Your Person 🥹" },
   { text: "You make ordinary moments extraordinary", author: "With all my heart ✨" },
   { text: "My favourite place is next to you", author: "Your Person 🌙" },
+  { text: "Loving you is the easiest thing I've ever done", author: "Forever Yours 💖" },
+  { text: "You had me at hello", author: "Jerry Maguire 🎬" },
+  { text: "I look at you and see the rest of my life", author: "Your Future 💑" },
+  { text: "You're the missing piece I didn't know I needed", author: "Complete 🧩" },
+  { text: "Home is wherever I'm with you", author: "Our Home 🏠" },
+  { text: "You're the first thought on my mind every morning", author: "Good Morning 🌅" },
+  { text: "I fell in love with you because you loved me when I couldn't love myself", author: "Grateful 💕" },
+  { text: "You're my favorite notification", author: "Ding! 📱" },
+  { text: "I still get butterflies every time I see you", author: "Every Single Time 🦋" },
+  { text: "You're the reason I believe in soulmates", author: "Destined ✨" },
+  { text: "I love you more than all the stars in the sky", author: "Infinity 🌟" },
+  { text: "You're my today and all of my tomorrows", author: "Always 💫" },
+  { text: "The best thing to hold onto in life is each other", author: "Audrey Hepburn 💕" },
+  { text: "You make my world brighter just by being in it", author: "My Sunshine ☀️" },
+  { text: "I love you without knowing how, or when, or from where", author: "Pablo Neruda 📖" },
+  { text: "You're the peanut butter to my jelly", author: "Perfect Match 🥜" },
+  { text: "Every love story is beautiful, but ours is my favorite", author: "Our Story 📖" },
+  { text: "You're the best thing that's ever been mine", author: "Taylor Swift 🎵" },
+  { text: "I never knew what forever felt like until I met you", author: "Eternity 💕" },
+  { text: "You're the reason I wake up with a smile", author: "Morning Joy 😊" },
+  { text: "I'd choose you in every lifetime", author: "Soulmates ♾️" },
+  { text: "You're my greatest adventure", author: "Let's Go! 🗺️" },
+  { text: "I love you more than coffee, and that's saying a lot", author: "☕ Your Person" },
+  { text: "You're the plot twist I never saw coming", author: "Best Surprise 🎬" },
+  { text: "Falling in love with you was the easiest thing I've ever done", author: "Gravity 💕" },
+  { text: "You're the best part of my every day", author: "Daily Dose 💊" },
+  { text: "I love you to the moon and back", author: "Sam McBratney 🌙" },
+  { text: "You're my happy place", author: "Safe & Sound 🏝️" },
+  { text: "I liked you before I even knew what to call it", author: "Just Knew 💕" },
+  { text: "You're the reason I look forward to tomorrow", author: "Future Looks Bright ✨" },
+  { text: "I love you more than words can ever say", author: "Speechless 💫" },
+  { text: "You're my favorite hello and hardest goodbye", author: "Come Back Soon 💕" },
+  { text: "Being with you feels like magic", author: "✨ Always" },
+  { text: "You're the first person I want to tell when something happens", author: "My Person 📞" },
+  { text: "I love you not only for what you are, but for what I am when I am with you", author: "Roy Croft 💕" },
+  { text: "You're the best decision I never had to think about", author: "Easy Choice ✅" },
+  { text: "My heart beats faster every time I see your name pop up", author: "Text Message 💌" },
+  { text: "You're the calm in my chaos", author: "Peace ☮️" },
+  { text: "I knew I loved you before I met you", author: "Savage Garden 🎵" },
+  { text: "You're the answer to every prayer I never spoke", author: "Heard Anyway 🙏" },
+  { text: "I love you more than pizza, and that's serious", author: "🍕 Your Person" },
+  { text: "You're the only person I want to annoy for the rest of my life", author: "Sorry Not Sorry 😘" },
+  { text: "Every love song makes sense now", author: "Finally Get It 🎶" },
+  { text: "You're my favorite reason to lose sleep", author: "Worth It 💕" },
+  { text: "I smile like an idiot every time I think of you", author: "Can't Help It 😊" },
+  { text: "You're the best part of my life story", author: "Chapter One 📚" },
+  { text: "I fall in love with you a little more every single day", author: "Daily Dose 💕" },
+  { text: "You're my favorite place to go when I need to escape", author: "My Refuge 🏡" },
+  { text: "I love you more than all the sand on the beach", author: "Endless 🏖️" },
+  { text: "You're the reason I believe in magic", author: "Believer ✨" },
+  { text: "My world is better because you're in it", author: "Grateful 🌍" },
+  { text: "You're the 'good morning' and 'good night' I look forward to", author: "Every Day 📱" },
+  { text: "I love you more than all the stars in the galaxy", author: "Universal 🌌" },
+  { text: "You're the best thing that's ever happened to me", author: "Truth 💕" },
+  { text: "I didn't fall in love with you, I walked into it with my eyes wide open", author: "Chose You 🚶" },
+  { text: "You're my favorite distraction", author: "Don't Mind If I Do 😊" },
+  { text: "I love you more than chocolate", author: "🍫 Big Deal" },
+  { text: "You're the only person who can make me laugh when I want to cry", author: "My Sunshine ☀️" },
+  { text: "I found the one my soul loves", author: "Song of Solomon 📖" },
+  { text: "You're the WiFi to my phone", author: "Connected 📶" },
+  { text: "I love you more than all the fish in the sea", author: "Plenty of 🐟" },
+  { text: "You're my favorite hello", author: "Every Time 💕" },
+  { text: "I love you without measure", author: "Endless 📏" },
+  { text: "You're the reason I'm still smiling", author: "Thank You 😊" },
+  { text: "My heart knew you before my mind did", author: "Instinct 💕" },
+  { text: "You're the best thing I never knew I needed", author: "Sweet Surprise 🎁" },
+  { text: "I love you more than words can hold", author: "Overflowing 💫" },
+  { text: "You're my favorite notification", author: "Always Read 📱" },
+  { text: "I love you more than all the leaves on all the trees", author: "Forestation 🌳" },
+  { text: "You're the melody that plays in my head all day", author: "On Repeat 🎵" },
+  { text: "I love you more than yesterday but less than tomorrow", author: "Growing 📈" },
+  { text: "You're the best part of waking up", author: "Folgers ☕" },
+  { text: "My favorite color is you", author: "🌈 True" },
+  { text: "You're the only 10 I see", author: "Perfect 10 💯" },
+  { text: "I love you more than all the drops in the ocean", author: "Deep 🌊" },
+  { text: "You're my greatest treasure", author: "Found 💎" },
+  { text: "I love you more than all the seconds in forever", author: "Eternal ⏰" },
+  { text: "You're my favorite reason to come home", author: "Welcome Back 🏠" },
+  { text: "I love you more than all the pages in every book", author: "Unwritten 📚" },
+  { text: "You're the poetry I never knew how to write", author: "My Muse ✍️" },
+  { text: "I love you more than all the notes in every song", author: "Symphony 🎼" },
+  { text: "You're my favorite adventure", author: "Let's Go 🌍" },
+  { text: "I love you more than all the colors in the rainbow", author: "Vivid 🌈" },
+  { text: "You're the best thing that's ever happened to me", author: "Lucky Me 🍀" },
+  { text: "I love you more than all the dreams I've ever dreamed", author: "Reality 💭" },
+  { text: "You're my favorite mistake to have made", author: "Happy Accident 😊" },
+  { text: "I love you more than all the hugs I've ever given", author: "Wrap Around 🤗" },
+  { text: "You're the only person I want to binge-watch life with", author: "Marathon 📺" },
+  { text: "I love you more than all the laughs I've ever laughed", author: "Smiling 😂" },
+  { text: "You're my favorite person to do nothing with", author: "Quality Time ⏰" },
+  { text: "I love you more than all the sunsets I've ever seen", author: "Beautiful 🌅" },
+  { text: "You're the best surprise life ever gave me", author: "Unexpected 🎁" },
+  { text: "I love you more than all the butterflies I've ever felt", author: "Flutter 🦋" },
+  { text: "You're my favorite reason to believe in fate", author: "Meant to Be ✨" },
+  { text: "I love you more than all the prayers I've ever prayed", author: "Answered 🙏" },
+  { text: "You're the last person I want to see before I sleep", author: "Good Night 🌙" },
 ];
-
 
 const QUICK_TILES = [
   {
@@ -311,17 +405,6 @@ const navigation = useNavigation();
           <Text style={styles.quote}>{currentQuote.text}</Text>
           <Text style={styles.quoteAuthor}>— {currentQuote.author}</Text>
           {/* Dot indicators */}
-          <View style={styles.quoteDots}>
-            {QUOTES.map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.quoteDot,
-                  { backgroundColor: i === quoteIndex ? '#FF6B9D' : '#FFB5C8' },
-                ]}
-              />
-            ))}
-          </View>
         </Animated.View>
 
         {/* ── NEW: Love note banner ── */}
