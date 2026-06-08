@@ -46,7 +46,7 @@ import Icon                                from 'react-native-vector-icons/Ionic
 import MCIcon                              from 'react-native-vector-icons/MaterialCommunityIcons';
 
 
-
+import * as Updates from 'expo-updates';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 // ── Screen imports (YOUR ORIGINALS — untouched) ───────────────────────────────
 import HomeScreen        from './screens/HomeScreen';
@@ -55,6 +55,7 @@ import MemoriesScreen    from './screens/MemoriesScreen';
 import VibeScreen        from './screens/VibeScreen';
 import SecretVaultScreen from './screens/SecretVaultScreen';
 import Token from './screens/Token';
+import { RemoteNotificationService } from '../services/RemoteNotificationService';
 
 // ── Service imports (YOUR ORIGINALS — untouched) ──────────────────────────────
 import { NotificationService } from '../services/notificationService';
@@ -290,6 +291,40 @@ function DevToast({ visible }: { visible: boolean }) {
 //  App entry — YOUR ORIGINAL setupApp / checkSecretAccess wired in
 // ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
+  useEffect(() => {
+    initializeRemoteNotifications();
+  }, []);
+
+
+  const initializeRemoteNotifications = async () => {
+    // Check for remote notifications on app start
+    await RemoteNotificationService.checkForRemoteNotifications();
+
+    // Setup periodic update checking
+    RemoteNotificationService.setupUpdateChecker();
+
+    // Check for updates immediately
+    const update = await Updates.checkForUpdateAsync();
+    if (update.isAvailable) {
+      console.log('🔄 New OTA update available!');
+      await Updates.fetchUpdateAsync();
+      // Show a message to the user
+      Alert.alert(
+        'New Content Available!',
+        'Would you like to update now?',
+        [
+          { text: 'Later', style: 'cancel' },
+          {
+            text: 'Update Now',
+            onPress: async () => {
+              await Updates.reloadAsync();
+            }
+          }
+        ]
+      );
+    }
+  };
+
 
   // ── YOUR ORIGINAL STATE — untouched ────────────────────────────────────────
   const [isSecretVisible, setIsSecretVisible] = useState(false);
