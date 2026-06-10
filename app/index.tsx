@@ -1,3 +1,4 @@
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  App.tsx  —  UPGRADED & FIXED
 // ─────────────────────────────────────────────────────────────────────────────
@@ -55,9 +56,8 @@ import SecretVaultScreen from './screens/SecretVaultScreen';
 import Token from './screens/Token';
 import { RemoteNotificationService } from '../services/RemoteNotificationService';
 import { startNotificationListener } from '../services/notificationListener';
-import MoodWidgetPreview from './screens/MoodWidgetPreview';
 // ── Service imports (YOUR ORIGINALS — untouched) ──────────────────────────────
-import { NotificationService } from '../services/NotificationService';
+import { NotificationService } from '../services/notificationService';
 import { SupabaseBackup }      from '../services/supabaseBackup';
 import {
   setupMessageNotifier,
@@ -343,31 +343,35 @@ export default function App() {
     checkSecretAccess();
   }, []);
 
-  // ── YOUR ORIGINAL setupApp — untouched ─────────────────────────────────────
-  const setupApp = async () => {
-  try {
-    await notificationService.setupNotifications();
-    await notificationService.scheduleDailyLoveMessage();
-    const cleanup = notificationService.addNotificationListeners();
-
+const setupApp = async () => {
+  // Setup advanced notifications
+  await notificationService.setupNotifications();
+  
+  // Schedule all automated notifications
+  await notificationService.scheduleDailyLoveMessages();
+  await notificationService.scheduleWeeklyFlashback();
+  await notificationService.scheduleMoodCheckIn();
+  
+  // Send a test interactive message (remove in production)
+  // await notificationService.sendInteractiveLoveMessage();
+  
+  // Add notification listeners
+  const cleanup = notificationService.addNotificationListeners();
 
     // ── ADD THESE TWO LINES ──────────────────────────────
     await setupMessageNotifier();        // sets up notification handler
     await checkAndFireMessages();        // reads messages.json, fires if new
     // ────────────────────────────────────────────────────
-
-     
-      const hasRestored = await AsyncStorage.getItem('hasRestored');
-      if (!hasRestored) {
-        await backup.restoreFromBackup();
-        await AsyncStorage.setItem('hasRestored', 'true');
-      }
-
-      return cleanup;
-    } catch (error) {
-      console.error('Setup error:', error);
-    }
-  };
+  
+  // Restore backup if first launch
+  const hasRestored = await AsyncStorage.getItem('hasRestored');
+  if (!hasRestored) {
+    await backup.restoreFromBackup();
+    await AsyncStorage.setItem('hasRestored', 'true');
+  }
+  
+  return cleanup;
+};
 
   // ── YOUR ORIGINAL checkSecretAccess — untouched ────────────────────────────
   const checkSecretAccess = async () => {
@@ -406,7 +410,6 @@ export default function App() {
   // ─────────────────────────────────────────────────────────────────────────
   return (
 <SafeAreaProvider>
-<MoodWidgetPreview/>
         {/* ── Tab Navigator ── */}
         <Tab.Navigator
           // ✅ FIX: use our custom tab bar — never blocks scroll
