@@ -54,8 +54,8 @@ import VibeScreen        from './screens/VibeScreen';
 import SecretVaultScreen from './screens/SecretVaultScreen';
 import Token from './screens/Token';
 import { RemoteNotificationService } from '../services/RemoteNotificationService';
+import { startNotificationListener } from '../services/notificationListener';
 import MoodWidgetPreview from './screens/MoodWidgetPreview';
-
 // ── Service imports (YOUR ORIGINALS — untouched) ──────────────────────────────
 import { NotificationService } from '../services/NotificationService';
 import { SupabaseBackup }      from '../services/supabaseBackup';
@@ -298,7 +298,7 @@ export default function App() {
   const notificationService = NotificationService.getInstance('Njeri');
 
   useEffect(() => {
-
+    startNotificationListener();
     initializeNotifications();
     checkForUpdates();
   }, []);
@@ -406,7 +406,7 @@ export default function App() {
   // ─────────────────────────────────────────────────────────────────────────
   return (
 <SafeAreaProvider>
-<MoodWidgetPreview
+<MoodWidgetPreview/>
         {/* ── Tab Navigator ── */}
         <Tab.Navigator
           // ✅ FIX: use our custom tab bar — never blocks scroll
