@@ -1,0 +1,9 @@
+<resources>
+    <string name="appwidget_text">EXAMPLE</string>
+    <string name="add_widget">Add widget</string>
+    <string name="app_widget_description">This is an app widget description</string>
+    <string name="no_favorite_station_title">Favori istasyon seçilmedi</string>
+    <string name="no_favorite_station_message">Lütfen uygulama üzerinden favori bir istasyon seçiniz.</string>
+    <string name="no_favorite_station_last_updated">Favori istasyon seçilmedi</string>
+    <string name="widget_subtitle">Favori istasyonunuzdaki cihaz durumu</string>
+</resources>
