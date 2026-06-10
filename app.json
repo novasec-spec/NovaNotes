@@ -1,4 +1,3 @@
-
 {
   "expo": {
     "name": "NovaNote",
@@ -45,7 +44,7 @@
     },
     "plugins": [
       "expo-router",
-     "expo-notifications",
+      "expo-notifications",
       "expo-secure-store",
       [
         "fumedeme-expo-widget",
@@ -59,7 +58,8 @@
             "appGroupIdentifier": "group.expo.modules.moodtracker.example"
           }
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,
