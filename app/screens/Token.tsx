@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Text, View, Button, Platform } from 'react-native';
+import { Text, View, TouchableOpacity, Button, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -51,6 +53,8 @@ async function registerForPushNotificationsAsync() {
     });
   }
 
+
+
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
   if (existingStatus !== 'granted') {
@@ -79,6 +83,26 @@ async function registerForPushNotificationsAsync() {
 }
 
 export default function App() {
+
+
+const lockDevMode = async () => {
+  Alert.alert(
+    'Lock Dev Tools',
+    'This will hide the Dev tab until you unlock it again.',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Lock',
+        style: 'destructive',
+        onPress: async () => {
+          await AsyncStorage.removeItem('dev_access');
+          Alert.alert('Locked', 'Restart the app to apply.');
+        },
+      },
+    ]
+  );
+};
+
   const [expoPushToken, setExpoPushToken] = useState('');
   const [notification, setNotification] = useState<Notifications.Notification | undefined>(
     undefined
@@ -111,6 +135,10 @@ export default function App() {
         <Text>Body: {notification && notification.request.content.body}</Text>
         <Text>Data: {notification && JSON.stringify(notification.request.content.data)}</Text>
       </View>
+<TouchableOpacity onPress={lockDevMode} style={lockBtnStyle}>
+  <Ionicons name="lock-closed" size={18} color="#fff" />
+  <Text>Lock Dev Tools</Text>
+</TouchableOpacity>
       <Button
         title="Press to Send Notification"
         onPress={async () => {
@@ -120,3 +148,13 @@ export default function App() {
     </View>
   );
 }
+
+const lockBtnStyle = {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: '#007AFF',
+  padding: 12,
+  borderRadius: 8,
+  marginTop: 10,
+};

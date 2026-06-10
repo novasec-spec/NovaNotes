@@ -1,0 +1,257 @@
+#!/usr/bin/env node
+// scripts/sendRemoteNotification.js
+const { exec } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+class RemoteNotificationSender {
+  constructor(projectDir) {
+    this.projectDir = projectDir;
+    this.constantsDir = path.join(projectDir, 'constants');
+  }
+
+  ensureConstantsDir() {
+    if (!fs.existsSync(this.constantsDir)) {
+      fs.mkdirSync(this.constantsDir, { recursive: true });
+    }
+  }
+
+  generateId() {
+    return crypto.randomBytes(8).toString('hex');
+  }
+
+  escapeShellArg(str) {
+    // Escape single quotes and wrap in single quotes
+    return "'" + str.replace(/'/g, "'\\''") + "'";
+  }
+
+  createNotificationUpdate(notification) {
+    this.ensureConstantsDir();
+
+
+
+
+
+    
+    const fileContent = `// constants/RemoteNotification.ts
+// AUTO-GENERATED - DO NOT EDIT MANUALLY
+// Last updated: ${new Date().toISOString()}
+
+export interface RemoteNotification {
+  id: string;
+  title: string;
+  body: string;
+  type: string;
+  categoryIdentifier: string;
+  cooldown?: number;
+  sound?: boolean;
+  data?: any;
+  createdAt: string;
+}
+
+export const REMOTE_NOTIFICATION = {
+  id: '${notification.id}',
+  title: '${notification.title.replace(/'/g, "\\'")}',
+  body: '${notification.body.replace(/'/g, "\\'")}',
+  type: '${notification.type}',
+  categoryIdentifier: '${notification.categoryIdentifier || notification.type}', 
+  cooldown: ${notification.cooldown || 3600000},
+  sound: true,
+  data: ${JSON.stringify(notification.data || {})},
+  createdAt: '${new Date().toISOString()}'
+};
+
+
+
+export function shouldShowNotification() {
+  try {
+    const lastShownKey = 'last_notification_' + REMOTE_NOTIFICATION.id;
+    const lastShown = localStorage?.getItem(lastShownKey);
+    const now = Date.now();
+    
+    if (lastShown && now - parseInt(lastShown) < (REMOTE_NOTIFICATION.cooldown || 3600000)) {
+      return false;
+    }
+    
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(lastShownKey, now.toString());
+    }
+    return true;
+  } catch (error) {
+    return true;
+  }
+}
+`;
+    const filePath = path.join(this.constantsDir, 'RemoteNotification.ts');
+    fs.writeFileSync(filePath, fileContent, 'utf8');
+    console.log(`✅ Notification update created at: ${filePath}`);
+    return filePath;
+  }
+
+  async publishUpdate(message, options = {}) {
+    const notification = {
+      id: this.generateId(),
+      title: options.title || this.getDefaultTitle(options.type),
+      body: message,
+      type: options.type || 'custom',
+      cooldown: options.cooldown || 3600000,
+      data: options.data || {},
+      createdAt: new Date().toISOString()
+    };
+
+    this.createNotificationUpdate(notification);
+
+    console.log('📦 Building and publishing OTA update...');
+    
+    // Create a simple message without emojis for the command
+    const cleanMessage = notification.title.replace(/[^\x00-\x7F]/g, '').trim();
+    const command = `EAS_SKIP_AUTO_FINGERPRINT=1 CI=1 eas update --branch production --auto --message "${cleanMessage}"`;
+    
+    console.log(`🔄 Running: ${command}`);
+    
+    return new Promise((resolve, reject) => {
+      exec(command, { 
+        cwd: this.projectDir,
+        maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+      }, (error, stdout, stderr) => {
+        if (error) {
+          console.error('❌ Failed to publish:', error.message);
+          console.log('\n💡 Tip: Make sure you are logged in to EAS');
+  console.error('STDERR:', stderr);
+  console.error('STDOUT:', stdout);
+          console.log('   Run: npx eas login');
+          reject(error);
+          return;
+        }
+        
+        console.log('✅ OTA Update published successfully!');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log(`📧 Title: ${notification.title}`);
+        console.log(`💬 Message: ${notification.body}`);
+        console.log(`🆔 ID: ${notification.id}`);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('\n💡 The notification will appear when she opens the app');
+        resolve(notification);
+      });
+    });
+  }
+
+  getDefaultTitle(type) {
+    const titles = {
+      'love_message': 'Thinking of You',
+      'memory_reminder': 'Memory Reminder', 
+      'surprise': 'Surprise',
+      'custom': 'Love Note'
+    };
+    return titles[type] || titles.custom;
+  }
+
+  async sendSurprise(message, options = {}) {
+    return await this.publishUpdate(message, {
+      title: options.title || '🎁 Surprise',
+      type: 'surprise',
+      ...options
+    });
+  }
+}
+
+// Add this method to send love message with reply data
+async sendLoveMessage(message, options = {}) {
+  return await this.publishUpdate(message, {
+    title: options.title || '💕 Thinking of You',
+    type: 'love_message',
+    category: 'love_message',
+    data: {
+      sender: 'Your Love',  // Will appear in reply
+      loveMessage: message,
+      timestamp: new Date().toISOString()
+    },
+    ...options
+  });
+}
+
+async sendMemoryReminder(memoryTitle, options = {}) {
+  const message = `Remember when we had ${memoryTitle}? 💭`;
+  return await this.publishUpdate(message, {
+    title: options.title || '📸 Memory Reminder',
+    type: 'memory_reminder',
+    category: 'memory_reminder',
+    data: {
+      memory: memoryTitle,
+      memoryId: options.memoryId || `memory_${Date.now()}`,
+      ...options.data
+    },
+    ...options
+  });
+}
+
+async sendNoteReminder(noteTitle, options = {}) {
+  const message = `Don't forget to read: ${noteTitle}`;
+  return await this.publishUpdate(message, {
+    title: options.title || '📝 Note Reminder',
+    type: 'note_reminder',
+    category: 'note_reminder',
+    data: {
+      noteTitle: noteTitle,
+      noteId: options.noteId || `note_${Date.now()}`,
+      ...options.data
+    },
+    ...options
+  });
+}
+
+
+// Simple CLI with readline for input
+async function main() {
+  const args = process.argv.slice(2);
+  const command = args[0];
+  const message = args.slice(1).join(' ');
+  
+  const sender = new RemoteNotificationSender(process.cwd());
+  
+  console.log('\n📱 Remote Notification Sender');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  
+  if (!command || command === 'help') {
+    console.log(`
+Usage:
+  node scripts/sendRemoteNotification.js love "Your message here"
+  node scripts/sendRemoteNotification.js memory "our first date"  
+  node scripts/sendRemoteNotification.js surprise "Check the app!"
+
+Examples:
+  node scripts/sendRemoteNotification.js love "I miss you so much"
+  node scripts/sendRemoteNotification.js memory "our trip to the beach"
+  node scripts/sendRemoteNotification.js surprise "Open the app for a special gift"
+`);
+    return;
+  }
+  
+  if (!message || message.length === 0) {
+    console.error('❌ Please provide a message');
+    console.log('Example: node scripts/sendRemoteNotification.js love "I love you"');
+    return;
+  }
+  
+  switch(command) {
+    case 'love_message':
+      await sender.sendLoveMessage(message);
+      break;
+    case 'memory':
+      await sender.sendMemoryReminder(message);
+      break;
+    case 'surprise':
+      await sender.sendSurprise(message);
+      break;
+    default:
+      console.error(`❌ Unknown command: ${command}`);
+      console.log('Available commands: love, memory, surprise');
+  }
+}
+
+if (require.main === module) {
+  main().catch(console.error);
+}
+
+module.exports = RemoteNotificationSender;

@@ -45,7 +45,6 @@ import AsyncStorage                        from '@react-native-async-storage/asy
 import Icon                                from 'react-native-vector-icons/Ionicons';
 import MCIcon                              from 'react-native-vector-icons/MaterialCommunityIcons';
 
-
 import * as Updates from 'expo-updates';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 // ── Screen imports (YOUR ORIGINALS — untouched) ───────────────────────────────
@@ -56,10 +55,14 @@ import VibeScreen        from './screens/VibeScreen';
 import SecretVaultScreen from './screens/SecretVaultScreen';
 import Token from './screens/Token';
 import { RemoteNotificationService } from '../services/RemoteNotificationService';
-
 // ── Service imports (YOUR ORIGINALS — untouched) ──────────────────────────────
-import { NotificationService } from '../services/notificationService';
+import { NotificationService } from '../services/NotificationService';
 import { SupabaseBackup }      from '../services/supabaseBackup';
+import {
+  setupMessageNotifier,
+  checkAndFireMessages,
+  resetMessageHistory,   // only needed in dev/TokenManager screen
+} from '../services/messageNotifier';
 
 const Tab      = createBottomTabNavigator();
 const USER_ID  = 'Njeri';                    // YOUR ORIGINAL
@@ -289,43 +292,40 @@ function DevToast({ visible }: { visible: boolean }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  App entry — YOUR ORIGINAL setupApp / checkSecretAccess wired in
-// ─────────────────────────────────────────────────────────────────────────────
+
 export default function App() {
+  const notificationService = NotificationService.getInstance('Njeri');
+
   useEffect(() => {
-    initializeRemoteNotifications();
+
+    initializeNotifications();
+    checkForUpdates();
   }, []);
 
+  const initializeNotifications = async () => {
+    await notificationService.setupNotifications();
+    return notificationService.addNotificationListeners();
+  };
 
-  const initializeRemoteNotifications = async () => {
-    // Check for remote notifications on app start
-    await RemoteNotificationService.checkForRemoteNotifications();
+  const checkForUpdates = async () => {
+    try {
+      const update = await Updates.checkForUpdateAsync();
 
-    // Setup periodic update checking
-    RemoteNotificationService.setupUpdateChecker();
+      if (update.isAvailable) {
+        console.log('🔄 New OTA update available!');
 
-    // Check for updates immediately
-    const update = await Updates.checkForUpdateAsync();
-    if (update.isAvailable) {
-      console.log('🔄 New OTA update available!');
-      await Updates.fetchUpdateAsync();
-      // Show a message to the user
-      Alert.alert(
-        'New Content Available!',
-        'Would you like to update now?',
-        [
-          { text: 'Later', style: 'cancel' },
-          {
-            text: 'Update Now',
-            onPress: async () => {
-              await Updates.reloadAsync();
-            }
-          }
-        ]
-      );
+        await Updates.fetchUpdateAsync();
+
+        console.log('✅ Update downloaded, reloading...');
+
+        await Updates.reloadAsync();
+      }
+    } catch (error) {
+      console.log('❌ Update check failed:', error);
     }
   };
 
-
+ 
   // ── YOUR ORIGINAL STATE — untouched ────────────────────────────────────────
   const [isSecretVisible, setIsSecretVisible] = useState(false);
 
@@ -334,7 +334,6 @@ export default function App() {
 
   // ── Services in refs so they never re-create on render ─────────────────────
   // YOUR ORIGINAL instances, just stabilised with useRef
-  const notificationService = useRef(new NotificationService(USER_ID)).current;
   const backup              = useRef(new SupabaseBackup(USER_ID)).current;
 
   // ── YOUR ORIGINAL useEffect — untouched ────────────────────────────────────
@@ -345,11 +344,18 @@ export default function App() {
 
   // ── YOUR ORIGINAL setupApp — untouched ─────────────────────────────────────
   const setupApp = async () => {
-    try {
-      await notificationService.setupNotifications();
-      await notificationService.scheduleDailyLoveMessage();
-      const cleanup = notificationService.addNotificationListeners();
+  try {
+    await notificationService.setupNotifications();
+    await notificationService.scheduleDailyLoveMessage();
+    const cleanup = notificationService.addNotificationListeners();
 
+
+    // ── ADD THESE TWO LINES ──────────────────────────────
+    await setupMessageNotifier();        // sets up notification handler
+    await checkAndFireMessages();        // reads messages.json, fires if new
+    // ────────────────────────────────────────────────────
+
+     
       const hasRestored = await AsyncStorage.getItem('hasRestored');
       if (!hasRestored) {
         await backup.restoreFromBackup();
@@ -374,6 +380,9 @@ export default function App() {
     }
   };
 
+
+
+
   // ── SECRET UNLOCK — your original logic, moved into SecretZone ─────────────
   const handleSecretUnlock = useCallback(async () => {
     try {
@@ -395,7 +404,7 @@ export default function App() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <SafeAreaProvider>
+<SafeAreaProvider>
         {/* ── Tab Navigator ── */}
         <Tab.Navigator
           // ✅ FIX: use our custom tab bar — never blocks scroll
@@ -458,6 +467,8 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
+
+
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({

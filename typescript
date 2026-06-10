@@ -1,0 +1,15 @@
+Script started on 2026-06-08 23:20:32+03:00 [TERM="xterm-256color" TTY="/dev/pts/31" COLUMNS="101" LINES="60"]
+^C[1m[7m%[27m[1m[0m                                                                                                     [0m[27m[24m[J% [K[?2004hlls[?2004l
+AGENTS.md        [0m[01;34mconstants[0m             metro.config.js
+CLAUDE.md        [01;34mcontext[0m               [01;34mnode_modules[0m
+README.md        [01;34mdist[0m                  package-lock.json
+[01;34mandroid[0m          eas.json              package.json
+[01;34mapp[0m              eslint.config.js      [01;34mscripts[0m
+app.json         expo-env.d.ts         [01;34mservices[0m
+[01;34massets[0m           [01;32mgoogle-services.json[0m  [01;32mtaptap-377d9-firebase-adminsdk-fbsvc-2331cfa36b.json[0m
+babel.config.js  [01;34mhooks[0m                 tsconfig.json
+[01;34mcomponents[0m       [01;34mios[0m                   typescript
+[01;34mconfig[0m           js                    [01;34mutils[0m
+[1m[7m%[27m[1m[0m                                                                                                     [0m[27m[24m[J% [K[?2004hccs c  eexit[?2004l
+
+Script done on 2026-06-08 23:20:54+03:00 [COMMAND_EXIT_CODE="0"]

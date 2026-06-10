@@ -3,9 +3,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// ──────────────────────────────────────────────────────────────────
-// 1. Configure how notifications behave when app is in foreground
-// ──────────────────────────────────────────────────────────────────
+// Configure notification handler
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -14,46 +12,36 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// ──────────────────────────────────────────────────────────────────
-// 2. Random messages for weekly nudges
-// ──────────────────────────────────────────────────────────────────
-const NUDGE_MESSAGES = [
-  "You wrote something beautiful — want to re-read it? ✨",
-  "A sweet memory is waiting for you! 💕",
-  "Your notes miss you. Come say hi! 📝",
-  "Something special from the past is calling you 💌",
-  "Take a moment to remember something beautiful today 🌸",
-];
-
-// ──────────────────────────────────────────────────────────────────
-// 3. Main Notification Service Class
-// ──────────────────────────────────────────────────────────────────
 export class NotificationService {
   private static instance: NotificationService;
   private isInitialized: boolean = false;
+  private userId: string;
+
+  constructor(userId: string) {
+    this.userId = userId;
+  }
 
   static getInstance(): NotificationService {
     if (!NotificationService.instance) {
-      NotificationService.instance = new NotificationService();
+      NotificationService.instance = new NotificationService('');
     }
     return NotificationService.instance;
   }
 
   // ──────────────────────────────────────────────────────────────
-  // 3.1 Setup - Call this ONCE when app starts
+  // 1. Setup notifications with action categories
   // ──────────────────────────────────────────────────────────────
   async setupNotifications(): Promise<boolean> {
     if (this.isInitialized) return true;
 
     try {
-      // Request permissions
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') {
         console.log('❌ Notification permissions not granted');
         return false;
       }
 
-      // ✅ CRITICAL FOR ANDROID PRODUCTION APK
+      // Create notification channel for Android
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('love_channel', {
           name: 'Love Notifications',
@@ -66,8 +54,119 @@ export class NotificationService {
         console.log('✅ Android notification channel created');
       }
 
+      // ============================================================
+      // REGISTER NOTIFICATION ACTION CATEGORIES (BUTTONS)
+      // ============================================================
+
+      // Category 1: Love Message with "Reply" and "Dismiss" buttons
+      await Notifications.setNotificationCategoryAsync('love_message', [
+        {
+          identifier: 'REPLY',
+          buttonTitle: '💌 Reply',
+          options: {
+            opensAppToForeground: true,  // Opens app when tapped
+          },
+        },
+        {
+          identifier: 'HEART',
+          buttonTitle: '❤️ Send Love',
+          options: {
+            opensAppToForeground: false, // Doesn't open app, just sends reaction
+          },
+        },
+        {
+          identifier: 'DISMISS',
+          buttonTitle: 'Later',
+          options: {
+            isDestructive: true,  // Makes the button red/destructive styling
+          },
+        },
+      ]);
+
+      // Category 2: Memory Reminder with "View" and "Remind Later" buttons
+      await Notifications.setNotificationCategoryAsync('memory_reminder', [
+        {
+          identifier: 'VIEW_MEMORY',
+          buttonTitle: '📸 View Memory',
+          options: {
+            opensAppToForeground: true,
+          },
+        },
+        {
+          identifier: 'REMIND_LATER',
+          buttonTitle: '⏰ Remind in 1 hour',
+          options: {
+            opensAppToForeground: false,
+          },
+        },
+        {
+          identifier: 'DISMISS',
+          buttonTitle: 'Dismiss',
+          options: {
+            isDestructive: true,
+          },
+        },
+      ]);
+
+      // Category 3: Mood Check-in with mood selection buttons
+      await Notifications.setNotificationCategoryAsync('mood_check', [
+        {
+          identifier: 'MOOD_HAPPY',
+          buttonTitle: '😊 Happy',
+          options: {
+            opensAppToForeground: false,
+          },
+        },
+        {
+          identifier: 'MOOD_LOVED',
+          buttonTitle: '🥰 Loved',
+          options: {
+            opensAppToForeground: false,
+          },
+        },
+        {
+          identifier: 'MOOD_SAD',
+          buttonTitle: '😢 Sad',
+          options: {
+            opensAppToForeground: false,
+          },
+        },
+        {
+          identifier: 'OPEN_APP',
+          buttonTitle: 'Open App',
+          options: {
+            opensAppToForeground: true,
+          },
+        },
+      ]);
+
+      // Category 4: Note Reminder with "Read" and "Snooze" buttons
+      await Notifications.setNotificationCategoryAsync('note_reminder', [
+        {
+          identifier: 'READ_NOTE',
+          buttonTitle: '📖 Read Note',
+          options: {
+            opensAppToForeground: true,
+          },
+        },
+        {
+          identifier: 'SNOOZE',
+          buttonTitle: '⏰ Snooze 30min',
+          options: {
+            opensAppToForeground: false,
+          },
+        },
+        {
+          identifier: 'DISMISS',
+          buttonTitle: 'Dismiss',
+          options: {
+            isDestructive: true,
+          },
+        },
+      ]);
+
+      console.log('✅ Notification action categories registered');
       this.isInitialized = true;
-      console.log('✅ Notifications setup complete');
       return true;
     } catch (error) {
       console.error('❌ Notification setup failed:', error);
@@ -76,110 +175,68 @@ export class NotificationService {
   }
 
   // ──────────────────────────────────────────────────────────────
-  // 3.2 Build trigger with platform-specific channel ID
+  // 2. Send notification with category (buttons will appear)
   // ──────────────────────────────────────────────────────────────
-  private buildTrigger(seconds: number, repeats: boolean = false): any {
-    const trigger: any = {
-      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-      seconds: seconds,
-      repeats: repeats,
-    };
-    
-    if (Platform.OS === 'android') {
-      trigger.channelId = 'love_channel';
-    }
-    
-    return trigger;
-  }
-
-  private buildDailyTrigger(hour: number, minute: number): any {
-    const trigger: any = {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour: hour,
-      minute: minute,
-      repeats: true,
-    };
-    
-    if (Platform.OS === 'android') {
-      trigger.channelId = 'love_channel';
-    }
-    
-    return trigger;
-  }
-
-  // ──────────────────────────────────────────────────────────────
-  // 3.3 Send immediate notification
-  // ──────────────────────────────────────────────────────────────
-  async sendImmediateNotification(title: string, body: string): Promise<boolean> {
+  async sendNotificationWithButtons(
+    title: string,
+    body: string,
+    categoryIdentifier: 'love_message' | 'memory_reminder' | 'mood_check' | 'note_reminder',
+    data?: any
+  ): Promise<boolean> {
     try {
+      // For immediate notification
+      const trigger = Platform.OS === 'android'
+        ? { seconds: 1, channelId: 'love_channel' }
+        : null;
+
       await Notifications.scheduleNotificationAsync({
         content: {
           title: title,
           body: body,
           sound: true,
-          data: { type: 'immediate' },
-        },
-        trigger: null, // null = send immediately
-      });
-      console.log('✅ Immediate notification sent');
-      return true;
-    } catch (error) {
-      console.error('❌ Failed to send immediate notification:', error);
-      return false;
-    }
-  }
-
-  // ──────────────────────────────────────────────────────────────
-  // 3.4 Schedule notification after X minutes
-  // ──────────────────────────────────────────────────────────────
-  async scheduleNoteReminder(
-    noteTitle: string, 
-    noteText: string, 
-    triggerMinutes: number
-  ): Promise<boolean> {
-    try {
-      const preview = noteText.length > 55 
-        ? noteText.substring(0, 52) + '...' 
-        : noteText;
-      
-      const trigger = this.buildTrigger(triggerMinutes * 60, false);
-      
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: `📝 Note reminder — ${noteTitle || 'Your note'}`,
-          body: preview,
-          sound: true,
-          data: { type: 'note_reminder', noteId: Date.now().toString() },
+          categoryIdentifier: categoryIdentifier, // ← This attaches the buttons!
+          data: {
+            type: categoryIdentifier,
+            ...data,
+          },
         },
         trigger: trigger,
       });
-      
-      console.log(`✅ Note reminder scheduled for ${triggerMinutes} minutes from now`);
+
+      console.log(`✅ Notification with buttons (${categoryIdentifier}) sent`);
       return true;
     } catch (error) {
-      console.error('❌ Failed to schedule note reminder:', error);
+      console.error('❌ Failed to send notification:', error);
       return false;
     }
   }
 
   // ──────────────────────────────────────────────────────────────
-  // 3.5 Schedule daily love message
+  // 3. Schedule daily love message with buttons
   // ──────────────────────────────────────────────────────────────
-  async scheduleDailyLoveMessage(hour: number = 9, minute: number = 0): Promise<boolean> {
+  async scheduleDailyLoveMessage(): Promise<boolean> {
     try {
-      const trigger = this.buildDailyTrigger(hour, minute);
-      
+      const trigger: any = {
+        hour: 9,
+        minute: 0,
+        repeats: true,
+      };
+      if (Platform.OS === 'android') {
+        trigger.channelId = 'love_channel';
+      }
+
       await Notifications.scheduleNotificationAsync({
         content: {
           title: '💕 Good Morning, My Love!',
-          body: 'Just wanted to be the first to say you\'re amazing today. Hope you have a wonderful day! 🌸',
+          body: 'How are you feeling today? Send me some love! 💖',
           sound: true,
+          categoryIdentifier: 'love_message', // ← Buttons attached!
           data: { type: 'daily_love' },
         },
         trigger: trigger,
       });
-      
-      console.log(`✅ Daily love message scheduled for ${hour}:${minute}`);
+
+      console.log('✅ Daily love message scheduled');
       return true;
     } catch (error) {
       console.error('❌ Failed to schedule daily love message:', error);
@@ -188,23 +245,31 @@ export class NotificationService {
   }
 
   // ──────────────────────────────────────────────────────────────
-  // 3.6 Schedule evening check-in
+  // 4. Schedule evening mood check-in with buttons
   // ──────────────────────────────────────────────────────────────
-  async scheduleEveningCheckIn(hour: number = 20, minute: number = 0): Promise<boolean> {
+  async scheduleEveningCheckIn(): Promise<boolean> {
     try {
-      const trigger = this.buildDailyTrigger(hour, minute);
-      
+      const trigger: any = {
+        hour: 20,
+        minute: 0,
+        repeats: true,
+      };
+      if (Platform.OS === 'android') {
+        trigger.channelId = 'love_channel';
+      }
+
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: '🌙 How Was Your Day?',
-          body: 'Don\'t forget to update your mood and add any special memories from today! 💭',
+          title: '🌙 Evening Check-in',
+          body: 'How was your day? Tap to share your mood! 💭',
           sound: true,
+          categoryIdentifier: 'mood_check', // ← Mood buttons appear!
           data: { type: 'evening_checkin' },
         },
         trigger: trigger,
       });
-      
-      console.log(`✅ Evening check-in scheduled for ${hour}:${minute}`);
+
+      console.log('✅ Evening check-in scheduled');
       return true;
     } catch (error) {
       console.error('❌ Failed to schedule evening check-in:', error);
@@ -213,90 +278,165 @@ export class NotificationService {
   }
 
   // ──────────────────────────────────────────────────────────────
-  // 3.7 Schedule random weekly nudge to read notes
-  // ──────────────────────────────────────────────────────────────
-  async scheduleWeeklyNudge(notes: any[]): Promise<boolean> {
-    if (!notes || notes.length === 0) {
-      console.log('📝 No notes available for nudge scheduling');
-      return false;
-    }
-
-    try {
-      // Check if we already scheduled a nudge this week
-      const lastNudge = await AsyncStorage.getItem('lastNudgeDate');
-      const now = Date.now();
-      
-      if (lastNudge && now - parseInt(lastNudge) < 7 * 24 * 60 * 60 * 1000) {
-        console.log('⏰ Weekly nudge already sent recently, skipping');
-        return false;
-      }
-
-      // Pick random note and random delay (2-5 days)
-      const randomNote = notes[Math.floor(Math.random() * notes.length)];
-      const randomDays = 2 + Math.floor(Math.random() * 4);
-      const randomSeconds = randomDays * 24 * 60 * 60;
-      const nudgeMsg = NUDGE_MESSAGES[Math.floor(Math.random() * NUDGE_MESSAGES.length)];
-      
-      const notePreview = randomNote.title 
-        ? `"${randomNote.title}" is waiting for you`
-        : `"${(randomNote.text ?? '').substring(0, 55)}..."`;
-
-      const trigger = this.buildTrigger(randomSeconds, false);
-      
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: nudgeMsg,
-          body: notePreview,
-          sound: true,
-          data: { type: 'nudge' },
-        },
-        trigger: trigger,
-      });
-
-      await AsyncStorage.setItem('lastNudgeDate', String(now));
-      console.log(`✅ Weekly nudge scheduled for ${randomDays} days from now`);
-      return true;
-    } catch (error) {
-      console.error('❌ Failed to schedule weekly nudge:', error);
-      return false;
-    }
-  }
-
-  // ──────────────────────────────────────────────────────────────
-  // 3.8 Cancel all scheduled notifications
-  // ──────────────────────────────────────────────────────────────
-  async cancelAllNotifications(): Promise<void> {
-    await Notifications.cancelAllScheduledNotificationsAsync();
-    console.log('🗑️ All scheduled notifications cancelled');
-  }
-
-  // ──────────────────────────────────────────────────────────────
-  // 3.9 Add listeners for notification interactions
+  // 5. Handle button tap responses
   // ──────────────────────────────────────────────────────────────
   addNotificationListeners() {
-    // When notification is received while app is foreground
-    const notificationListener = Notifications.addNotificationReceivedListener(notification => {
-      console.log('📨 Notification received:', notification);
-    });
+    // Listen for when user taps a button on the notification
+    const responseListener = Notifications.addNotificationResponseReceivedListener(
+      async (response) => {
+        const { actionIdentifier, notification } = response;
+        const data = notification.request.content.data;
+        const categoryId = notification.request.content.categoryIdentifier;
 
-    // When user taps on notification
-    const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log('👆 User tapped notification:', response.notification.request.content.data);
-      // You can navigate to specific screen based on data.type
-    });
+        console.log('👆 Button tapped:', { actionIdentifier, categoryId, data });
 
-    // Return cleanup function
+        // Handle different button actions
+        switch (actionIdentifier) {
+          // Love Message buttons
+          case 'REPLY':
+            console.log('💌 User wants to reply');
+            // You could open the notes screen or show a reply modal
+            break;
+          case 'HEART':
+            console.log('❤️ User sent love reaction');
+            // Save reaction to AsyncStorage
+            await this.saveReaction('love');
+            break;
+          
+          // Memory Reminder buttons
+          case 'VIEW_MEMORY':
+            console.log('📸 User wants to view memory');
+            // Navigate to memories screen
+            break;
+          case 'REMIND_LATER':
+            console.log('⏰ Remind later requested');
+            // Schedule a reminder for 1 hour later
+            await this.scheduleReminderLater(data);
+            break;
+          
+          // Mood Check buttons
+          case 'MOOD_HAPPY':
+            console.log('😊 User is happy');
+            await this.saveMood('Happy');
+            break;
+          case 'MOOD_LOVED':
+            console.log('🥰 User feels loved');
+            await this.saveMood('Loved');
+            break;
+          case 'MOOD_SAD':
+            console.log('😢 User is sad');
+            await this.saveMood('Sad');
+            break;
+          
+          // Note Reminder buttons
+          case 'READ_NOTE':
+            console.log('📖 User wants to read note');
+            break;
+          case 'SNOOZE':
+            console.log('⏰ Snooze requested');
+            await this.scheduleSnooze(data);
+            break;
+          
+          // Dismiss buttons
+          case 'DISMISS':
+            console.log('User dismissed notification');
+            break;
+          case 'OPEN_APP':
+            console.log('Opening app from button');
+            break;
+          
+          default:
+            console.log('Unknown action:', actionIdentifier);
+        }
+      }
+    );
+
+    // Listen for notifications received while app is open
+    const notificationListener = Notifications.addNotificationReceivedListener(
+      (notification) => {
+        console.log('📨 Notification received:', notification);
+      }
+    );
+
     return () => {
-      Notifications.removeNotificationSubscription(notificationListener);
       Notifications.removeNotificationSubscription(responseListener);
+      Notifications.removeNotificationSubscription(notificationListener);
     };
   }
 
-  // ──────────────────────────────────────────────────────────────
-  // 3.10 Check if notifications are supported
-  // ──────────────────────────────────────────────────────────────
-  async areNotificationsSupported(): Promise<boolean> {
-    const { status } = await Notifications.getPermissionsAsync();
-    return status === 'granted';
+  // Helper: Save mood from button tap
+  private async saveMood(mood: string) {
+    try {
+      const history = await AsyncStorage.getItem('moodHistory');
+      const moods = history ? JSON.parse(history) : [];
+      moods.push({
+        mood: mood,
+        timestamp: new Date().toISOString(),
+        source: 'notification_button',
+      });
+      await AsyncStorage.setItem('moodHistory', JSON.stringify(moods));
+      console.log(`✅ Mood "${mood}" saved from notification`);
+    } catch (error) {
+      console.error('Failed to save mood:', error);
+    }
+  }
+
+  // Helper: Save reaction
+  private async saveReaction(type: string) {
+    try {
+      const reactions = await AsyncStorage.getItem('loveReactions');
+      const list = reactions ? JSON.parse(reactions) : [];
+      list.push({
+        type: type,
+        timestamp: new Date().toISOString(),
+      });
+      await AsyncStorage.setItem('loveReactions', JSON.stringify(list));
+    } catch (error) {
+      console.error('Failed to save reaction:', error);
+    }
+  }
+
+  // Helper: Schedule a reminder for later
+  private async scheduleReminderLater(data: any) {
+    try {
+      const trigger = Platform.OS === 'android'
+        ? { seconds: 3600, channelId: 'love_channel' }  // 1 hour
+        : { seconds: 3600 };
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '📸 Memory Reminder',
+          body: 'You wanted to see this memory again...',
+          sound: true,
+          categoryIdentifier: 'memory_reminder',
+        },
+        trigger: trigger,
+      });
+      console.log('✅ Reminder scheduled for later');
+    } catch (error) {
+      console.error('Failed to schedule reminder:', error);
+    }
+  }
+
+  // Helper: Schedule snooze
+  private async scheduleSnooze(data: any) {
+    try {
+      const trigger = Platform.OS === 'android'
+        ? { seconds: 1800, channelId: 'love_channel' }  // 30 minutes
+        : { seconds: 1800 };
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '📖 Note Reminder',
+          body: 'Ready to read your note now? ✨',
+          sound: true,
+          categoryIdentifier: 'note_reminder',
+        },
+        trigger: trigger,
+      });
+      console.log('✅ Snooze scheduled');
+    } catch (error) {
+      console.error('Failed to schedule snooze:', error);
+    }
   }
 }

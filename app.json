@@ -45,8 +45,21 @@
     },
     "plugins": [
       "expo-router",
+     "expo-notifications",
       "expo-secure-store",
-      "expo-notifications"
+      [
+        "fumedeme-expo-widget",
+        {
+          "widgetName": "MoodWidget",
+          "android": {
+            "updateInterval": 1800000
+          },
+          "ios": {
+            "devTeamId": "YOUR_TEAM_ID",
+            "appGroupIdentifier": "group.expo.modules.moodtracker.example"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
