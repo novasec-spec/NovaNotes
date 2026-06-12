@@ -45,21 +45,22 @@
     "plugins": [
       "expo-router",
       "expo-notifications",
+      "@react-native-community/datetimepicker",
       "expo-secure-store",
       [
-        "fumedeme-expo-widget",
+        "expo-widgets",
         {
-          "widgetName": "MoodWidget",
-          "android": {
-            "updateInterval": 1800000
-          },
-          "ios": {
-            "devTeamId": "YOUR_TEAM_ID",
-            "appGroupIdentifier": "group.expo.modules.moodtracker.example"
-          }
+          "groupIdentifier": "group.com.novasec.moodtracker",
+          "widgets": [
+            {
+              "name": "MoodWidget",
+              "displayName": "Mood Tracker",
+              "description": "Track your daily mood",
+              "supportedFamilies": ["systemSmall", "systemMedium"]
+            }
+          ]
         }
-      ],
-      "@react-native-community/datetimepicker"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -33,7 +33,7 @@
 //
 // ─────────────────────────────────────────────────────────────────────────────
 import React, {
-  useEffect, useState, useRef, useCallback,
+  useEffect, useState, useRef, AppState, useCallback,
 } from 'react';
 import {
   View, Text, TouchableOpacity, Pressable, StyleSheet,
@@ -56,6 +56,13 @@ import SecretVaultScreen from './screens/SecretVaultScreen';
 import Token from './screens/Token';
 import { RemoteNotificationService } from '../services/RemoteNotificationService';
 import { startNotificationListener } from '../services/notificationListener';
+import {
+  registerNotificationCategories,
+  setupNotificationListeners,
+  NotificationResponse,
+  actionLabel,
+} from '../services/notificationHandler';
+
 // ── Service imports (YOUR ORIGINALS — untouched) ──────────────────────────────
 import { NotificationService } from '../services/notificationService';
 import { SupabaseBackup }      from '../services/supabaseBackup';
@@ -296,6 +303,7 @@ function DevToast({ visible }: { visible: boolean }) {
 
 export default function App() {
   const notificationService = NotificationService.getInstance('Njeri');
+  const [responseToast, setResponseToast] = useState<string | null>(null);
 
   useEffect(() => {
     startNotificationListener();
@@ -355,23 +363,41 @@ const setupApp = async () => {
   // Send a test interactive message (remove in production)
   // await notificationService.sendInteractiveLoveMessage();
   
-  // Add notification listeners
-  const cleanup = notificationService.addNotificationListeners();
+
+    // ── ADD THESE TWO LINES ──────────────────────────────────────────────────
+    await registerNotificationCategories();   // registers all button categories
 
     // ── ADD THESE TWO LINES ──────────────────────────────
     await setupMessageNotifier();        // sets up notification handler
     await checkAndFireMessages();        // reads messages.json, fires if new
-    // ────────────────────────────────────────────────────
+    const cleanupListeners = setupNotificationListeners((response: NotificationResponse) => {
+      // Called every time Alice taps a notification button
+      const label = actionLabel(response.actionId);
+      setResponseToast(label);                // show toast in app
+      setTimeout(() => setResponseToast(null), 3500);
+
+      // If she replied with text — you can read it here
+      if (response.textInput) {
+        console.log('Alice replied:', response.textInput);
+        // TODO: save to Supabase or show in a special inbox screen
+      }
+    });    // ────────────────────────────────────────────────────
   
+
   // Restore backup if first launch
   const hasRestored = await AsyncStorage.getItem('hasRestored');
   if (!hasRestored) {
     await backup.restoreFromBackup();
     await AsyncStorage.setItem('hasRestored', 'true');
   }
-  
-  return cleanup;
-};
+
+
+    return () => {
+      cleanup?.();
+      cleanupListeners();
+    };
+  }
+
 
   // ── YOUR ORIGINAL checkSecretAccess — untouched ────────────────────────────
   const checkSecretAccess = async () => {
@@ -469,6 +495,14 @@ const setupApp = async () => {
 
         {/* ── Dev mode toast ── */}
         <DevToast visible={showDevToast} />
+
+{responseToast && (
+  <Animated.View style={toastStyle}>
+    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>
+      Alice reacted: {responseToast}
+    </Text>
+  </Animated.View>
+             )}
     </SafeAreaProvider>
   );
 }
@@ -530,6 +564,16 @@ const styles = StyleSheet.create({
     zIndex:   999,
     // Transparent — renders nothing visually
   },
+
+
+// Toast style (add to your StyleSheet)
+ toastStyle: {
+   position: 'absolute', bottom: 100, alignSelf: 'center',
+   backgroundColor: '#FF6B9D', paddingHorizontal: 20,
+   paddingVertical: 12, borderRadius: 24, zIndex: 9999,
+   shadowColor: '#FF6B9D', shadowOffset: { width: 0, height: 4 },
+   shadowOpacity: 0.4, shadowRadius: 10, elevation: 10,
+ },
 
   // Tiny dot shown only after dev mode is active
   secretDot: {

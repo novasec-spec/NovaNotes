@@ -6,7 +6,7 @@
 //    quick-action tiles, streak counter, love note banner
 // ─────────────────────────────────────────────
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, AppState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,7 +23,6 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from '../../context/ThemeContext';
-
 const { width: W } = Dimensions.get('window');
 
  const QUOTES = [
@@ -179,7 +178,6 @@ const navigation = useNavigation();
   const quoteAnim   = useRef(new Animated.Value(1)).current;
   const toastAnim   = useRef(new Animated.Value(0)).current;
   const backupSpinAnim = useRef(new Animated.Value(0)).current;
-
   // ── YOUR ORIGINAL useEffect (untouched) ─────
   useEffect(() => {
     const hour = new Date().getHours();
@@ -265,7 +263,9 @@ const navigation = useNavigation();
     backupSpinAnim.stopAnimation();
     backupSpinAnim.setValue(0);
 
-    // Show toast instead of inline text
+  // ── ADD ──────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────
+
     setShowBackupToast(true);
     Animated.sequence([
       Animated.timing(toastAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
@@ -277,6 +277,7 @@ const navigation = useNavigation();
     });
   };
 
+
   // Spin interpolation for backup icon
   const spinInterpolate = backupSpinAnim.interpolate({
     inputRange:  [0, 1],
@@ -284,6 +285,7 @@ const navigation = useNavigation();
   });
 
   const currentQuote = QUOTES[quoteIndex];
+
 
   // ─────────────────────────────────────────────
   return (
