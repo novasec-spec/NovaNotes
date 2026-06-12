@@ -1289,41 +1289,53 @@ export default function NotesScreen() {
     setNotes(newNotes);
   };
 
-  // YOUR ORIGINAL addOrUpdateNote — extended to accept extra fields
-  const addOrUpdateNote = (data: {
-    title: string; text: string; place: string; event: string; author: string;
-    themeIndex: number; moodIndex: number | null; stickerIndex: number | null;
-    photoUri: string | null; hasDoodle: boolean;
-  }) => {
-    // keep currentNote in sync for any external consumers
-    setCurrentNote(data.text);
+type NoteData = {
+  title: string;
+  text: string;
+  place: string;
+  event: string;
+  author: string;
+  themeIndex: number;
+  moodIndex: number | null;
+  stickerIndex: number | null;
+  photoUri: string | null;
+  hasDoodle: boolean;
+};
 
-    if (editingId) {
-      // ── YOUR ORIGINAL edit logic ──
-      const updated = notes.map(n =>
-        n.id === editingId
-          ? { ...n, ...data, updatedAt: new Date().toISOString() }
-          : n
-      );
-      saveNotes(updated);
-      setEditingId(null);
-    } else {
-      // ── YOUR ORIGINAL new-note logic ──
-      const newNote = {
-        id:        Date.now().toString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        pinned:    false,
-        fav:       false,
-        ...data,
-      };
-      saveNotes([newNote, ...notes]);
-    }
+const addOrUpdateNote = (data: NoteData) => {
+  // keep currentNote in sync for any external consumers
+  setCurrentNote(data.text);
 
-    setShowEditor(false);
-    setEditingNote(null);
-  };
+  if (editingId) {
+    const updated = notes.map((n) =>
+      n.id === editingId
+        ? {
+            ...n,
+            ...data,
+            updatedAt: new Date().toISOString(),
+          }
+        : n
+    );
 
+    saveNotes(updated);
+    setEditingId(null);
+  } else {
+    const newNote = {
+      id: Date.now().toString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      pinned: false,
+      fav: false,
+      ...data,
+    };
+
+    saveNotes([newNote, ...notes]);
+  }
+
+
+  setShowEditor(false);
+  setEditingNote(null);
+};
   // YOUR ORIGINAL deleteNote — untouched
   const deleteNote = (id: string) => {
     Alert.alert('Delete Note', 'Are you sure?', [
