@@ -11,6 +11,7 @@
     "lint": "expo lint"
   },
   "dependencies": {
+    "@babel/runtime": "^7.29.7",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "8.4.4",
     "@react-navigation/bottom-tabs": "^7.4.0",
@@ -19,6 +20,7 @@
     "@react-navigation/stack": "^7.9.3",
     "@supabase/supabase-js": "^2.107.0",
     "expo": "~54.0.34",
+    "expo-av": "~16.0.8",
     "expo-background-fetch": "~14.0.9",
     "expo-constants": "~18.0.13",
     "expo-file-system": "~19.0.23",
@@ -35,10 +37,11 @@
     "expo-task-manager": "~14.0.9",
     "expo-updates": "~29.0.18",
     "expo-web-browser": "~15.0.11",
-    "expo-widgets": "^56.0.18",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
+    "react-native-android-widget": "^0.20.3",
+    "react-native-audio-record": "^0.2.2",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.0",

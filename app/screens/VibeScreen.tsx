@@ -174,13 +174,11 @@ function FadeSection({ delay = 0, children }: { delay?: number; children: React.
 
 // ══════════════════════════════════════════════════════════════════════════════
 export default function VibeScreen() {
-
   // ── YOUR ORIGINAL STATE ───────────────────────────────────────────────────
   const [todayMood,    setTodayMood]    = useState<MoodEntry | null>(null);
   const [moodHistory,  setMoodHistory]  = useState<MoodEntry[]>([]);
   const [weeklyStats,  setWeeklyStats]  = useState<Record<string, number>>({});
   const [todaysQuote,  setTodaysQuote]  = useState(quotes[0]);
-
   // ── NEW STATE ─────────────────────────────────────────────────────────────
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [showJournal,    setShowJournal]    = useState(false);
@@ -227,7 +225,6 @@ export default function VibeScreen() {
       setWeeklyStats(stats);
     }
   };
-
   // ── YOUR ORIGINAL getLast7Days ────────────────────────────────────────────
   const getLast7Days = () => {
     const days = [];
@@ -324,6 +321,7 @@ export default function VibeScreen() {
   const getMoodForDate = (dateStr: string) =>
     moodHistory.find(m => new Date(m.timestamp).toDateString() === dateStr);
 
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
 <SafeAreaView style={styles.container} edges={['top']}> 
@@ -342,6 +340,9 @@ export default function VibeScreen() {
             </TouchableOpacity>
           </View>
         </FadeSection>
+
+
+
 
         {/* ── Quote card — YOUR ORIGINAL structure ── */}
         <FadeSection delay={60}>
@@ -667,7 +668,6 @@ const styles = StyleSheet.create({
   quoteAuthor:         { color: PINK, fontSize: 13, fontWeight: '600' },
   refreshQuote:        { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 },
   refreshQuoteTxt:     { color: SOFT, fontSize: 12 },
-
   // Question card
   questionCard:        { marginHorizontal: 20, marginBottom: 12, padding: 18, backgroundColor: '#FFF0F7', borderRadius: 18, borderLeftWidth: 3, borderLeftColor: PINK },
   questionHeader:      { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 8 },

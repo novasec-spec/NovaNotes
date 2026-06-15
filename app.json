@@ -1,11 +1,11 @@
 {
   "expo": {
     "name": "NovaNote",
-    "slug": "novanote",
+    "slug": "novasec",
     "version": "1.0.0",
     "sdkVersion": "54.0.0",
     "updates": {
-      "url": "https://u.expo.dev/e9077b65-46aa-4a24-b9c4-48ef704c0973"
+      "url": "https://u.expo.dev/c39ab55b-00b0-4e0c-ba80-9df316f2a3b7"
     },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -16,7 +16,7 @@
       "supportsTablet": true,
       "jsEngine": "jsc",
       "bundleIdentifier": "com.novasec.notes"
-    },
+      },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -47,16 +47,43 @@
       "expo-notifications",
       "@react-native-community/datetimepicker",
       "expo-secure-store",
+      "expo-web-browser",
       [
-        "expo-widgets",
+        "react-native-android-widget",
         {
-          "groupIdentifier": "group.com.novasec.moodtracker",
           "widgets": [
             {
-              "name": "MoodWidget",
-              "displayName": "Mood Tracker",
-              "description": "Track your daily mood",
-              "supportedFamilies": ["systemSmall", "systemMedium"]
+              // This "name" must match the key in nameToWidget
+              // inside widget-task-handler.tsx
+              "name": "Bubbles",
+
+              // Label shown when Alice long-presses home screen → Widgets
+              "label": "Bubbles — Quote & Mood",
+
+              "description": "Daily quote, mood, streak & love note",
+
+              // Size on home screen grid
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+
+              // Allow Alice to resize it
+              "resizeMode": "horizontal|vertical",
+              "minResizeWidth": "180dp",
+              "minResizeHeight": "100dp",
+              "maxResizeWidth": "400dp",
+              "maxResizeHeight": "250dp",
+
+              // How often Android force-refreshes it on its own
+              // (30 min minimum — your app can refresh more often via
+              // requestWidgetUpdate when she opens it)
+              "updatePeriodMillis": 1800000,
+
+              // Screenshot shown in the widget picker — create this!
+              // Take a screenshot of the widget once it's working,
+              // crop it, save it here:
+              "previewImage": "./assets/widget-preview/bubbles.png"
             }
           ]
         }
@@ -68,7 +95,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "e9077b65-46aa-4a24-b9c4-48ef704c0973"
+        "projectId": "c39ab55b-00b0-4e0c-ba80-9df316f2a3b7"
       }
     },
     "runtimeVersion": {
