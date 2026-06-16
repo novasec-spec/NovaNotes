@@ -31,6 +31,7 @@ import MemoriesScreen from './screens/MemoriesScreen';
 import VibeScreen from './screens/VibeScreen';
 import SecretVaultScreen from './screens/SecretVaultScreen';
 import Token from './screens/Token';
+import { MungaBot } from '../components/MungaBot';
 
 // ── Service imports ──────────────────────────────
 import { SupabaseBackup } from '../services/supabaseBackup';
@@ -266,12 +267,14 @@ function DevToast({ visible }: { visible: boolean }) {
 //  Main App
 // ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
+ const [isMungaVisible, setIsMungaVisible] = useState(true);
+  const [isMungaOpen, setIsMungaOpen] = useState(false);
   const [responseToast, setResponseToast] = useState<string | null>(null);
   const [isSecretVisible, setIsSecretVisible] = useState(false);
   const [showDevToast, setShowDevToast] = useState(false);
 
   const backup = useRef(new SupabaseBackup(USER_ID)).current;
-
+  const toggleMunga = () => setIsMungaOpen(!isMungaOpen);
   // Initialize notifications + updates
   const initializeApp = async () => {
     try {
@@ -393,6 +396,11 @@ export default function App() {
             </Text>
           </Animated.View>
         )}
+<MungaBot
+        userId="Alice"
+        isVisible={isMungaVisible}
+        onToggle={toggleMunga}
+      />
     </SafeAreaProvider>
   );
 }
