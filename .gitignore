@@ -43,5 +43,5 @@ app-example
 /android
 
 #credentials
-./taptap-377d9-firebase-adminsdk-fbsvc-f46373a47f.json
-./google-services.json
+taptap-377d9-firebase-adminsdk-fbsvc-f46373a47f.json
+google-services.json
