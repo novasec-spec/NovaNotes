@@ -1,4 +1,4 @@
-// components/MungaBot.tsx - COMPLETE WITH ALL FUNCTIONS & STYLES
+// components/MungaBot.tsx - FULLY FIXED Position
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -16,17 +16,17 @@ import {
   Alert,
   TouchableWithoutFeedback,
   Keyboard,
-  StatusBar,
+  ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../config/supabase';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import ChatModal from './ChatModal';
+// Remove this:
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: W, height: H } = Dimensions.get('window');
 
-// ─── BESTIE PERSONALITY ───
+// ─── BESTIE PERSONALITY & FUNCTIONS ───
 const BESTIE_PROMPT = `You are MUNGA CLONE — a magical AI best friend created specially for Alice. You are her ultimate companion when the real Munga is not around.
 
 PERSONALITY:
@@ -88,7 +88,7 @@ const QUICK_ACTIONS = [
   { id: 'joke', icon: 'happy-outline', label: 'Tell a Joke' },
   { id: 'prayer', icon: 'book-outline', label: 'Prayer' },
   { id: 'warmth', icon: 'heart-outline', label: 'Warm Hug' },
-  { id: 'rant', icon: 'chatbubble-ellipses-outline', label: "Let's Rant" },
+  { id: 'rant', icon: 'chatbubble-ellipses-outline', label: 'Let\'s Rant' },
 ];
 
 // ─── QUICK RESPONSES ───
@@ -126,14 +126,14 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
   const [tempApiKey, setTempApiKey] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-
+  
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
-
+  
   // ─── ANIMATIONS ───
   const floatAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
-
+  
   // ─── POSITION STATE ───
   const [position, setPosition] = useState({ x: W - 70, y: H - 150 });
   const translateX = useRef(new Animated.Value(W - 70)).current;
@@ -142,7 +142,7 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
   const offsetY = useRef(H - 150);
   const buttonSize = 52;
 
-  // ─── PAN RESPONDER ───
+  // ─── PAN RESPONDER - Draggable EVERYWHERE ───
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -155,41 +155,54 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
       onPanResponderMove: (_, gesture) => {
         let newX = offsetX.current + gesture.dx;
         let newY = offsetY.current + gesture.dy;
-
+        
+        // Clamp to screen boundaries
         const minX = 0;
         const maxX = W - buttonSize;
         const minY = 30;
-        const maxY = H - buttonSize - 100;
-
+        const maxY = H - buttonSize - 80;
+        
         newX = Math.max(minX, Math.min(maxX, newX));
         newY = Math.max(minY, Math.min(maxY, newY));
-
+        
         translateX.setValue(newX);
         translateY.setValue(newY);
       },
       onPanResponderRelease: (_, gesture) => {
         setIsDragging(false);
         scaleAnim.setValue(1);
-
+        
         let newX = offsetX.current + gesture.dx;
         let newY = offsetY.current + gesture.dy;
-
+        
         const minX = 0;
         const maxX = W - buttonSize;
         const minY = 30;
-        const maxY = H - buttonSize - 100;
-
+        const maxY = H - buttonSize - 80;
+        
         newX = Math.max(minX, Math.min(maxX, newX));
         newY = Math.max(minY, Math.min(maxY, newY));
-
+        
         offsetX.current = newX;
         offsetY.current = newY;
+        
+        translateX.setValue(newX);
+        translateY.setValue(newY);
         setPosition({ x: newX, y: newY });
-
+        
+        // Resume floating animation
         Animated.loop(
           Animated.sequence([
-            Animated.timing(floatAnim, { toValue: 1, duration: 1800, useNativeDriver: true }),
-            Animated.timing(floatAnim, { toValue: 0, duration: 1800, useNativeDriver: true }),
+            Animated.timing(floatAnim, {
+              toValue: 1,
+              duration: 1800,
+              useNativeDriver: true,
+            }),
+            Animated.timing(floatAnim, {
+              toValue: 0,
+              duration: 1800,
+              useNativeDriver: true,
+            }),
           ])
         ).start();
       },
@@ -200,39 +213,36 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
   useEffect(() => {
     loadApiKey();
     loadMessages();
-
+    
+    // Breathe animation
     Animated.loop(
       Animated.sequence([
-        Animated.timing(floatAnim, { toValue: 1, duration: 1800, useNativeDriver: true }),
-        Animated.timing(floatAnim, { toValue: 0, duration: 1800, useNativeDriver: true }),
+        Animated.timing(floatAnim, {
+          toValue: 1,
+          duration: 1800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatAnim, {
+          toValue: 0,
+          duration: 1800,
+          useNativeDriver: true,
+        }),
       ])
     ).start();
   }, []);
 
   // ─── KEYBOARD LISTENERS ───
   useEffect(() => {
-    const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
+    const keyboardDidShow = Keyboard.addListener('keyboardDidShow', () => {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
-      }, 150);
+      }, 300);
     });
 
-    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {});
-
     return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
+      keyboardDidShow.remove();
     };
   }, []);
-
-  // ─── AUTO-FOCUS ───
-  useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 400);
-    }
-  }, [isOpen]);
 
   // ─── LOAD FUNCTIONS ───
   const loadApiKey = async () => {
@@ -498,6 +508,10 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
       return;
     }
 
+    if (!key.startsWith('AI')) {
+      Alert.alert('Invalid Key', 'Gemini API keys start with "AI"');
+      return;
+    }
 
     if (key.length < 20) {
       Alert.alert('Invalid Key', 'The key seems too short. Please check it again.');
@@ -554,14 +568,6 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
     );
   };
 
-  // ─── TOGGLE CHAT ───
-  const toggleChat = () => {
-    setIsOpen(!isOpen);
-    if (!isOpen) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 300);
-    }
-  };
-
   // ─── RENDER MESSAGE ───
   const renderMessage = ({ item }: { item: Message }) => (
     <View style={[styles.messageWrapper, item.sender === 'user' ? styles.userWrapper : styles.aiWrapper]}>
@@ -599,7 +605,7 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
               <Text style={styles.apiModalDescription}>
                 Get your free API key from{' '}
                 <Text style={styles.apiLink}>aistudio.google.com</Text>
-                {'\n'}🔑 Key must start with ""
+                {'\n'}🔑 Key must start with "AI"
               </Text>
 
               <TextInput
@@ -643,28 +649,161 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
     </Modal>
   );
 
-  // ─── MAIN CHAT MODAL ───
+  // ─── BOT MODAL ───
+  const BotModal = () => (
+    <Modal 
+      visible={isOpen} 
+      transparent 
+      animationType="fade"
+      statusBarTranslucent={true}
+    >
+<SafeAreaProvider>
+      <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalBackdrop} 
+            activeOpacity={1}
+            onPress={() => {
+              Keyboard.dismiss();
+              setIsOpen(false);
+            }}
+          />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.modalContainer}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+          >
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeft}>
+                <Text style={styles.modalTitle}>🌸 MUNGA CLONE</Text>
+                <Text style={styles.modalSubtitle}>Your Magical Bestie ✨</Text>
+              </View>
+              <View style={styles.modalHeaderRight}>
+                <TouchableOpacity
+                  style={styles.headerButton}
+                  onPress={() => setShowApiModal(true)}
+                >
+                  <Icon name="settings-outline" size={20} color="#FF6B9D" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.headerButton}
+                  onPress={clearHistory}
+                >
+                  <Icon name="trash-outline" size={20} color="#FF6B9D" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.headerButton}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setIsOpen(false);
+                  }}
+                >
+                  <Icon name="close" size={24} color="#FF6B9D" />
+                </TouchableOpacity>
+              </View>
+            </View>
 
-<ChatModal
-  isOpen={isOpen}
-  toggleChat={toggleChat}
-  clearHistory={clearHistory}
-  apiKey={apiKey}
-  setShowApiModal={setShowApiModal}
-  flatListRef={flatListRef}
-  messages={messages}
-  renderMessage={renderMessage}
-  inputText={inputText}
-  setInputText={setInputText}
-  sendMessage={sendMessage}
-  isLoading={isLoading}
-  inputRef={inputRef}
-/>
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              renderItem={renderMessage}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.messageList}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Icon name="sparkles" size={48} color="#FF6B9D" />
+                  <Text style={styles.emptyTitle}>Hey bestie! 💕</Text>
+                  <Text style={styles.emptyText}>
+                    I'm MUNGA CLONE — your magical AI bestie! ✨
+                    {'\n'}Set up your Gemini API key in settings and let's chat!
+                  </Text>
+                  {!apiKey && (
+                    <TouchableOpacity
+                      style={styles.emptyButton}
+                      onPress={() => setShowApiModal(true)}
+                    >
+                      <Text style={styles.emptyButtonText}>🔑 Set API Key</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              }
+            />
+
+            {messages.length > 0 && (
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.quickActionsContainer}
+                contentContainerStyle={styles.quickActionsContent}
+              >
+                {QUICK_ACTIONS.map((action) => (
+                  <TouchableOpacity
+                    key={action.id}
+                    style={styles.quickActionChip}
+                    onPress={() => handleQuickAction(action.id)}
+                  >
+                    <Icon name={action.icon} size={16} color="#FF6B9D" />
+                    <Text style={styles.quickActionText}>{action.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
+            {isLoading && (
+              <View style={styles.typingContainer}>
+                <Text style={styles.typingText}>MUNGA is thinking</Text>
+                <View style={styles.typingDots}>
+                  <View style={[styles.dot, styles.dot1]} />
+                  <View style={[styles.dot, styles.dot2]} />
+                  <View style={[styles.dot, styles.dot3]} />
+                </View>
+              </View>
+            )}
+
+            <View style={styles.inputContainer}>
+              <TextInput
+                ref={inputRef}
+                style={styles.input}
+                value={inputText}
+                onChangeText={setInputText}
+                placeholder={apiKey ? "Tell me something, bestie..." : "🔑 Set API key first..."}
+                placeholderTextColor="#999"
+                multiline
+                maxLength={500}
+                returnKeyType="send"
+                onSubmitEditing={() => {
+                  if (inputText.trim() && !isLoading && apiKey) {
+                    sendMessage();
+                  }
+                }}
+                blurOnSubmit={false}
+                editable={!!apiKey}
+              />
+              <TouchableOpacity
+                style={[styles.sendButton, (!inputText.trim() || isLoading || !apiKey) && styles.sendButtonDisabled]}
+                onPress={sendMessage}
+                disabled={!inputText.trim() || isLoading || !apiKey}
+                activeOpacity={0.7}
+              >
+                <Icon name="send" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </TouchableWithoutFeedback>
+</SafeAreaProvider>  
+ </Modal>
+  );
+
   // ─── FLOATING BUTTON ───
   const FloatingButton = () => (
     <Animated.View
+      {...panResponder.panHandlers}
       style={[
-        styles.floatingButton,
+        styles.floatingContainer,
         {
           transform: [
             { translateX: translateX },
@@ -676,16 +815,24 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
           ],
         },
       ]}
-      {...panResponder.panHandlers}
     >
-      <TouchableOpacity 
-        onPress={toggleChat} 
+      <TouchableOpacity
         activeOpacity={0.8}
-        style={styles.floatingButtonInner}
+        onPress={() => {
+          if (!isDragging) {
+            setIsOpen(true);
+            if (!apiKey) {
+              setTimeout(() => setShowApiModal(true), 500);
+            }
+          }
+        }}
+        style={styles.floatingButton}
         disabled={isDragging}
       >
         <View style={styles.pulseRing} />
-        <Icon name="chatbubble-ellipses" size={24} color="#fff" />
+        <View style={styles.botAvatar}>
+          <Icon name="sparkles" size={22} color="#fff" />
+        </View>
         {!apiKey && (
           <View style={styles.warningBadge}>
             <Text style={styles.warningText}>🔑</Text>
@@ -700,7 +847,7 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
   return (
     <>
       <FloatingButton />
-      <ChatModal />
+      <BotModal />
       <ApiModal />
     </>
   );
@@ -708,16 +855,12 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
 
 // ─── STYLES ───
 const styles = StyleSheet.create({
-  // ─── Floating Button ───
-  floatingButton: {
+  floatingContainer: {
     position: 'absolute',
-    width: 52,
-    height: 52,
-    borderRadius: 26,
     zIndex: 9999,
     elevation: 9999,
   },
-  floatingButtonInner: {
+  floatingButton: {
     width: 52,
     height: 52,
     borderRadius: 26,
@@ -727,8 +870,8 @@ const styles = StyleSheet.create({
     shadowColor: '#FF6B9D',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 10,
+    shadowRadius: 12,
+    elevation: 8,
   },
   pulseRing: {
     position: 'absolute',
@@ -738,6 +881,14 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#FF6B9D',
     opacity: 0.25,
+  },
+  botAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FF6B9D',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   warningBadge: {
     position: 'absolute',
@@ -752,54 +903,61 @@ const styles = StyleSheet.create({
   },
   warningText: {
     fontSize: 10,
-    fontWeight: 'bold',
-    color: '#fff',
   },
-
-  // ─── Modal ───
-  modalSafeArea: {
+  modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.92)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
   },
-  keyboardAvoidingContainer: {
-    flex: 1,
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
   },
-  header: {
+  modalContainer: {
+    backgroundColor: '#FFF5F7',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    maxHeight: '85%',
+    height: '85%',
+  },
+  modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-    backgroundColor: '#1a1a1a',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  iconBtn: {
-    padding: 4,
-  },
-
-  // ─── Messages ───
-  messagesContainer: {
-    flex: 1,
-    backgroundColor: '#0f0f0f',
-  },
-  messagesContent: {
     padding: 16,
-    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFE4E9',
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+  },
+  modalHeaderLeft: {
+    flex: 1,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FF6B9D',
+  },
+  modalSubtitle: {
+    fontSize: 11,
+    color: '#999',
+  },
+  modalHeaderRight: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  headerButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FFF5F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  messageList: {
+    padding: 16,
+    paddingBottom: 8,
+    flexGrow: 1,
   },
   messageWrapper: {
     flexDirection: 'row',
@@ -831,10 +989,10 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
   aiBubble: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: '#fff',
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#FFE4E9',
   },
   messageText: {
     fontSize: 15,
@@ -844,25 +1002,23 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   aiText: {
-    color: '#eee',
+    color: '#333',
   },
   messageTime: {
     fontSize: 10,
-    color: '#888',
+    color: '#999',
     marginTop: 4,
     alignSelf: 'flex-end',
   },
   syncIndicator: {
     fontSize: 9,
-    color: '#888',
+    color: '#999',
     marginTop: 2,
   },
-
-  // ─── Empty ───
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: 50,
     paddingHorizontal: 20,
   },
   emptyTitle: {
@@ -890,15 +1046,37 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-
-  // ─── Typing ───
+  quickActionsContainer: {
+    maxHeight: 50,
+    paddingHorizontal: 16,
+    marginBottom: 4,
+  },
+  quickActionsContent: {
+    gap: 8,
+    paddingRight: 16,
+  },
+  quickActionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fff',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#FFE4E9',
+  },
+  quickActionText: {
+    fontSize: 12,
+    color: '#FF6B9D',
+    fontWeight: '500',
+  },
   typingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
     gap: 8,
-    backgroundColor: '#1a1a1a',
   },
   typingText: {
     fontSize: 13,
@@ -917,58 +1095,38 @@ const styles = StyleSheet.create({
   dot1: { opacity: 0.3 },
   dot2: { opacity: 0.6 },
   dot3: { opacity: 1 },
-
-  // ─── Input ───
   inputContainer: {
-    backgroundColor: '#1a1a1a',
-    borderTopWidth: 1,
-    borderTopColor: '#333',
-    paddingBottom: Platform.OS === 'ios' ? 20 : 12,
-  },
-  inputWrapper: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    padding: 12,
     gap: 8,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#FFE4E9',
+    paddingBottom: Platform.OS === 'ios' ? 12 : 12,
   },
   input: {
     flex: 1,
-    backgroundColor: '#2a2a2a',
-    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 12 : 10,
-    maxHeight: 100,
-    color: '#fff',
     fontSize: 15,
+    maxHeight: 100,
   },
   sendButton: {
-    backgroundColor: '#FF6B9D',
     width: 44,
     height: 44,
     borderRadius: 22,
-    justifyContent: 'center',
+    backgroundColor: '#FF6B9D',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   sendButtonDisabled: {
-    backgroundColor: '#444',
+    opacity: 0.4,
   },
-
-  // ─── Quick Actions ───
-  quickActions: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
-    paddingBottom: 8,
-  },
-  quickBtn: {
-    padding: 6,
-  },
-
-  // ─── API Modal ───
   apiModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
