@@ -9,7 +9,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
 import MoodTracker from '../../components/MoodTracker';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons'; // or any icon library
+
 const { width: W } = Dimensions.get('window');
+
+
+
+
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const PINK    = '#FF6B9D';
@@ -174,6 +181,9 @@ function FadeSection({ delay = 0, children }: { delay?: number; children: React.
 
 // ══════════════════════════════════════════════════════════════════════════════
 export default function VibeScreen() {
+  const handleOpenMoodMusic = () => {
+    router.push('/moodmusic');
+  };
   // ── YOUR ORIGINAL STATE ───────────────────────────────────────────────────
   const [todayMood,    setTodayMood]    = useState<MoodEntry | null>(null);
   const [moodHistory,  setMoodHistory]  = useState<MoodEntry[]>([]);
@@ -333,7 +343,7 @@ export default function VibeScreen() {
             <View>
               <Text style={styles.headerGreeting}>Good {getTimeOfDay()} 🌸</Text>
               <Text style={styles.headerSub}>How's your heart today?</Text>
-            </View>
+                        </View>
             <TouchableOpacity style={styles.journalFab} onPress={openJournal}>
               <Icon name={todayJournal ? 'checkmark-circle' : 'journal'} size={20} color={WHITE} />
               <Text style={styles.journalFabTxt}>{todayJournal ? 'Diary' : 'Write'}</Text>
@@ -341,10 +351,30 @@ export default function VibeScreen() {
           </View>
         </FadeSection>
 
+          <View style={styles.music}>
+<TouchableOpacity
+  onPress={handleOpenMoodMusic}
+  style={{
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor:{PINK},
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5, // Android shadow
+    shadowColor: '#000', // iOS shadow
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  }}
+>
+  <Ionicons name="musical-notes" size={30} color="#FFF" />
+</TouchableOpacity> 
+         </View>
 
-
-
-        {/* ── Quote card — YOUR ORIGINAL structure ── */}
         <FadeSection delay={60}>
           <View style={styles.quoteCard}>
             <Icon name="chatbubble-ellipses" size={26} color={PINK} />
@@ -677,7 +707,7 @@ const styles = StyleSheet.create({
   answerPreviewTxt:    { flex: 1, fontSize: 13, color: MID, fontStyle: 'italic' },
   answerBtn:           { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10, alignSelf: 'flex-start' },
   answerBtnTxt:        { color: PINK, fontSize: 13, fontWeight: '600' },
-
+  music:               { margin: 20, marginBottom: 12, backgroundColor: CARD_BG, borderRadius: 20, alignItems: 'center', elevation: 2 },
   // Today mood card — YOUR ORIGINAL todayCard
   todayCard:           { margin: 20, marginBottom: 12, padding: 20, borderRadius: 20, alignItems: 'center' },
   cardTitle:           { fontSize: 16, fontWeight: '700', color: PINK, marginBottom: 10 },

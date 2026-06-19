@@ -24,6 +24,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
 import { Audio } from 'expo-av';
+import {  useTheme } from '../../contexts/ThemeContext';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -1185,6 +1186,8 @@ function ReminderModal({
 // ── MAIN SCREEN ───────────────────────────────
 // ─────────────────────────────────────────────
 export default function NotesScreen() {
+  const { colors, isDarkMode } = useTheme();
+
   // ORIGINAL STATE - PRESERVED
   const [notes, setNotes] = useState<any[]>([]);
   const [currentNote, setCurrentNote] = useState('');
@@ -1318,7 +1321,7 @@ export default function NotesScreen() {
   const favCount = notes.filter(n => n.fav).length;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <Animated.View style={[
         styles.header,

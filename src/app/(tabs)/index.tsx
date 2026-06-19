@@ -22,7 +22,7 @@ import { SupabaseBackup } from '../../services/supabaseBackup';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemeProvider, useTheme } from '../../context/ThemeContext';
+import {  useTheme } from '../../contexts/ThemeContext';
 const { width: W } = Dimensions.get('window');
 
  const QUOTES = [
@@ -133,28 +133,28 @@ const QUICK_TILES = [
   {
     icon: 'notebook-outline',
     label: 'New Note',
-    screen: 'Notes',
+    screen: 'notes',
     color: '#FFD6E8',
     accent: '#FF85A1',
   },
   {
     icon: 'memory',
     label: 'Memory Jar',
-    screen: 'Memories',
+    screen: 'memories',
     color: '#D6F5E8',
     accent: '#7EDCB5',
   },
   {
     icon: 'gift-outline',
     label: 'From Him',
-    screen: 'Vault',
+    screen: 'vault',
     color: '#E8D6FF',
     accent: '#C9A8F5',
   },
   {
     icon: 'music-circle-outline',
     label: 'Our Playlist',
-    screen: 'Vibe',
+    screen: 'vibe',
     color: '#FFF3D6',
     accent: '#FFD97D',
   },
@@ -162,6 +162,7 @@ const QUICK_TILES = [
 // ─────────────────────────────────────────────
 export default function HomeScreen() {
   // ── YOUR ORIGINAL STATE (untouched) ─────────
+  const { colors, isDarkMode } = useTheme();
 const navigation = useNavigation();
   const [greeting,     setGreeting]     = useState('');
   const [todayMood,    setTodayMood]    = useState(null);
@@ -289,18 +290,17 @@ const navigation = useNavigation();
 
   // ─────────────────────────────────────────────
   return (
-<ThemeProvider>
 <SafeAreaProvider>
-<SafeAreaView style={styles.root} edges={['top']}>
+<SafeAreaView style={[styles.root, { backgroundColor: colors.background }]} edges={['top']}>
       {/* ── Toast notification (replaces inline backup status) ── */}
       {showBackupToast && (
-        <Animated.View style={[styles.toast, { opacity: toastAnim }]}>
-          <Text style={styles.toastText}>{backupStatus}</Text>
+        <Animated.View style={[styles.toast,  { opacity: toastAnim }]}>
+          <Text style={[styles.toastText,  { color: colors.text }]}>{backupStatus}</Text>
         </Animated.View>
       )}
 
       <ScrollView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -319,7 +319,7 @@ const navigation = useNavigation();
 
           {/* ── BACKUP BUTTON → moved to top-right corner icon ── */}
           <TouchableOpacity
-            style={styles.backupIconBtn}
+            style={[styles.backupIconBtn, { backgroundColor: colors.card }] }
             onPress={performBackup}
             activeOpacity={0.75}
           >
@@ -338,11 +338,12 @@ const navigation = useNavigation();
         {/* ── NEW: Streak banner ── */}
         <Animated.View
           style={[
-            styles.streakBanner,
+            styles.streakBanner,{  backgroundColor: colors.card, borderColor: colors.border },
             { opacity: fadeAnim },
           ]}
         >
    
+
 <MaterialCommunityIcons
   name="fire"
   size={26}
@@ -351,14 +352,14 @@ const navigation = useNavigation();
           <Text style={styles.streakText}>
             {streak} day{streak !== 1 ? 's' : ''} in a row!
           </Text>
-          <Text style={styles.streakSub}>Alice is on a streak ✨</Text>
+          <Text style={[styles.streakSub,  { color: colors.text }]}>Alice is on a streak ✨</Text>
         </Animated.View>
 
         {/* ── Mood section (YOUR ORIGINAL logic, untouched) ── */}
         {todayMood ? (
-          <View style={styles.todayMoodCard}>
-            <Text style={styles.cardTitle}>Today's Vibe</Text>
-            <Text style={styles.moodDisplay}>
+          <View style={[styles.todayMoodCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.cardTitle,  { color: colors.text }]}>Today's Vibe</Text>
+            <Text style={[styles.moodDisplay,  { color: colors.text }]}>
               {todayMood.emoji} {todayMood.mood}
             </Text>
             <Text style={styles.moodTime}>
@@ -377,7 +378,7 @@ const navigation = useNavigation();
   color="#FF6B9D"
 /> </Text>
         </View>
-        <View style={styles.tilesGrid}>
+        <View style={[styles.tilesGrid, { borderColor: colors.border }]}>
           {QUICK_TILES.map((tile, i) => (
 <TouchableOpacity
   key={i}
@@ -386,7 +387,7 @@ const navigation = useNavigation();
   style={[
     styles.tile,
     {
-      backgroundColor: tile.color,
+      backgroundColor: colors.card,
       borderColor: tile.accent + '55',
     },
   ]}
@@ -402,7 +403,7 @@ const navigation = useNavigation();
         </View>
 
         {/* ── Quote card (YOUR ORIGINAL, now rotates) ── */}
-        <Animated.View style={[styles.quoteCard, { opacity: quoteAnim }]}>
+        <Animated.View style={[styles.quoteCard, { opacity: quoteAnim }, { backgroundColor: colors.card }]}>
           <Text style={styles.quoteMark}>"</Text>
           <Text style={styles.quote}>{currentQuote.text}</Text>
           <Text style={styles.quoteAuthor}>— {currentQuote.author}</Text>
@@ -410,7 +411,7 @@ const navigation = useNavigation();
         </Animated.View>
 
         {/* ── NEW: Love note banner ── */}
-        <View style={styles.loveNoteBanner}>
+        <View style={[styles.loveNoteBanner, { backgroundColor: colors.background }]}>
 
 <MaterialCommunityIcons
   name="email-heart-outline"
@@ -427,7 +428,6 @@ const navigation = useNavigation();
       </ScrollView>
 </SafeAreaView>
 </SafeAreaProvider>
-</ThemeProvider> 
  );
 }
 

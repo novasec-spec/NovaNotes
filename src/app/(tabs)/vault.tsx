@@ -8,8 +8,11 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
-import DeveloperInfoModal from './DeveloperInfoModal';
+import DeveloperInfoModal from '../developer';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router'; // Import the router
+
 const { width: W } = Dimensions.get('window');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -88,7 +91,7 @@ function PinDots({ count, filled }: { count: number; filled: number }) {
         <View
           key={i}
           style={[
-            dotStyles.dot,
+	            dotStyles.dot,
             i < filled ? dotStyles.dotFilled : dotStyles.dotEmpty,
           ]}
         />
@@ -323,7 +326,11 @@ export default function SecretVaultScreen() {
 
           <Text style={styles.lockedTitle}>Secret Vault</Text>
           <Text style={styles.lockedSub}>Your private space 💕</Text>
-
+    <TouchableOpacity
+      style={styles.iconBtn}
+      onPress={() => router.push('/tokenmanager')}>
+      <Icon name="cog" size={5} color='white' />
+      </TouchableOpacity>
           {/* Password input — text, not just digits */}
           <TextInput
             style={[styles.pinInput, pinError && styles.pinInputError]}
@@ -370,6 +377,11 @@ export default function SecretVaultScreen() {
       <TouchableOpacity
       style={styles.iconBtn}   
       onPress={() => setModalVisible(true)}>
+      <Icon name="cog" size={18} color={PINK} />
+      </TouchableOpacity>
+     <TouchableOpacity
+      style={styles.iconBtn}
+      onPress={() => router.push('/settings')}>
       <Icon name="cog" size={18} color={PINK} />
       </TouchableOpacity>
       <DeveloperInfoModal
