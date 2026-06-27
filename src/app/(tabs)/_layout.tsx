@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppContext } from '../_layout';
 import { useColors } from '../../hooks/useColors'; // Import the hook
 
+
 const { width: W } = Dimensions.get('window');
 const WHITE = '#FFFFFF';
 const TAB_BG = '#FFFFFF';
@@ -16,7 +17,8 @@ const TAB_CONFIG: Record<string, { icon: string; iconActive: string; color: stri
   memories: { icon: 'images-outline', iconActive: 'images', color: '#F97316' },
   vibe: { icon: 'happy-outline', iconActive: 'happy', color: '#22C55E' },
   vault: { icon: 'lock-closed-outline', iconActive: 'lock-closed', color: '#3B82F6' },
-  token: { icon: 'construct-outline', iconActive: 'construct', color: '#F59E0B' },
+  chat: { icon: 'chatbubbles-outline', iconActive: 'chatbubbles', color: '#F59E0B' },
+  notifications: { icon: 'notifications-outline', iconActive: 'notifications', color: '#F5685' },
 };
 
 // Helper to format the label exactly like your original code
@@ -117,10 +119,10 @@ export default function TabsLayout() {  // Read the secret state from the Root L
       <Tabs.Screen name="memories" options={{ title: '📸 Memories' }} />
       <Tabs.Screen name="vibe" options={{ title: "🎵 Today's Vibe" }} />
       <Tabs.Screen name="vault" options={{ title: '🔒 Secret Vault' }} />
-      
+    <Tabs.Screen name="notifications" options={{ title: 'Not' }} />
       {/* Conditionally render the Dev tab just like before */}
       {isSecretVisible && (
-        <Tabs.Screen name="token" options={{ title: '🔧 Dev Tools' }} />
+        <Tabs.Screen name="chat" options={{ title: ' Chat ' }} />
       )}
     </Tabs>
   );

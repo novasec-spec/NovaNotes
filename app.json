@@ -15,8 +15,11 @@
     "ios": {
       "supportsTablet": true,
       "jsEngine": "jsc",
-      "bundleIdentifier": "com.novasec.notes"
-      },
+      "bundleIdentifier": "com.novasec.notes",
+      "infoPlist": {
+        "UIBackgroundModes": ["audio"]
+      }
+    },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -24,8 +27,9 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "jsEngine": "hermes",
+      "jsEngine": "jsc",
       "googleServicesFile": "./google-services.json",
+      "enableBackgroundAudio": true,
       "package": "com.novasec.notes",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": true,
@@ -53,43 +57,27 @@
         {
           "widgets": [
             {
-              // This "name" must match the key in nameToWidget
-              // inside widget-task-handler.tsx
               "name": "Bubbles",
-
-              // Label shown when Alice long-presses home screen → Widgets
               "label": "Bubbles — Quote & Mood",
-
               "description": "Daily quote, mood, streak & love note",
-
-              // Size on home screen grid
               "minWidth": "250dp",
               "minHeight": "110dp",
               "targetCellWidth": 4,
               "targetCellHeight": 2,
-
-              // Allow Alice to resize it
               "resizeMode": "horizontal|vertical",
               "minResizeWidth": "180dp",
               "minResizeHeight": "100dp",
               "maxResizeWidth": "400dp",
               "maxResizeHeight": "250dp",
-
-              // How often Android force-refreshes it on its own
-              // (30 min minimum — your app can refresh more often via
-              // requestWidgetUpdate when she opens it)
               "updatePeriodMillis": 1800000,
-
-              // Screenshot shown in the widget picker — create this!
-              // Take a screenshot of the widget once it's working,
-              // crop it, save it here:
               "previewImage": "./assets/widget-preview/bubbles.png"
             }
           ]
-        }
-      ]
-    ],
-    "experiments": {
+      }  
+       ],
+       "expo-audio"
+],
+"experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
@@ -103,3 +91,5 @@
     }
   }
 }
+
+

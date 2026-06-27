@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback, createContext } from 'react';
 import { View, Text, StyleSheet, Animated, Pressable } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Updates from 'expo-updates';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,7 +11,6 @@ import { ThemeProvider } from '../contexts/ThemeContext'; // Adjust path if need
 import { SupabaseBackup } from '../services/supabaseBackup';
 import { NotificationService } from '../services/notificationService';
 import { MungaBot } from '../components/MungaBot';
-
 
 const USER_ID = 'Njeri';
 const WHITE = '#FFFFFF';
@@ -85,6 +84,7 @@ function DevToast({ visible }: { visible: boolean }) {
 
 // ── Main Root Layout ─────────────────────────────────────────────────────────
 export default function RootLayout() {
+  const router = useRouter();
   const [isMungaVisible, setIsMungaVisible] = useState(true);
   const [isMungaOpen, setIsMungaOpen] = useState(false);
   const [responseToast, setResponseToast] = useState<string | null>(null);
@@ -152,15 +152,23 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+
 <ThemeProvider>
       {/* Provide the secret state to the tabs layout */}
       <AppContext.Provider value={{ isSecretVisible, setIsSecretVisible }}>
-        
+ <View style={{ flex: 1 }}>
         {/* Stack allows us to push non-tab screens (like profile) over the tabs */}
         <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
+          <Stack.Screen
+          name="splash"
+          options={{
+            headerShown: false,
+            animation: 'fade',
+          }}
+        />
           <Stack.Screen name="(tabs)" />
         </Stack>
-
+</View>
         {/* Global Overlays */}
         <SecretZone onUnlock={handleSecretUnlock} isDevMode={isSecretVisible} />
         <DevToast visible={showDevToast} />
