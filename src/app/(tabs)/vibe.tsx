@@ -3,20 +3,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   Dimensions, Alert, TextInput, Modal, Animated,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, Pressable,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Icon from 'react-native-vector-icons/Ionicons';
+import { Ionicons } from '@expo/vector-icons';
 import MoodTracker from '../../components/MoodTracker';
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons'; // or any icon library
+import { useTheme } from '../../contexts/ThemeContext';
 
 const { width: W } = Dimensions.get('window');
-
-
-
-
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const PINK    = '#FF6B9D';
@@ -26,64 +22,96 @@ const WHITE   = '#FFFFFF';
 const DARK    = '#2D1B25';
 const MID     = '#9A7090';
 const SOFT    = '#C4A0B8';
-const CARD_BG = '#FFFFFF';
+const MINT    = '#22C55E';
+const PURPLE  = '#8B5CF6';
+const AMBER   = '#F59E0B';
 
-// ── Quotes — YOUR ORIGINAL array ─────────────────────────────────────────────
- const quotes = [
+// ── Mood config ───────────────────────────────────────────────────────────────
+const MOODS = [
+  { key: 'Happy',      icon: 'sunny',        color: '#F59E0B', bg: '#FFFBEB', label: 'Happy'      },
+  { key: 'Loved',      icon: 'heart',        color: '#EF4444', bg: '#FFF0F0', label: 'Loved'      },
+  { key: 'Relaxed',    icon: 'leaf',         color: '#22C55E', bg: '#F0FDF4', label: 'Relaxed'    },
+  { key: 'Thoughtful', icon: 'bulb',         color: '#8B5CF6', bg: '#F5F3FF', label: 'Thoughtful' },
+  { key: 'Sad',        icon: 'rainy',        color: '#6B7280', bg: '#F3F4F6', label: 'Sad'        },
+  { key: 'Frustrated', icon: 'thunderstorm', color: '#F97316', bg: '#FFF4ED', label: 'Frustrated' },
+  { key: 'Anxious',    icon: 'pulse',        color: '#EC4899', bg: '#FDF2F8', label: 'Anxious'    },
+  { key: 'Grateful',   icon: 'sparkles',     color: '#14B8A6', bg: '#F0FDFA', label: 'Grateful'   },
+] as const;
+
+type MoodKey = typeof MOODS[number]['key'];
+
+function getMood(key?: string) {
+  return MOODS.find(m => m.key === key) ?? MOODS[0];
+}
+
+// ── Day-of-week labels ────────────────────────────────────────────────────────
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// ── Journal / Mood types ──────────────────────────────────────────────────────
+interface JournalEntry {
+  id:        string;
+  date:      string;
+  note:      string;
+  dayRating: 'great' | 'good' | 'okay' | 'rough' | 'bad';
+  question?: string;
+  answer?:   string;
+}
+
+interface MoodEntry {
+  mood:      string;
+  timestamp: string;
+  note?:     string;
+}
+
+// ── Day rating config ─────────────────────────────────────────────────────────
+const DAY_RATINGS = [
+  { key: 'great', icon: 'star',          color: '#F59E0B', label: 'Great'  },
+  { key: 'good',  icon: 'happy',         color: '#22C55E', label: 'Good'   },
+  { key: 'okay',  icon: 'remove-circle', color: '#6B7280', label: 'Okay'   },
+  { key: 'rough', icon: 'cloudy',        color: '#F97316', label: 'Rough'  },
+  { key: 'bad',   icon: 'thunderstorm',  color: '#EF4444', label: 'Bad'    },
+] as const;
+
+type DayRating = typeof DAY_RATINGS[number]['key'];
+
+function getRating(key?: string) {
+  return DAY_RATINGS.find(r => r.key === key) ?? DAY_RATINGS[2];
+}
+
+// ── Quotes ────────────────────────────────────────────────────────────────────
+const SWEET_QUOTES = [
   { text: "You are enough. You have always been enough.", author: "Your Person 💕" },
-  { text: "You deserve all the love and happiness in the world", author: "Believe It ✨" },
   { text: "Your smile is my favorite thing to see", author: "Keep Smiling 😊" },
   { text: "You are stronger than you know and braver than you feel", author: "Warrior 💪" },
-  { text: "I believe in you, even when you don't believe in yourself", author: "Your Cheerleader 🎉" },
   { text: "You make the world a better place just by being in it", author: "Truth 🌍" },
   { text: "Your kindness is your superpower", author: "Hero 🦸" },
-  { text: "You are loved more than you will ever know", author: "Deeply ❤️" },
   { text: "Today is going to be a good day because you're in it", author: "Morning Boost ☀️" },
-  { text: "You are capable of amazing things", author: "Dream Big 🌟" },
-  { text: "Your presence is a gift to everyone around you", author: "Precious 🎁" },
   { text: "You are not your mistakes. You are growing every day", author: "Progress 📈" },
   { text: "The world needs exactly you. Not a version of someone else", author: "Authentic 💯" },
   { text: "You are worthy of rest, peace, and joy", author: "Take a Breath 🧘" },
-  { text: "Your heart is beautiful, and so is your soul", author: "Inside & Out 💕" },
-  { text: "You light up every room you walk into", author: "Radiant ✨" },
-  { text: "I am so proud of the person you are becoming", author: "So Proud 🥹" },
-  { text: "You turn ordinary moments into magic", author: "Enchanting 🪄" },
-  { text: "Your feelings are valid. Always", author: "Feel It All 💭" },
-  { text: "You are doing better than you think", author: "Keep Going 🚀" },
-  { text: "Your voice matters. What you say is important", author: "Be Heard 🗣️" },
-  { text: "You are the best thing that ever happened to me", author: "My Blessing 🙏" },
-  { text: "Today, choose yourself. You deserve it", author: "Self Love 💖" },
-  { text: "You are not alone. I am always here", author: "Right Beside You 👫" },
-  { text: "Your potential is limitless", author: "Unstoppable 🌈" },
-  { text: "You bring out the best in everyone around you", author: "Inspiring 🌺" },
-  { text: "You are exactly where you need to be right now", author: "Perfect Timing ⏰" },
-  { text: "Your laughter is my favorite sound", author: "Music to My Ears 🎵" },
-  { text: "You are brave for facing each new day", author: "Courageous 🦁" },
-  { text: "Your uniqueness is what makes you beautiful", author: "One of a Kind 💎" },
-  { text: "You have survived every bad day so far", author: "Stronger Every Day 💪" },
-  { text: "Your dreams are valid. Chase them", author: "Go Get It 🎯" },
-  { text: "You make my life better just by being in it", author: "Thank You 💕" },
-  { text: "You are allowed to take up space", author: "Be Present 🌸" },
-  { text: "Your energy is healing to those around you", author: "Peaceful 🕊️" },
-  { text: "You are more than enough. You always were", author: "Enough 💯" },
-  { text: "Your patience and understanding amaze me", author: "So Kind 🙌" },
+  { text: "Your presence is a gift to everyone around you", author: "Precious 🎁" },
   { text: "You are a masterpiece in progress", author: "Work of Art 🎨" },
-  { text: "Your intuition is powerful. Trust it", author: "Inner Voice 🔊" },
-  { text: "You have a heart of gold", author: "Pure 💛" },
-  { text: "You are resilient. Nothing can keep you down", author: "Rise Again 🌱" },
-  { text: "Your authenticity inspires me every day", author: "Real & Raw 💫" },
-  { text: "You deserve to be celebrated, not just tolerated", author: "Worthy 🎉" },
-  { text: "Your presence calms my storms", author: "My Anchor ⚓" },
-  { text: "You are growing into the best version of yourself", author: "Evolving 🦋" },
   { text: "Your effort matters more than perfection", author: "Trying is Winning 🏆" },
-  { text: "You are a blessing to everyone who knows you", author: "Gift 🎀" },
-  { text: "Your perspective is valuable and needed", author: "See the World 🌍" },
-  { text: "You are loved for exactly who you are, right now", author: "Unconditionally 💕" },
   { text: "Keep shining. The world needs your light", author: "Shine Bright ✨" },
+  { text: "You turn ordinary moments into magic", author: "Enchanting 🪄" },
+  { text: "Your potential is limitless", author: "Unstoppable 🌈" },
 ];
 
+const FUNNY_QUOTES = [
+  { text: "You're like coffee — essential, warm, and some people don't deserve you.", author: "Factual ☕" },
+  { text: "You're not lazy. You're on energy-saving mode. Very eco-friendly.", author: "Efficiency Expert 🌿" },
+  { text: "Napping is basically time travel to when you feel better. Very scientific.", author: "Dr. Pillow 🔬" },
+  { text: "You walked past a mirror today and it said 'okay wow'.", author: "Eyewitness 🪞" },
+  { text: "Your vibe is giving main character — even when you're just getting snacks.", author: "The Narrator 📖" },
+  { text: "Somewhere, someone is using you as their 'goals'. No pressure tho.", author: "Anonymous Fan 🫶" },
+  { text: "Bad day? You've survived 100% of your bad days so far. Excellent track record.", author: "Statistics 📊" },
+  { text: "You're the reason the WiFi password is worth sharing.", author: "Tech Support 📶" },
+  { text: "You could be a Monday and still be someone's favourite thing about the week.", author: "Calendar Logic 📅" },
+  { text: "Manifesting good things for you. I also manifested snacks. Priorities.", author: "The Universe 🌌" },
+  { text: "Not to be dramatic but you might literally be the coolest person I know.", author: "Objective Opinion 🤓" },
+  { text: "Plot twist: the main character was you the whole time. Always has been.", author: "Spoiler Alert 🎬" },
+];
 
-// ── Rotating daily affirmations ───────────────────────────────────────────────
 const AFFIRMATIONS = [
   "You are loved, you are cherished, and you make this world more beautiful.",
   "Your feelings matter. It's okay to feel everything deeply.",
@@ -94,7 +122,6 @@ const AFFIRMATIONS = [
   "Every day you choose love, you are choosing the best version of yourself.",
 ];
 
-// ── Inquisitive mood questions ────────────────────────────────────────────────
 const MOOD_QUESTIONS = [
   "What's one tiny thing that made you smile today?",
   "On a scale of sleepy to full of life — where are you landing?",
@@ -110,61 +137,99 @@ const MOOD_QUESTIONS = [
   "What are you most grateful for in this exact moment?",
 ];
 
-// ── Mood config — Ionicons only, no emojis ────────────────────────────────────
-const MOODS = [
-  { key: 'Happy',       icon: 'sunny',           color: '#F59E0B', bg: '#FFFBEB', label: 'Happy'       },
-  { key: 'Loved',       icon: 'heart',           color: '#EF4444', bg: '#FFF0F0', label: 'Loved'       },
-  { key: 'Relaxed',     icon: 'leaf',            color: '#22C55E', bg: '#F0FDF4', label: 'Relaxed'     },
-  { key: 'Thoughtful',  icon: 'bulb',            color: '#8B5CF6', bg: '#F5F3FF', label: 'Thoughtful'  },
-  { key: 'Sad',         icon: 'rainy',           color: '#6B7280', bg: '#F3F4F6', label: 'Sad'         },
-  { key: 'Frustrated',  icon: 'thunderstorm',    color: '#F97316', bg: '#FFF4ED', label: 'Frustrated'  },
-  { key: 'Anxious',     icon: 'pulse',           color: '#EC4899', bg: '#FDF2F8', label: 'Anxious'     },
-  { key: 'Grateful',    icon: 'sparkles',        color: '#14B8A6', bg: '#F0FDFA', label: 'Grateful'    },
-] as const;
+// ── Mood-aware encouragements ─────────────────────────────────────────────────
+const MOOD_ENCOURAGEMENTS: Record<string, string[]> = {
+  Happy: [
+    "You're radiating today and people can feel it. Keep going.",
+    "This energy is contagious. Bottle it up for a rainy day.",
+    "Happy looks incredible on you, just so you know.",
+  ],
+  Loved: [
+    "You deserve every bit of that feeling. Soak it in.",
+    "Being loved is nice. Being you is nicer. Both happening? Win.",
+    "Hold onto this. You earned it.",
+  ],
+  Relaxed: [
+    "Rest is productive. You are doing amazing by doing nothing.",
+    "Chill mode activated. Respect.",
+    "Slow days are still good days. You're exactly where you should be.",
+  ],
+  Thoughtful: [
+    "Big brain energy. Whatever you're figuring out — you'll get there.",
+    "Deep thinkers see what others miss. Keep going.",
+    "It's okay to sit with your thoughts. No rush.",
+  ],
+  Sad: [
+    "Sad days are valid. You don't have to perform happiness today.",
+    "It's okay to not be okay. That's literally what 'okay' is for later.",
+    "Be soft with yourself right now. You deserve that.",
+  ],
+  Frustrated: [
+    "Frustration means you care. That's actually not a bad thing.",
+    "You are allowed to be annoyed. Just don't live there.",
+    "Deep breaths. Dramatic exhale. You've got this.",
+  ],
+  Anxious: [
+    "Your nervous system is doing a lot right now. Let's slow it down.",
+    "One thing at a time. You don't have to solve everything today.",
+    "You've survived every anxious day before this one. Today too.",
+  ],
+  Grateful: [
+    "Gratitude is a superpower and you're using it wisely.",
+    "Noticing the good things is genuinely a skill. You have it.",
+    "This energy you're giving? It comes back to you tenfold.",
+  ],
+};
 
-type MoodKey = typeof MOODS[number]['key'];
+// ── Mini challenges ───────────────────────────────────────────────────────────
+const DAILY_CHALLENGES = [
+  { icon: 'water', color: '#3B82F6', text: 'Drink 8 glasses of water today', category: 'Health' },
+  { icon: 'walk', color: MINT, text: 'Take a 10-minute walk outside', category: 'Movement' },
+  { icon: 'phone-portrait-outline', color: '#F97316', text: 'Phone-free for 30 mins before bed', category: 'Wind down' },
+  { icon: 'chatbubble-outline', color: PINK, text: 'Text someone you haven\'t talked to in a while', category: 'Connection' },
+  { icon: 'book-outline', color: PURPLE, text: 'Read 10 pages of anything you like', category: 'Mind' },
+  { icon: 'sunny-outline', color: AMBER, text: 'Step outside for at least 5 minutes', category: 'Mood' },
+  { icon: 'musical-notes-outline', color: '#EC4899', text: 'Listen to a song that makes you feel something', category: 'Vibe' },
+  { icon: 'ribbon-outline', color: '#14B8A6', text: 'Say one kind thing to yourself out loud', category: 'Self' },
+  { icon: 'cafe-outline', color: '#92400E', text: 'Make or order your favourite drink. No guilt.', category: 'Treat' },
+  { icon: 'bed-outline', color: '#6B7280', text: 'Be in bed by 11. Your brain will thank you.', category: 'Rest' },
+  { icon: 'color-palette-outline', color: '#A855F7', text: 'Draw, doodle, or colour something — anything', category: 'Create' },
+  { icon: 'fitness-outline', color: '#22C55E', text: 'Do 5 minutes of stretching', category: 'Body' },
+  { icon: 'earth-outline', color: '#3B82F6', text: 'Learn one random interesting fact today', category: 'Curious' },
+  { icon: 'pizza-outline', color: '#F59E0B', text: 'Eat something that genuinely makes you happy', category: 'Joy' },
+];
 
-function getMood(key?: string) {
-  return MOODS.find(m => m.key === key) ?? MOODS[0];
-}
+// ── Mood trend summaries ──────────────────────────────────────────────────────
+function getMoodTrendMessage(stats: Record<string, number>): { text: string; icon: string; color: string } {
+  const total = Object.values(stats).reduce((a, b) => a + b, 0);
+  if (total === 0) return { text: 'No mood data yet this week — start tracking!', icon: 'analytics-outline', color: SOFT };
 
-// ── Day-of-week labels ────────────────────────────────────────────────────────
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const topMood = Object.entries(stats).sort((a, b) => b[1] - a[1])[0];
+  const [moodKey, count] = topMood;
+  const m = getMood(moodKey);
+  const pct = Math.round((count / total) * 100);
 
-// ── Journal entry type ────────────────────────────────────────────────────────
-interface JournalEntry {
-  id:        string;
-  date:      string;        // ISO date string
-  note:      string;
-  dayRating: 'great' | 'good' | 'okay' | 'rough' | 'bad';
-  question?: string;        // the inquisitive question that was shown
-  answer?:   string;        // her answer to it
-}
+  const messages: Record<string, string> = {
+    Happy:      `You've been Happy ${pct}% of the time this week. Genuinely love that for you.`,
+    Loved:      `Feeling Loved ${pct}% of days. Someone's doing a good job. (It might be you.)`,
+    Relaxed:    `${pct}% of your week has been Relaxed. An icon of chill. Respect.`,
+    Thoughtful: `You've been Thoughtful ${pct}% of this week. Big brain week incoming.`,
+    Sad:        `Sad showed up ${pct}% of the time. That's okay. You're still here. That matters.`,
+    Frustrated: `Frustrated for ${pct}% of the week. Sounds rough — what's going on?`,
+    Anxious:    `Anxious vibes ${pct}% of this week. Be extra gentle with yourself right now.`,
+    Grateful:   `Grateful ${pct}% of the week. That perspective is a genuine superpower.`,
+  };
 
-interface MoodEntry {
-  mood:      string;
-  timestamp: string;
-  note?:     string;
-}
-
-// ── Day rating config ─────────────────────────────────────────────────────────
-const DAY_RATINGS = [
-  { key: 'great', icon: 'star',         color: '#F59E0B', label: 'Great'  },
-  { key: 'good',  icon: 'happy',        color: '#22C55E', label: 'Good'   },
-  { key: 'okay',  icon: 'remove-circle',color: '#6B7280', label: 'Okay'   },
-  { key: 'rough', icon: 'cloudy',       color: '#F97316', label: 'Rough'  },
-  { key: 'bad',   icon: 'thunderstorm', color: '#EF4444', label: 'Bad'    },
-] as const;
-
-type DayRating = typeof DAY_RATINGS[number]['key'];
-
-function getRating(key?: string) {
-  return DAY_RATINGS.find(r => r.key === key) ?? DAY_RATINGS[2];
+  return {
+    text: messages[moodKey] ?? `Your most common vibe this week was ${moodKey}.`,
+    icon: m.icon,
+    color: m.color,
+  };
 }
 
 // ── Animated fade-in section ──────────────────────────────────────────────────
 function FadeSection({ delay = 0, children }: { delay?: number; children: React.ReactNode }) {
-  const opacity = useRef(new Animated.Value(0)).current;
+  const opacity    = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
   useEffect(() => {
     Animated.parallel([
@@ -179,101 +244,151 @@ function FadeSection({ delay = 0, children }: { delay?: number; children: React.
   );
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-export default function VibeScreen() {
-  const handleOpenMoodMusic = () => {
-    router.push('/moodmusic');
-  };
-  // ── YOUR ORIGINAL STATE ───────────────────────────────────────────────────
-  const [todayMood,    setTodayMood]    = useState<MoodEntry | null>(null);
-  const [moodHistory,  setMoodHistory]  = useState<MoodEntry[]>([]);
-  const [weeklyStats,  setWeeklyStats]  = useState<Record<string, number>>({});
-  const [todaysQuote,  setTodaysQuote]  = useState(quotes[0]);
-  // ── NEW STATE ─────────────────────────────────────────────────────────────
-  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
-  const [showJournal,    setShowJournal]    = useState(false);
-  const [todayJournal,   setTodayJournal]   = useState<JournalEntry | null>(null);
-  const [dailyQuestion,  setDailyQuestion]  = useState('');
-  const [affirmation,    setAffirmation]    = useState('');
+// ── Pulsing music button ──────────────────────────────────────────────────────
+function MusicButton({ onPress }: { onPress: () => void }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const glow  = useRef(new Animated.Value(0)).current;
 
-  // Journal modal state
-  const [journalNote,    setJournalNote]    = useState('');
-  const [journalRating,  setJournalRating]  = useState<DayRating>('okay');
-  const [questionAnswer, setQuestionAnswer] = useState('');
-  const [editingJournal, setEditingJournal] = useState(false);
-
-  // ── YOUR ORIGINAL useEffect ───────────────────────────────────────────────
   useEffect(() => {
-    loadMoodData();
-    loadTodaysQuote();
-    loadJournalData();
-    pickDailyQuestion();
-    pickAffirmation();
+    Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 1.08, duration: 800, useNativeDriver: false }),
+          Animated.timing(glow,  { toValue: 1,    duration: 800, useNativeDriver: false }),
+        ]),
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 1,    duration: 800, useNativeDriver: false }),
+          Animated.timing(glow,  { toValue: 0,    duration: 800, useNativeDriver: false }),
+        ]),
+      ])
+    ).start();
   }, []);
 
-  // ── YOUR ORIGINAL loadMoodData ────────────────────────────────────────────
+  const shadowRadius = glow.interpolate({ inputRange: [0, 1], outputRange: [6, 18] });
+  const shadowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.55] });
+
+  return (
+    <Animated.View style={[
+      styles.musicBtn,
+      { transform: [{ scale }], shadowRadius, shadowOpacity }
+    ]}>
+      <Pressable onPress={onPress} style={styles.musicBtnInner} android_ripple={{ color: 'rgba(255,255,255,0.2)', radius: 30 }}>
+        {/* Vinyl ring */}
+        <View style={styles.vinylOuter}>
+          <View style={styles.vinylInner}>
+            <Ionicons name="musical-notes" size={22} color={WHITE} />
+          </View>
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+export default function VibeScreen() {
+  const { colors, isDarkMode } = useTheme();
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  const [todayMood,        setTodayMood]        = useState<MoodEntry | null>(null);
+  const [moodHistory,      setMoodHistory]      = useState<MoodEntry[]>([]);
+  const [weeklyStats,      setWeeklyStats]      = useState<Record<string, number>>({});
+  const [todaysQuote,      setTodaysQuote]      = useState(SWEET_QUOTES[0]);
+  const [quoteMode,        setQuoteMode]        = useState<'sweet' | 'funny'>('sweet');
+  const [journalEntries,   setJournalEntries]   = useState<JournalEntry[]>([]);
+  const [showJournal,      setShowJournal]      = useState(false);
+  const [todayJournal,     setTodayJournal]     = useState<JournalEntry | null>(null);
+  const [dailyQuestion,    setDailyQuestion]    = useState('');
+  const [affirmation,      setAffirmation]      = useState('');
+  const [challengeDone,    setChallengeDone]    = useState(false);
+  const [challenge,        setChallenge]        = useState(DAILY_CHALLENGES[0]);
+  const [streak,           setStreak]           = useState(0);
+  const [showMoodSummary,  setShowMoodSummary]  = useState(false);
+
+  // Journal modal
+  const [journalNote,      setJournalNote]      = useState('');
+  const [journalRating,    setJournalRating]    = useState<DayRating>('okay');
+  const [questionAnswer,   setQuestionAnswer]   = useState('');
+  const [editingJournal,   setEditingJournal]   = useState(false);
+
+  const checkAnim = useRef(new Animated.Value(0)).current;
+
+  // ── Load ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    loadMoodData();
+    loadJournalData();
+    loadChallenge();
+    loadStreak();
+    pickDailyQuestion();
+    pickAffirmation();
+    pickQuote('sweet');
+  }, []);
+
+  const getLast7Days = () => {
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      days.push(d.toDateString());
+    }
+    return days;
+  };
+
   const loadMoodData = async () => {
     const history = await AsyncStorage.getItem('moodHistory');
     if (history) {
       const parsed: MoodEntry[] = JSON.parse(history);
       setMoodHistory(parsed);
-
-      // Check today's mood — YOUR ORIGINAL logic
       const today = new Date().toDateString();
-      const todayEntry = parsed.find(m => new Date(m.timestamp).toDateString() === today);
-      setTodayMood(todayEntry ?? null);
-
-      // Calculate weekly stats — YOUR ORIGINAL logic
-      const last7Days = getLast7Days();
+      setTodayMood(parsed.find(m => new Date(m.timestamp).toDateString() === today) ?? null);
+      const last7 = getLast7Days();
       const stats: Record<string, number> = {};
-      parsed.forEach(mood => {
-        const date = new Date(mood.timestamp).toDateString();
-        if (last7Days.includes(date)) {
-          stats[mood.mood] = (stats[mood.mood] || 0) + 1;
+      parsed.forEach(m => {
+        if (last7.includes(new Date(m.timestamp).toDateString())) {
+          stats[m.mood] = (stats[m.mood] || 0) + 1;
         }
       });
       setWeeklyStats(stats);
     }
   };
-  // ── YOUR ORIGINAL getLast7Days ────────────────────────────────────────────
-  const getLast7Days = () => {
-    const days = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      days.push(date.toDateString());
-    }
-    return days;
-  };
 
-  // ── YOUR ORIGINAL loadTodaysQuote ─────────────────────────────────────────
-  const loadTodaysQuote = () => {
-    const randomIndex = Math.floor(Math.random() * quotes.length);
-    setTodaysQuote(quotes[randomIndex]);
-  };
-
-  // ── YOUR ORIGINAL getMoodEmoji — replaced with icon lookup ────────────────
-  const getMoodIcon = (mood: string) => getMood(mood).icon;
-  const getMoodColor = (mood: string) => getMood(mood).color;
-
-  // ── NEW: Journal logic ────────────────────────────────────────────────────
   const loadJournalData = async () => {
     const saved = await AsyncStorage.getItem('journalEntries');
     if (saved) {
       const entries: JournalEntry[] = JSON.parse(saved);
       setJournalEntries(entries);
       const today = new Date().toDateString();
-      const todayEntry = entries.find(e => new Date(e.date).toDateString() === today);
-      setTodayJournal(todayEntry ?? null);
+      setTodayJournal(entries.find(e => new Date(e.date).toDateString() === today) ?? null);
     }
+  };
+
+  const loadChallenge = async () => {
+    const today    = new Date().toDateString();
+    const saved    = await AsyncStorage.getItem('dailyChallenge');
+    const doneSaved = await AsyncStorage.getItem('challengeDone');
+    if (saved) {
+      const { date, index } = JSON.parse(saved);
+      if (date === today) {
+        setChallenge(DAILY_CHALLENGES[index]);
+        setChallengeDone(doneSaved === today);
+        return;
+      }
+    }
+    const idx = new Date().getDate() % DAILY_CHALLENGES.length;
+    await AsyncStorage.setItem('dailyChallenge', JSON.stringify({ date: today, index: idx }));
+    setChallenge(DAILY_CHALLENGES[idx]);
+    setChallengeDone(false);
+  };
+
+  const loadStreak = async () => {
+    const saved = await AsyncStorage.getItem('moodStreak');
+    if (saved) setStreak(parseInt(saved, 10));
   };
 
   const saveJournalEntries = async (entries: JournalEntry[]) => {
     await AsyncStorage.setItem('journalEntries', JSON.stringify(entries));
     setJournalEntries(entries);
     const today = new Date().toDateString();
-    const todayEntry = entries.find(e => new Date(e.date).toDateString() === today);
-    setTodayJournal(todayEntry ?? null);
+    setTodayJournal(entries.find(e => new Date(e.date).toDateString() === today) ?? null);
   };
 
   const openJournal = () => {
@@ -293,7 +408,7 @@ export default function VibeScreen() {
 
   const saveJournalEntry = () => {
     if (!journalNote.trim() && !questionAnswer.trim()) {
-      Alert.alert('Write something', 'Add a note or answer the question before saving 💕');
+      Alert.alert('Write something', 'Add a note or answer the question first ✍️');
       return;
     }
     const entry: JournalEntry = {
@@ -312,148 +427,229 @@ export default function VibeScreen() {
   };
 
   const pickDailyQuestion = () => {
-    // Deterministic by day so it stays the same all day
-    const dayIndex = new Date().getDay() + new Date().getDate();
-    setDailyQuestion(MOOD_QUESTIONS[dayIndex % MOOD_QUESTIONS.length]);
+    const idx = (new Date().getDay() + new Date().getDate()) % MOOD_QUESTIONS.length;
+    setDailyQuestion(MOOD_QUESTIONS[idx]);
   };
 
   const pickAffirmation = () => {
-    const dayIndex = new Date().getDate();
-    setAffirmation(AFFIRMATIONS[dayIndex % AFFIRMATIONS.length]);
+    setAffirmation(AFFIRMATIONS[new Date().getDate() % AFFIRMATIONS.length]);
   };
 
-  // Build last-7-days calendar row
-  const last7 = getLast7Days().reverse(); // oldest first
+  const pickQuote = (mode: 'sweet' | 'funny') => {
+    const pool = mode === 'funny' ? FUNNY_QUOTES : SWEET_QUOTES;
+    setTodaysQuote(pool[Math.floor(Math.random() * pool.length)]);
+    setQuoteMode(mode);
+  };
 
+  const toggleChallenge = async () => {
+    if (challengeDone) return;
+    Animated.sequence([
+      Animated.timing(checkAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.timing(checkAnim, { toValue: 0.9, duration: 100, useNativeDriver: true }),
+    ]).start();
+    setChallengeDone(true);
+    await AsyncStorage.setItem('challengeDone', new Date().toDateString());
+    const newStreak = streak + 1;
+    setStreak(newStreak);
+    await AsyncStorage.setItem('moodStreak', newStreak.toString());
+    Alert.alert('Done! 🎉', 'Challenge complete. Look at you go.');
+  };
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
   const getJournalForDate = (dateStr: string) =>
     journalEntries.find(e => new Date(e.date).toDateString() === dateStr);
-
   const getMoodForDate = (dateStr: string) =>
     moodHistory.find(m => new Date(m.timestamp).toDateString() === dateStr);
+  const last7 = getLast7Days().reverse();
 
+  const moodEncouragements = todayMood
+    ? MOOD_ENCOURAGEMENTS[todayMood.mood] ?? []
+    : [];
+  const todayEncouragement = moodEncouragements[new Date().getHours() % moodEncouragements.length] ?? '';
 
-  // ─────────────────────────────────────────────────────────────────────────
+  const trendMsg = getMoodTrendMessage(weeklyStats);
+
+  const checkScale = checkAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.2] });
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-<SafeAreaView style={styles.container} edges={['top']}> 
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background ?? BG }]} edges={['top']}>
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background ?? BG }]}
+        showsVerticalScrollIndicator={false}
+      >
 
         {/* ── Header ── */}
         <FadeSection delay={0}>
           <View style={styles.header}>
             <View>
-              <Text style={styles.headerGreeting}>Good {getTimeOfDay()} 🌸</Text>
+              <Text style={[styles.headerGreeting, { color: colors.text ?? DARK }]}>
+                {getGreeting()}
+              </Text>
               <Text style={styles.headerSub}>How's your heart today?</Text>
-                        </View>
-            <TouchableOpacity style={styles.journalFab} onPress={openJournal}>
-              <Icon name={todayJournal ? 'checkmark-circle' : 'journal'} size={20} color={WHITE} />
-              <Text style={styles.journalFabTxt}>{todayJournal ? 'Diary' : 'Write'}</Text>
-            </TouchableOpacity>
+            </View>
+            <View style={styles.headerRight}>
+              {/* Streak badge */}
+              {streak > 0 && (
+                <View style={styles.streakBadge}>
+                  <Ionicons name="flame" size={14} color="#F97316" />
+                  <Text style={styles.streakTxt}>{streak}</Text>
+                </View>
+              )}
+              <TouchableOpacity style={styles.journalFab} onPress={openJournal}>
+                <Ionicons name={todayJournal ? 'checkmark-circle' : 'journal'} size={18} color={WHITE} />
+                <Text style={styles.journalFabTxt}>{todayJournal ? 'Diary ✓' : 'Write'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </FadeSection>
 
-          <View style={styles.music}>
-<TouchableOpacity
-  onPress={handleOpenMoodMusic}
-  style={{
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor:{PINK},
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 5, // Android shadow
-    shadowColor: '#000', // iOS shadow
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  }}
->
-  <Ionicons name="musical-notes" size={30} color="#FFF" />
-</TouchableOpacity> 
-         </View>
+        {/* ── Music button — redesigned ── */}
+        <FadeSection delay={30}>
+          <View style={styles.musicRow}>
+            <View style={styles.musicMeta}>
+              <Text style={styles.musicLabel}>Mood Music</Text>
+              <Text style={styles.musicSub}>Pick a playlist for your vibe</Text>
+            </View>
+            <MusicButton onPress={() => router.push('/moodmusic')} />
+          </View>
+        </FadeSection>
 
+        {/* ── Quote card with sweet / funny toggle ── */}
         <FadeSection delay={60}>
-          <View style={styles.quoteCard}>
-            <Icon name="chatbubble-ellipses" size={26} color={PINK} />
-            <Text style={styles.quoteText}>"{todaysQuote.text}"</Text>
+          <View style={[styles.quoteCard, { backgroundColor: colors.card ?? WHITE }]}>
+            {/* Toggle */}
+            <View style={styles.quoteModeRow}>
+              <TouchableOpacity
+                style={[styles.quoteModeBtn, quoteMode === 'sweet' && styles.quoteModeBtnActive]}
+                onPress={() => pickQuote('sweet')}
+              >
+                <Ionicons name="heart" size={12} color={quoteMode === 'sweet' ? WHITE : SOFT} />
+                <Text style={[styles.quoteModeTxt, quoteMode === 'sweet' && { color: WHITE }]}>Sweet</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.quoteModeBtn, quoteMode === 'funny' && styles.quoteModeBtnActiveAlt]}
+                onPress={() => pickQuote('funny')}
+              >
+                <Ionicons name="happy" size={12} color={quoteMode === 'funny' ? WHITE : SOFT} />
+                <Text style={[styles.quoteModeTxt, quoteMode === 'funny' && { color: WHITE }]}>Funny</Text>
+              </TouchableOpacity>
+            </View>
+            <Ionicons name={quoteMode === 'funny' ? 'happy-outline' : 'chatbubble-ellipses'} size={24} color={PINK} style={{ marginBottom: 6 }} />
+            <Text style={[styles.quoteText, { color: colors.text ?? DARK }]}>"{todaysQuote.text}"</Text>
             <Text style={styles.quoteAuthor}>— {todaysQuote.author}</Text>
-            <TouchableOpacity onPress={loadTodaysQuote} style={styles.refreshQuote}>
-              <Icon name="refresh" size={14} color={SOFT} />
-              <Text style={styles.refreshQuoteTxt}>New quote</Text>
+            <TouchableOpacity onPress={() => pickQuote(quoteMode)} style={styles.refreshQuote}>
+              <Ionicons name="shuffle" size={13} color={SOFT} />
+              <Text style={styles.refreshQuoteTxt}>Another one</Text>
             </TouchableOpacity>
           </View>
         </FadeSection>
 
-        {/* ── Daily inquisitive question ── */}
+        {/* ── Daily question ── */}
         <FadeSection delay={120}>
-          <View style={styles.questionCard}>
+          <View style={[styles.questionCard, { backgroundColor: colors.card ?? WHITE }]}>
             <View style={styles.questionHeader}>
-              <Icon name="help-circle" size={20} color={PINK} />
+              <Ionicons name="help-circle" size={20} color={PINK} />
               <Text style={styles.questionLabel}>Today's question</Text>
             </View>
-            <Text style={styles.questionText}>{dailyQuestion}</Text>
+            <Text style={[styles.questionText, { color: colors.text ?? DARK }]}>{dailyQuestion}</Text>
             {todayJournal?.answer ? (
               <View style={styles.answerPreview}>
-                <Icon name="checkmark-circle" size={14} color={PINK} />
+                <Ionicons name="checkmark-circle" size={14} color={PINK} />
                 <Text style={styles.answerPreviewTxt} numberOfLines={2}>{todayJournal.answer}</Text>
               </View>
             ) : (
               <TouchableOpacity style={styles.answerBtn} onPress={openJournal}>
-                <Icon name="pencil" size={14} color={PINK} />
+                <Ionicons name="pencil" size={13} color={PINK} />
                 <Text style={styles.answerBtnTxt}>Answer in diary</Text>
               </TouchableOpacity>
             )}
           </View>
         </FadeSection>
 
-        {/* ── Mood tracker — YOUR ORIGINAL MoodTracker component or today card ── */}
+        {/* ── Mood tracker ── */}
         <FadeSection delay={180}>
           {!todayMood ? (
             <MoodTracker onMoodSelect={() => loadMoodData()} />
           ) : (
-            <View style={[styles.todayCard, { backgroundColor: getMood(todayMood.mood).bg }]}>
-              <Text style={styles.cardTitle}>Today's Mood</Text>
+            <View style={[styles.todayCard, { backgroundColor: colors.card ?? WHITE }]}>
+              <Text style={styles.cardTitle}>Today's mood</Text>
               <View style={styles.todayMoodRow}>
-                <View style={[styles.todayMoodIcon, { backgroundColor: getMoodColor(todayMood.mood) + '22' }]}>
-                  <Icon name={getMoodIcon(todayMood.mood) as any} size={32} color={getMoodColor(todayMood.mood)} />
+                <View style={[styles.todayMoodIcon, { backgroundColor: getMood(todayMood.mood).color + '22' }]}>
+                  <Ionicons name={getMood(todayMood.mood).icon as any} size={34} color={getMood(todayMood.mood).color} />
                 </View>
-                <Text style={[styles.todayMoodLabel, { color: getMoodColor(todayMood.mood) }]}>
-                  {todayMood.mood}
-                </Text>
+                <View>
+                  <Text style={[styles.todayMoodLabel, { color: getMood(todayMood.mood).color }]}>
+                    {todayMood.mood}
+                  </Text>
+                  {/* Mood-based encouragement */}
+                  {!!todayEncouragement && (
+                    <Text style={styles.moodEncouragement}>{todayEncouragement}</Text>
+                  )}
+                </View>
               </View>
               <TouchableOpacity
                 style={styles.updateButton}
-                onPress={() => {
-                  setTodayMood(null);
-                  Alert.alert('Update Mood', 'How are you feeling now?');
-                }}
+                onPress={() => { setTodayMood(null); }}
               >
-                <Icon name="refresh" size={14} color={PINK} />
-                <Text style={styles.updateText}>Update Mood</Text>
+                <Ionicons name="refresh" size={13} color={PINK} />
+                <Text style={styles.updateText}>Update mood</Text>
               </TouchableOpacity>
             </View>
           )}
         </FadeSection>
 
-        {/* ── Today's day journal summary ── */}
+        {/* ── Daily challenge card ── */}
+        <FadeSection delay={220}>
+          <View style={[styles.challengeCard, { backgroundColor: colors.card ?? WHITE }]}>
+            <View style={styles.challengeHeader}>
+              <View style={[styles.challengeIconWrap, { backgroundColor: challenge.color + '18' }]}>
+                <Ionicons name={challenge.icon as any} size={22} color={challenge.color} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.challengeCategory}>{challenge.category} challenge</Text>
+                <Text style={[styles.challengeText, { color: colors.text ?? DARK }]}>
+                  {challenge.text}
+                </Text>
+              </View>
+            </View>
+            <Animated.View style={{ transform: [{ scale: checkScale }] }}>
+              <TouchableOpacity
+                style={[
+                  styles.challengeBtn,
+                  { backgroundColor: challengeDone ? MINT : challenge.color },
+                ]}
+                onPress={toggleChallenge}
+                disabled={challengeDone}
+              >
+                <Ionicons
+                  name={challengeDone ? 'checkmark-circle' : 'checkmark-circle-outline'}
+                  size={16}
+                  color={WHITE}
+                />
+                <Text style={styles.challengeBtnTxt}>
+                  {challengeDone ? 'Done! ✓' : 'Mark complete'}
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        </FadeSection>
+
+        {/* ── Today's diary summary ── */}
         {todayJournal && (
-          <FadeSection delay={220}>
-            <View style={styles.journalSummaryCard}>
+          <FadeSection delay={260}>
+            <View style={[styles.journalSummaryCard, { backgroundColor: colors.card ?? WHITE }]}>
               <View style={styles.journalSummaryHeader}>
-                <Icon name="journal" size={16} color={PINK} />
-                <Text style={styles.journalSummaryTitle}>Today's diary</Text>
+                <Ionicons name="journal" size={16} color={PINK} />
+                <Text style={styles.questionLabel}>Today's diary</Text>
                 <TouchableOpacity onPress={openJournal} style={{ marginLeft: 'auto' }}>
-                  <Icon name="pencil" size={16} color={SOFT} />
+                  <Ionicons name="pencil" size={16} color={SOFT} />
                 </TouchableOpacity>
               </View>
-              {/* Day rating */}
               <View style={styles.daySummaryRating}>
-                <Icon
+                <Ionicons
                   name={getRating(todayJournal.dayRating).icon as any}
-                  size={18}
+                  size={16}
                   color={getRating(todayJournal.dayRating).color}
                 />
                 <Text style={[styles.daySummaryRatingTxt, { color: getRating(todayJournal.dayRating).color }]}>
@@ -467,12 +663,12 @@ export default function VibeScreen() {
           </FadeSection>
         )}
 
-        {/* ── 7-day mood + journal calendar strip ── */}
-        <FadeSection delay={260}>
-          <View style={styles.calCard}>
+        {/* ── 7-day calendar strip ── */}
+        <FadeSection delay={300}>
+          <View style={[styles.calCard, { backgroundColor: colors.card ?? WHITE }]}>
             <Text style={styles.cardTitle}>This week</Text>
             <View style={styles.calRow}>
-              {last7.map((dayStr, i) => {
+              {last7.map((dayStr) => {
                 const moodEntry    = getMoodForDate(dayStr);
                 const journalEntry = getJournalForDate(dayStr);
                 const isToday      = dayStr === new Date().toDateString();
@@ -483,30 +679,23 @@ export default function VibeScreen() {
                 return (
                   <View key={dayStr} style={[styles.calDay, isToday && styles.calDayToday]}>
                     <Text style={[styles.calDayLabel, isToday && { color: PINK }]}>{dayLabel}</Text>
-                    {/* Mood icon */}
-                    <View style={[
-                      styles.calMoodCircle,
-                      mood ? { backgroundColor: mood.bg } : { backgroundColor: '#F3F4F6' },
-                    ]}>
-                      {mood ? (
-                        <Icon name={mood.icon as any} size={16} color={mood.color} />
-                      ) : (
-                        <Icon name="ellipse-outline" size={14} color={SOFT} />
-                      )}
+                    <View style={[styles.calMoodCircle, { backgroundColor: mood ? mood.bg : '#F3F4F6' }]}>
+                      {mood
+                        ? <Ionicons name={mood.icon as any} size={15} color={mood.color} />
+                        : <Ionicons name="ellipse-outline" size={13} color={SOFT} />
+                      }
                     </View>
-                    {/* Journal rating dot */}
-                    {rating ? (
-                      <View style={[styles.calRatingDot, { backgroundColor: rating.color }]} />
-                    ) : (
-                      <View style={[styles.calRatingDot, { backgroundColor: '#E5E7EB' }]} />
-                    )}
+                    {rating
+                      ? <View style={[styles.calRatingDot, { backgroundColor: rating.color }]} />
+                      : <View style={[styles.calRatingDot, { backgroundColor: '#E5E7EB' }]} />
+                    }
                   </View>
                 );
               })}
             </View>
             <View style={styles.calLegend}>
               <View style={styles.calLegendItem}>
-                <Icon name="ellipse" size={8} color={PINK} />
+                <Ionicons name="ellipse" size={7} color={PINK} />
                 <Text style={styles.calLegendTxt}>Mood</Text>
               </View>
               <View style={styles.calLegendItem}>
@@ -517,16 +706,33 @@ export default function VibeScreen() {
           </View>
         </FadeSection>
 
-        {/* ── Weekly mood stats — YOUR ORIGINAL statsCard ── */}
-        <FadeSection delay={310}>
-          <View style={styles.statsCard}>
-            <Text style={styles.cardTitle}>Weekly mood summary</Text>
+        {/* ── Mood trend summary (smart) ── */}
+        <FadeSection delay={340}>
+          <TouchableOpacity
+            style={[styles.trendCard, { backgroundColor: trendMsg.color + '14', borderColor: trendMsg.color + '44' }]}
+            onPress={() => setShowMoodSummary(true)}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.trendIconWrap, { backgroundColor: trendMsg.color + '22' }]}>
+              <Ionicons name={trendMsg.icon as any} size={22} color={trendMsg.color} />
+            </View>
+            <Text style={[styles.trendText, { color: trendMsg.color === SOFT ? MID : DARK }]}>
+              {trendMsg.text}
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color={trendMsg.color} />
+          </TouchableOpacity>
+        </FadeSection>
+
+        {/* ── Weekly mood breakdown ── */}
+        <FadeSection delay={370}>
+          <View style={[styles.statsCard, { backgroundColor: colors.card ?? WHITE }]}>
+            <Text style={styles.cardTitle}>Weekly mood breakdown</Text>
             <View style={styles.statsGrid}>
               {Object.entries(weeklyStats).map(([mood, count]) => {
                 const m = getMood(mood);
                 return (
                   <View key={mood} style={[styles.statItem, { backgroundColor: m.bg }]}>
-                    <Icon name={m.icon as any} size={28} color={m.color} />
+                    <Ionicons name={m.icon as any} size={26} color={m.color} />
                     <Text style={[styles.statMood, { color: m.color }]}>{mood}</Text>
                     <Text style={styles.statCount}>{count as number}d</Text>
                   </View>
@@ -534,27 +740,27 @@ export default function VibeScreen() {
               })}
               {Object.keys(weeklyStats).length === 0 && (
                 <View style={styles.noDataWrap}>
-                  <Icon name="heart-outline" size={28} color={SOFT} />
-                  <Text style={styles.noData}>No mood data this week yet</Text>
+                  <Ionicons name="bar-chart-outline" size={28} color={SOFT} />
+                  <Text style={styles.noData}>Log a mood to start your summary</Text>
                 </View>
               )}
             </View>
           </View>
         </FadeSection>
 
-        {/* ── Recent journal entries ── */}
+        {/* ── Recent diary ── */}
         {journalEntries.length > 1 && (
-          <FadeSection delay={360}>
-            <View style={styles.recentCard}>
+          <FadeSection delay={400}>
+            <View style={[styles.recentCard, { backgroundColor: colors.card ?? WHITE }]}>
               <Text style={styles.cardTitle}>Recent diary</Text>
               {journalEntries.slice(0, 4).map(entry => {
-                const rating = getRating(entry.dayRating);
-                const mood   = getMoodForDate(new Date(entry.date).toDateString());
-                const moodM  = mood ? getMood(mood.mood) : null;
+                const rating  = getRating(entry.dayRating);
+                const moodE   = getMoodForDate(new Date(entry.date).toDateString());
+                const moodM   = moodE ? getMood(moodE.mood) : null;
                 return (
                   <View key={entry.id} style={styles.recentEntry}>
                     <View style={[styles.recentRatingDot, { backgroundColor: rating.color + '33' }]}>
-                      <Icon name={rating.icon as any} size={14} color={rating.color} />
+                      <Ionicons name={rating.icon as any} size={14} color={rating.color} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <View style={styles.recentEntryTop}>
@@ -563,8 +769,8 @@ export default function VibeScreen() {
                         </Text>
                         {moodM && (
                           <View style={[styles.recentMoodBadge, { backgroundColor: moodM.bg }]}>
-                            <Icon name={moodM.icon as any} size={11} color={moodM.color} />
-                            <Text style={[styles.recentMoodTxt, { color: moodM.color }]}>{mood!.mood}</Text>
+                            <Ionicons name={moodM.icon as any} size={10} color={moodM.color} />
+                            <Text style={[styles.recentMoodTxt, { color: moodM.color }]}>{moodE!.mood}</Text>
                           </View>
                         )}
                         <View style={[styles.recentRatingBadge, { backgroundColor: rating.color + '18' }]}>
@@ -582,19 +788,65 @@ export default function VibeScreen() {
           </FadeSection>
         )}
 
-        {/* ── Daily Affirmation — YOUR ORIGINAL affirmationCard ── */}
-        <FadeSection delay={410}>
-          <View style={styles.affirmationCard}>
+        {/* ── Daily Affirmation ── */}
+        <FadeSection delay={440}>
+          <View style={[styles.affirmationCard, { backgroundColor: colors.card ?? '#FFFBEB' }]}>
             <View style={styles.affirmationHeader}>
-              <Icon name="sparkles" size={18} color={PINK} />
-              <Text style={styles.affirmationTitle}>Daily Affirmation</Text>
+              <Ionicons name="sparkles" size={18} color={PINK} />
+              <Text style={styles.affirmationTitle}>Daily affirmation</Text>
             </View>
             <Text style={styles.affirmation}>{affirmation}</Text>
           </View>
         </FadeSection>
 
-        <View style={{ height: 32 }} />
+        <View style={{ height: 36 }} />
       </ScrollView>
+
+      {/* ── Mood trend detail modal ── */}
+      <Modal visible={showMoodSummary} transparent animationType="slide">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowMoodSummary(false)}>
+          <View style={styles.summarySheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.summaryTitle}>Your Week in Moods</Text>
+
+            {Object.keys(weeklyStats).length === 0 ? (
+              <Text style={styles.noData}>No mood data this week — start tracking today!</Text>
+            ) : (
+              <>
+                {/* Mood bars */}
+                {Object.entries(weeklyStats)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([moodKey, count]) => {
+                    const m = getMood(moodKey);
+                    const pct = (count / 7) * 100;
+                    return (
+                      <View key={moodKey} style={styles.summaryRow}>
+                        <View style={[styles.summaryDot, { backgroundColor: m.bg }]}>
+                          <Ionicons name={m.icon as any} size={14} color={m.color} />
+                        </View>
+                        <Text style={[styles.summaryMoodTxt, { color: m.color }]}>{moodKey}</Text>
+                        <View style={styles.summaryBarBg}>
+                          <View style={[styles.summaryBarFill, { width: `${pct}%`, backgroundColor: m.color }]} />
+                        </View>
+                        <Text style={[styles.summaryCount, { color: m.color }]}>{count}d</Text>
+                      </View>
+                    );
+                  })}
+
+                {/* Encouragements */}
+                <View style={styles.summaryEncRow}>
+                  <Ionicons name="heart" size={14} color={PINK} />
+                  <Text style={styles.summaryEncTxt}>{trendMsg.text}</Text>
+                </View>
+              </>
+            )}
+
+            <TouchableOpacity style={styles.summaryClose} onPress={() => setShowMoodSummary(false)}>
+              <Text style={styles.summaryCloseTxt}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* ── Journal / Diary modal ── */}
       <Modal visible={showJournal} transparent animationType="slide">
@@ -604,13 +856,12 @@ export default function VibeScreen() {
         >
           <View style={styles.journalSheet}>
             <View style={styles.sheetHandle} />
-
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.journalSheetTitle}>
-                {editingJournal ? 'Edit today\'s diary' : 'How was your day?'}
+                {editingJournal ? "Edit today's diary" : "How was your day?"}
               </Text>
 
-              {/* Day rating selector */}
+              {/* Day rating */}
               <Text style={styles.journalSectionLabel}>Rate your day</Text>
               <View style={styles.ratingRow}>
                 {DAY_RATINGS.map(r => (
@@ -622,7 +873,7 @@ export default function VibeScreen() {
                       { backgroundColor: r.color + '18', borderColor: journalRating === r.key ? r.color : 'transparent' },
                     ]}
                   >
-                    <Icon name={r.icon as any} size={22} color={r.color} />
+                    <Ionicons name={r.icon as any} size={22} color={r.color} />
                     <Text style={[styles.ratingBtnTxt, { color: r.color }]}>{r.label}</Text>
                   </TouchableOpacity>
                 ))}
@@ -630,12 +881,12 @@ export default function VibeScreen() {
 
               {/* Inquisitive question */}
               <View style={styles.journalQuestionBox}>
-                <Icon name="help-circle" size={16} color={PINK} />
+                <Ionicons name="help-circle" size={16} color={PINK} />
                 <Text style={styles.journalQuestionTxt}>{dailyQuestion}</Text>
               </View>
               <TextInput
                 style={styles.journalAnswerInput}
-                placeholder="Write your answer here..."
+                placeholder="Your answer..."
                 placeholderTextColor={SOFT}
                 value={questionAnswer}
                 onChangeText={setQuestionAnswer}
@@ -643,11 +894,11 @@ export default function VibeScreen() {
                 maxLength={300}
               />
 
-              {/* Free-form note */}
-              <Text style={styles.journalSectionLabel}>Anything else on your mind?</Text>
+              {/* Free note */}
+              <Text style={styles.journalSectionLabel}>Anything else?</Text>
               <TextInput
                 style={styles.journalNoteInput}
-                placeholder="Write freely — no rules here 💕"
+                placeholder="Write freely — no rules here"
                 placeholderTextColor={SOFT}
                 value={journalNote}
                 onChangeText={setJournalNote}
@@ -655,13 +906,12 @@ export default function VibeScreen() {
                 maxLength={600}
               />
 
-              {/* Buttons */}
               <View style={styles.journalBtnRow}>
                 <TouchableOpacity onPress={() => setShowJournal(false)} style={styles.journalCancelBtn}>
                   <Text style={styles.cancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={saveJournalEntry} style={styles.journalSaveBtn}>
-                  <Icon name="checkmark" size={16} color={WHITE} />
+                  <Ionicons name="checkmark" size={16} color={WHITE} />
                   <Text style={styles.journalSaveTxt}>Save diary</Text>
                 </TouchableOpacity>
               </View>
@@ -673,7 +923,7 @@ export default function VibeScreen() {
   );
 }
 
-// ── Time of day helper ────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function getTimeOfDay() {
   const h = new Date().getHours();
   if (h < 12) return 'morning';
@@ -681,88 +931,147 @@ function getTimeOfDay() {
   return 'evening';
 }
 
+function getGreeting() {
+  const greetings: Record<string, string[]> = {
+    morning:   ['Good morning ☀️', 'Rise and shine ✨', 'Morning, you 🌸'],
+    afternoon: ['Hey, you 👋', 'Good afternoon 🌤️', 'Hope your day\'s going well 💛'],
+    evening:   ['Good evening 🌙', 'Hey, how\'d it go? 🌟', 'End of day check-in ✨'],
+  };
+  const tod = getTimeOfDay();
+  const opts = greetings[tod];
+  return opts[new Date().getDate() % opts.length];
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
 
   // Header
-  header:              { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6 },
-  headerGreeting:      { fontSize: 22, fontWeight: '800', color: DARK, letterSpacing: -0.4 },
-  headerSub:           { fontSize: 13, color: MID, marginTop: 2 },
-  journalFab:          { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: PINK, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 22, elevation: 3, shadowColor: PINK, shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
-  journalFabTxt:       { color: WHITE, fontWeight: '700', fontSize: 13 },
+  header:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6 },
+  headerGreeting:{ fontSize: 22, fontWeight: '800', color: DARK, letterSpacing: -0.4 },
+  headerSub:     { fontSize: 13, color: MID, marginTop: 2 },
+  headerRight:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  journalFab:    { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: PINK, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 22, elevation: 3, shadowColor: PINK, shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
+  journalFabTxt: { color: WHITE, fontWeight: '700', fontSize: 12 },
+  streakBadge:   { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FFF4ED', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1.5, borderColor: '#F97316' },
+  streakTxt:     { fontSize: 12, fontWeight: '800', color: '#F97316' },
 
-  // Quote card — YOUR ORIGINAL structure
-  quoteCard:           { margin: 20, marginBottom: 12, padding: 22, backgroundColor: CARD_BG, borderRadius: 20, alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
-  quoteText:           { fontSize: 17, fontStyle: 'italic', textAlign: 'center', marginVertical: 12, color: DARK, lineHeight: 25 },
-  quoteAuthor:         { color: PINK, fontSize: 13, fontWeight: '600' },
-  refreshQuote:        { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 },
-  refreshQuoteTxt:     { color: SOFT, fontSize: 12 },
+  // Music row
+  musicRow:    { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginBottom: 4, backgroundColor: DARK, borderRadius: 20, padding: 16, gap: 12 },
+  musicMeta:   { flex: 1 },
+  musicLabel:  { fontSize: 16, fontWeight: '800', color: WHITE },
+  musicSub:    { fontSize: 12, color: SOFT, marginTop: 2 },
+  musicBtn:    { width: 60, height: 60, borderRadius: 30, backgroundColor: PINK, justifyContent: 'center', alignItems: 'center', shadowColor: PINK, shadowOffset: { width: 0, height: 3 }, elevation: 5 },
+  musicBtnInner: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
+  vinylOuter:  { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)' },
+  vinylInner:  { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+
+  // Quote card
+  quoteCard:        { margin: 20, marginBottom: 12, padding: 20, backgroundColor: WHITE, borderRadius: 20, alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
+  quoteModeRow:     { flexDirection: 'row', gap: 8, marginBottom: 14, alignSelf: 'stretch', justifyContent: 'center' },
+  quoteModeBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, borderWidth: 1.5, borderColor: '#EDD8E8' },
+  quoteModeBtnActive:    { backgroundColor: PINK, borderColor: PINK },
+  quoteModeBtnActiveAlt: { backgroundColor: '#F59E0B', borderColor: '#F59E0B' },
+  quoteModeTxt:     { fontSize: 12, fontWeight: '600', color: SOFT },
+  quoteText:        { fontSize: 16, fontStyle: 'italic', textAlign: 'center', marginVertical: 10, color: DARK, lineHeight: 24 },
+  quoteAuthor:      { color: PINK, fontSize: 13, fontWeight: '600' },
+  refreshQuote:     { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 },
+  refreshQuoteTxt:  { color: SOFT, fontSize: 12 },
+
   // Question card
-  questionCard:        { marginHorizontal: 20, marginBottom: 12, padding: 18, backgroundColor: '#FFF0F7', borderRadius: 18, borderLeftWidth: 3, borderLeftColor: PINK },
-  questionHeader:      { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 8 },
-  questionLabel:       { fontSize: 12, fontWeight: '700', color: PINK, textTransform: 'uppercase', letterSpacing: 0.5 },
-  questionText:        { fontSize: 15, color: DARK, fontWeight: '500', lineHeight: 22 },
-  answerPreview:       { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 10, backgroundColor: WHITE, padding: 10, borderRadius: 12 },
-  answerPreviewTxt:    { flex: 1, fontSize: 13, color: MID, fontStyle: 'italic' },
-  answerBtn:           { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10, alignSelf: 'flex-start' },
-  answerBtnTxt:        { color: PINK, fontSize: 13, fontWeight: '600' },
-  music:               { margin: 20, marginBottom: 12, backgroundColor: CARD_BG, borderRadius: 20, alignItems: 'center', elevation: 2 },
-  // Today mood card — YOUR ORIGINAL todayCard
-  todayCard:           { margin: 20, marginBottom: 12, padding: 20, borderRadius: 20, alignItems: 'center' },
-  cardTitle:           { fontSize: 16, fontWeight: '700', color: PINK, marginBottom: 10 },
-  todayMoodRow:        { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 6 },
-  todayMoodIcon:       { width: 58, height: 58, borderRadius: 29, justifyContent: 'center', alignItems: 'center' },
-  todayMoodLabel:      { fontSize: 26, fontWeight: '800' },
-  updateButton:        { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: WHITE, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, marginTop: 10 },
-  updateText:          { color: PINK, fontWeight: '600', fontSize: 14 },
+  questionCard:      { marginHorizontal: 20, marginBottom: 12, padding: 18, backgroundColor: '#FFF0F7', borderRadius: 18, borderLeftWidth: 3, borderLeftColor: PINK },
+  questionHeader:    { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 8 },
+  questionLabel:     { fontSize: 12, fontWeight: '700', color: PINK, textTransform: 'uppercase', letterSpacing: 0.5 },
+  questionText:      { fontSize: 15, color: DARK, fontWeight: '500', lineHeight: 22 },
+  answerPreview:     { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 10, backgroundColor: WHITE, padding: 10, borderRadius: 12 },
+  answerPreviewTxt:  { flex: 1, fontSize: 13, color: MID, fontStyle: 'italic' },
+  answerBtn:         { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10, alignSelf: 'flex-start' },
+  answerBtnTxt:      { color: PINK, fontSize: 13, fontWeight: '600' },
+
+  // Today mood
+  todayCard:         { margin: 20, marginBottom: 12, padding: 20, borderRadius: 20, backgroundColor: WHITE, elevation: 1 },
+  cardTitle:         { fontSize: 15, fontWeight: '700', color: PINK, marginBottom: 10 },
+  todayMoodRow:      { flexDirection: 'row', alignItems: 'center', gap: 14, marginVertical: 6 },
+  todayMoodIcon:     { width: 58, height: 58, borderRadius: 29, justifyContent: 'center', alignItems: 'center' },
+  todayMoodLabel:    { fontSize: 22, fontWeight: '800' },
+  moodEncouragement: { fontSize: 12, color: MID, marginTop: 4, maxWidth: W * 0.55, lineHeight: 17 },
+  updateButton:      { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: ROSE, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginTop: 10, alignSelf: 'flex-start' },
+  updateText:        { color: PINK, fontWeight: '600', fontSize: 13 },
+
+  // Challenge
+  challengeCard:      { marginHorizontal: 20, marginBottom: 12, padding: 16, backgroundColor: WHITE, borderRadius: 20, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  challengeHeader:    { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
+  challengeIconWrap:  { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
+  challengeCategory:  { fontSize: 10, fontWeight: '700', color: SOFT, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
+  challengeText:      { fontSize: 14, color: DARK, fontWeight: '500', lineHeight: 20 },
+  challengeBtn:       { flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 10, paddingHorizontal: 18, borderRadius: 20, alignSelf: 'flex-start' },
+  challengeBtnTxt:    { color: WHITE, fontWeight: '700', fontSize: 13 },
+
+  // Trend card
+  trendCard:      { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 20, marginBottom: 12, padding: 14, borderRadius: 18, borderWidth: 1.5 },
+  trendIconWrap:  { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  trendText:      { flex: 1, fontSize: 13, color: DARK, lineHeight: 19, fontWeight: '500' },
 
   // Journal summary
-  journalSummaryCard:  { marginHorizontal: 20, marginBottom: 12, padding: 16, backgroundColor: CARD_BG, borderRadius: 18, elevation: 1 },
-  journalSummaryHeader:{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 10 },
-  journalSummaryTitle: { fontSize: 14, fontWeight: '700', color: DARK },
-  daySummaryRating:    { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  daySummaryRatingTxt: { fontSize: 13, fontWeight: '700' },
-  journalSummaryNote:  { fontSize: 13, color: MID, lineHeight: 19 },
+  journalSummaryCard:   { marginHorizontal: 20, marginBottom: 12, padding: 16, backgroundColor: WHITE, borderRadius: 18, elevation: 1 },
+  journalSummaryHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 10 },
+  daySummaryRating:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  daySummaryRatingTxt:  { fontSize: 13, fontWeight: '700' },
+  journalSummaryNote:   { fontSize: 13, color: MID, lineHeight: 19 },
 
-  // Weekly calendar strip
-  calCard:             { marginHorizontal: 20, marginBottom: 12, padding: 16, backgroundColor: CARD_BG, borderRadius: 20, elevation: 1 },
-  calRow:              { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
-  calDay:              { alignItems: 'center', flex: 1 },
-  calDayToday:         { backgroundColor: '#FFF0F7', borderRadius: 12, paddingVertical: 4 },
-  calDayLabel:         { fontSize: 10, color: MID, fontWeight: '600', marginBottom: 4 },
-  calMoodCircle:       { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
-  calRatingDot:        { width: 7, height: 7, borderRadius: 4 },
-  calLegend:           { flexDirection: 'row', gap: 16, marginTop: 10, justifyContent: 'center' },
-  calLegendItem:       { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  calLegendTxt:        { fontSize: 10, color: SOFT },
+  // Calendar strip
+  calCard:        { marginHorizontal: 20, marginBottom: 12, padding: 16, backgroundColor: WHITE, borderRadius: 20, elevation: 1 },
+  calRow:         { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+  calDay:         { alignItems: 'center', flex: 1 },
+  calDayToday:    { backgroundColor: '#FFF0F7', borderRadius: 12, paddingVertical: 4 },
+  calDayLabel:    { fontSize: 10, color: MID, fontWeight: '600', marginBottom: 4 },
+  calMoodCircle:  { width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
+  calRatingDot:   { width: 7, height: 7, borderRadius: 4 },
+  calLegend:      { flexDirection: 'row', gap: 16, marginTop: 10, justifyContent: 'center' },
+  calLegendItem:  { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  calLegendTxt:   { fontSize: 10, color: SOFT },
 
-  // Weekly stats — YOUR ORIGINAL statsCard
-  statsCard:           { margin: 20, marginTop: 8, marginBottom: 12, padding: 20, backgroundColor: CARD_BG, borderRadius: 20, elevation: 1 },
-  statsGrid:           { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 10 },
-  statItem:            { alignItems: 'center', minWidth: 72, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 16 },
-  statMood:            { fontSize: 11, marginTop: 4, fontWeight: '600' },
-  statCount:           { fontSize: 10, color: MID, marginTop: 2 },
-  noDataWrap:          { alignItems: 'center', paddingVertical: 16, gap: 8 },
-  noData:              { textAlign: 'center', color: SOFT, fontSize: 13 },
+  // Weekly stats
+  statsCard:  { marginHorizontal: 20, marginBottom: 12, padding: 20, backgroundColor: WHITE, borderRadius: 20, elevation: 1 },
+  statsGrid:  { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 10 },
+  statItem:   { alignItems: 'center', minWidth: 72, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 16 },
+  statMood:   { fontSize: 11, marginTop: 4, fontWeight: '600' },
+  statCount:  { fontSize: 10, color: MID, marginTop: 2 },
+  noDataWrap: { alignItems: 'center', paddingVertical: 16, gap: 8 },
+  noData:     { textAlign: 'center', color: SOFT, fontSize: 13 },
 
-  // Recent journal
-  recentCard:          { marginHorizontal: 20, marginBottom: 12, padding: 16, backgroundColor: CARD_BG, borderRadius: 20, elevation: 1 },
-  recentEntry:         { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F3E8EF' },
-  recentRatingDot:     { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginTop: 2 },
-  recentEntryTop:      { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' },
-  recentDate:          { fontSize: 12, fontWeight: '700', color: DARK },
-  recentMoodBadge:     { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
-  recentMoodTxt:       { fontSize: 10, fontWeight: '600' },
-  recentRatingBadge:   { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
-  recentRatingTxt:     { fontSize: 10, fontWeight: '600' },
-  recentNote:          { fontSize: 12, color: MID, lineHeight: 17 },
+  // Recent diary
+  recentCard:        { marginHorizontal: 20, marginBottom: 12, padding: 16, backgroundColor: WHITE, borderRadius: 20, elevation: 1 },
+  recentEntry:       { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F3E8EF' },
+  recentRatingDot:   { width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginTop: 2 },
+  recentEntryTop:    { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4, flexWrap: 'wrap' },
+  recentDate:        { fontSize: 12, fontWeight: '700', color: DARK },
+  recentMoodBadge:   { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
+  recentMoodTxt:     { fontSize: 10, fontWeight: '600' },
+  recentRatingBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
+  recentRatingTxt:   { fontSize: 10, fontWeight: '600' },
+  recentNote:        { fontSize: 12, color: MID, lineHeight: 17 },
 
-  // Affirmation — YOUR ORIGINAL affirmationCard
-  affirmationCard:     { marginHorizontal: 20, marginBottom: 8, padding: 22, backgroundColor: '#FFFBEB', borderRadius: 20, alignItems: 'center' },
-  affirmationHeader:   { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 10 },
-  affirmationTitle:    { fontSize: 16, fontWeight: '700', color: PINK },
-  affirmation:         { fontSize: 15, textAlign: 'center', color: DARK, lineHeight: 23 },
+  // Affirmation
+  affirmationCard:   { marginHorizontal: 20, marginBottom: 8, padding: 22, backgroundColor: '#FFFBEB', borderRadius: 20, alignItems: 'center' },
+  affirmationHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 10 },
+  affirmationTitle:  { fontSize: 15, fontWeight: '700', color: PINK },
+  affirmation:       { fontSize: 14, textAlign: 'center', color: DARK, lineHeight: 22 },
+
+  // Mood summary modal
+  modalOverlay:      { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  summarySheet:      { backgroundColor: WHITE, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 22, paddingBottom: 36 },
+  summaryTitle:      { fontSize: 20, fontWeight: '800', color: DARK, marginBottom: 18, textAlign: 'center' },
+  summaryRow:        { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  summaryDot:        { width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
+  summaryMoodTxt:    { fontSize: 13, fontWeight: '700', width: 80 },
+  summaryBarBg:      { flex: 1, height: 8, backgroundColor: '#F3E8EF', borderRadius: 4, overflow: 'hidden' },
+  summaryBarFill:    { height: 8, borderRadius: 4 },
+  summaryCount:      { fontSize: 12, fontWeight: '700', width: 22, textAlign: 'right' },
+  summaryEncRow:     { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: ROSE, borderRadius: 14, padding: 12, marginTop: 16 },
+  summaryEncTxt:     { flex: 1, fontSize: 13, color: DARK, lineHeight: 19, fontWeight: '500' },
+  summaryClose:      { marginTop: 20, alignSelf: 'center', backgroundColor: PINK, paddingHorizontal: 32, paddingVertical: 12, borderRadius: 22 },
+  summaryCloseTxt:   { color: WHITE, fontWeight: '700', fontSize: 15 },
 
   // Journal sheet modal
   journalModalBg:      { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
@@ -770,8 +1079,8 @@ const styles = StyleSheet.create({
   sheetHandle:         { width: 40, height: 4, backgroundColor: '#EDD8E8', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   journalSheetTitle:   { fontSize: 20, fontWeight: '800', color: DARK, textAlign: 'center', marginBottom: 16 },
   journalSectionLabel: { fontSize: 13, fontWeight: '700', color: DARK, marginBottom: 8, marginTop: 4 },
-  ratingRow:           { flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
-  ratingBtn:           { flex: 1, minWidth: 56, alignItems: 'center', paddingVertical: 10, borderRadius: 14, borderWidth: 2, gap: 3 },
+  ratingRow:           { flexDirection: 'row', gap: 6, marginBottom: 16, flexWrap: 'wrap' },
+  ratingBtn:           { flex: 1, minWidth: 52, alignItems: 'center', paddingVertical: 10, borderRadius: 14, borderWidth: 2, gap: 3 },
   ratingBtnTxt:        { fontSize: 10, fontWeight: '700' },
   journalQuestionBox:  { flexDirection: 'row', alignItems: 'flex-start', gap: 7, backgroundColor: '#FFF0F7', borderRadius: 14, padding: 12, marginBottom: 8 },
   journalQuestionTxt:  { flex: 1, fontSize: 14, color: DARK, fontStyle: 'italic', lineHeight: 20 },

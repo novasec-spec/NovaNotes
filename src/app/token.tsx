@@ -12,7 +12,7 @@ import {
   Modal,
   Platform,
 } from 'react-native';
-import { NotificationService } from '../../services/notificationService';
+import { NotificationService } from '../services/notificationService';
 import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
