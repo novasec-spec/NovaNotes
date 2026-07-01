@@ -31,8 +31,8 @@ import {
   ChatNotificationData,
   markChatMessageRead,
   sendQuickReply,
-} from './notifications';
-import { NotificationStore } from '../notifications/NotificationStore';
+} from './notification';
+import { NotificationStore } from './notifications/NotificationStore';
 
 const PINK = '#FF6B9D';
 const PINK_DARK = '#E84F86';

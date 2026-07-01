@@ -1489,7 +1489,7 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
                 </View>
               ) : (
                 <KeyboardAvoidingView
-                  behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                   style={styles.keyboardContainer}
                   keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
                 >
@@ -1530,7 +1530,7 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
                       { 
                         backgroundColor: isDarkMode ? 'rgba(30,30,30,0.95)' : 'rgba(255,255,255,0.95)',
                         borderTopColor: isDarkMode ? '#333' : '#fbcfe8',
-                        paddingBottom: insets.bottom + 10,
+                        paddingBottom: 40,
                       }
                     ]}>
                       <TouchableOpacity
@@ -1788,40 +1788,106 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
 
-  // ── Input ──
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    gap: 6,
-  },
-  inputActionButton: {
-    padding: 6,
-  },
-  textInput: {
-    flex: 1,
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    fontSize: 15,
-  },
-  sendButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    overflow: 'hidden',
-  },
-  sendButtonGradient: {
-    width: 42,
-    height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendButtonDisabled: {
-    opacity: 0.6,
-  },
+
+// ── Input with Gradient ──
+inputRow: {
+  flexDirection: 'row',
+  alignItems: 'flex-end',
+  paddingHorizontal: 14,
+  paddingVertical: 10,
+  borderTopWidth: 0.5,
+  borderTopColor: '#E8E0E6',
+  backgroundColor: '#FFF',
+  gap: 8,
+  paddingBottom: Platform.OS === 'ios' ? 14 : 10,
+},
+inputActionButton: {
+  padding: 6,
+  marginBottom: 4,
+},
+textInput: {
+  flex: 1,
+  backgroundColor: '#F5F0F3',
+  borderRadius: 22,
+  paddingHorizontal: 18,
+  paddingVertical: Platform.OS === 'ios' ? 12 : 10,
+  fontSize: 15,
+  maxHeight: 100,
+  color: '#1A1A1A',
+  borderWidth: 0,
+},
+textInputFocused: {
+  backgroundColor: '#FFF',
+  borderWidth: 1.5,
+  borderColor: '#FF6B9D',
+  shadowColor: '#FF6B9D',
+  shadowOffset: { width: 0, height: 0 },
+  shadowOpacity: 0.1,
+  shadowRadius: 4,
+  elevation: 2,
+},
+sendButton: {
+  width: 42,
+  height: 42,
+  borderRadius: 21,
+  overflow: 'hidden',
+  marginBottom: 2,
+  shadowColor: '#FF6B9D',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.25,
+  shadowRadius: 4,
+  elevation: 3,
+},
+sendButtonGradient: {
+  width: 42,
+  height: 42,
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: 21,
+},
+sendButtonDisabled: {
+  opacity: 0.4,
+  shadowOpacity: 0,
+  elevation: 0,
+},
+voiceButton: {
+  backgroundColor: '#4CAF50',
+  width: 42,
+  height: 42,
+  borderRadius: 21,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginBottom: 2,
+  shadowColor: '#4CAF50',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.25,
+  shadowRadius: 4,
+  elevation: 3,
+},
+recordingButton: {
+  backgroundColor: '#EF4444',
+  width: 42,
+  height: 42,
+  borderRadius: 21,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginBottom: 2,
+  shadowColor: '#EF4444',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.25,
+  shadowRadius: 4,
+  elevation: 3,
+},
+recordingPulse: {
+  position: 'absolute',
+  width: 54,
+  height: 54,
+  borderRadius: 27,
+  borderWidth: 2,
+  borderColor: '#EF4444',
+  opacity: 0.3,
+  transform: [{ scale: 1 }],
+},
 
   // ── Typing ──
   typingRow: {
@@ -1843,29 +1909,32 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  // ── Quick Actions ──
-  quickActionsContainer: {
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  quickActionsContent: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  quickActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 8,
-    borderWidth: 1,
-  },
-  quickActionText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
+// ── Quick Actions (Instagram-style) ──
+quickActionsContainer: {
+  paddingVertical: 6,
+  maxHeight: 40,
+},
+quickActionsContent: {
+  paddingHorizontal: 16,
+  gap: 4,
+},
+quickActionButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 3,
+  paddingHorizontal: 10,
+  paddingVertical: 4,
+  borderRadius: 14,
+  marginRight: 4,
+  borderWidth: 0.5,
+  borderColor: '#FFD6E8',
+  backgroundColor: '#FFF8FA',
+},
+quickActionText: {
+  fontSize: 10,
+  fontWeight: '500',
+  color: '#831843',
+},
 
   // ── Key Prompt ──
   keyPromptContainer: {

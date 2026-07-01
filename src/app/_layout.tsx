@@ -1,27 +1,27 @@
 import React, { useEffect, useState, useRef, useCallback, createContext } from 'react';
 import { View, Text, StyleSheet, Animated, Pressable } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Updates from 'expo-updates';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { ThemeProvider } from '../contexts/ThemeContext'; // Adjust path if needed
+import { ThemeProvider } from '../contexts/ThemeContext';
+import { AuthProvider } from '../contexts/AuthContext';
+import { NotificationProvider } from '../contexts/NotificationContext';
+import { useNotificationActions } from '../hooks/useNotificationActions';
 
-// ⚠️ UPDATE THESE PATHS to match your actual folder structure
+
 import { SupabaseBackup } from '../services/supabaseBackup';
-import { NotificationService } from '../services/notificationService';
 import { MungaBot } from '../components/MungaBot';
 
 const USER_ID = 'Njeri';
 const WHITE = '#FFFFFF';
 
-// Create a context to share the secret state with the (tabs) layout
 export const AppContext = createContext({
   isSecretVisible: false,
   setIsSecretVisible: (val: boolean) => {},
 });
 
-// ── Secret corner tap zone (Preserved exactly) ───────────────────────────────
 function SecretZone({ onUnlock, isDevMode }: { onUnlock: () => void; isDevMode: boolean }) {
   const tapCount = useRef(0);
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -52,7 +52,6 @@ function SecretZone({ onUnlock, isDevMode }: { onUnlock: () => void; isDevMode: 
   );
 }
 
-// ── Dev mode toast (Preserved exactly) ───────────────────────────────────────
 function DevToast({ visible }: { visible: boolean }) {
   const translateY = useRef(new Animated.Value(-60)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -82,9 +81,8 @@ function DevToast({ visible }: { visible: boolean }) {
   );
 }
 
-// ── Main Root Layout ─────────────────────────────────────────────────────────
-export default function RootLayout() {
-  const router = useRouter();
+function InnerLayout() {
+useNotificationActions();
   const [isMungaVisible, setIsMungaVisible] = useState(true);
   const [isMungaOpen, setIsMungaOpen] = useState(false);
   const [responseToast, setResponseToast] = useState<string | null>(null);
@@ -93,20 +91,6 @@ export default function RootLayout() {
   
   const backup = useRef(new SupabaseBackup(USER_ID)).current;
   const toggleMunga = () => setIsMungaOpen(!isMungaOpen);
-
-  const initializeApp = async () => {    try {
-      const notificationService = NotificationService.getInstance(USER_ID);
-      const notifReady = await notificationService.initialize();
-      if (notifReady) {
-        notificationService.addNotificationListeners();
-        const hasSetup = await AsyncStorage.getItem('notifications_setup');
-        if (!hasSetup) {
-          await notificationService.setupAutomatedNotifications();
-          await AsyncStorage.setItem('notifications_setup', 'true');
-        }
-      }
-    } catch (error) { console.error('Initialization error:', error); }
-  };
 
   const checkForUpdates = async () => {
     try {
@@ -143,33 +127,45 @@ export default function RootLayout() {
         await AsyncStorage.setItem('dev_access', 'true');
         setIsSecretVisible(true);
         setShowDevToast(true);
-        setTimeout(() => setShowDevToast(false), 3200);      }
+        setTimeout(() => setShowDevToast(false), 3200);
+      }
     } catch (error) { console.error('Secret unlock error:', error); }
   }, []);
 
-  useEffect(() => { initializeApp(); checkForUpdates(); }, []);
+  useEffect(() => { checkForUpdates(); }, []);
   useEffect(() => { setupApp(); checkSecretAccess(); }, []);
 
   return (
-    <SafeAreaProvider>
-
-<ThemeProvider>
-      {/* Provide the secret state to the tabs layout */}
+    <ThemeProvider>
+<NotificationProvider>
       <AppContext.Provider value={{ isSecretVisible, setIsSecretVisible }}>
- <View style={{ flex: 1 }}>
-        {/* Stack allows us to push non-tab screens (like profile) over the tabs */}
-        <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
-          <Stack.Screen
-          name="splash"
-          options={{
-            headerShown: false,
-            animation: 'fade',
-          }}
-        />
-          <Stack.Screen name="(tabs)" />
-        </Stack>
-</View>
-        {/* Global Overlays */}
+        <View style={{ flex: 1 }}>
+          <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
+            <Stack.Screen name="splash" options={{ headerShown: false, animation: 'fade' }} />
+            <Stack.Screen name="(tabs)" />
+<Stack.Screen name="notification-playground" options={{ presentation: 'modal', animation: 'slide_from_right' }} />
+// app/_layout.tsx
+
+<Stack.Screen 
+  name="mood-checkin" 
+  options={{ 
+    presentation: 'modal', 
+    animation: 'slide_from_bottom',
+    headerShown: false,
+  }} 
+/>
+<Stack.Screen 
+  name="notification-settings" 
+  options={{ 
+    presentation: 'modal', 
+    animation: 'slide_from_bottom',
+    headerShown: false,
+  }} 
+/>
+            <Stack.Screen name="notification" options={{ presentation: 'modal', animation: 'slide_from_right' }} />
+          </Stack>
+        </View>
+
         <SecretZone onUnlock={handleSecretUnlock} isDevMode={isSecretVisible} />
         <DevToast visible={showDevToast} />
 
@@ -182,12 +178,21 @@ export default function RootLayout() {
         )}
         <MungaBot userId="Alice" isVisible={isMungaVisible} onToggle={toggleMunga} />
       </AppContext.Provider>
-</ThemeProvider>   
- </SafeAreaProvider>
+</NotificationProvider>
+    </ThemeProvider>
   );
 }
 
-// ── Styles (Preserved exactly) ───────────────────────────────────────────────
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <SafeAreaProvider>
+        <InnerLayout />
+      </SafeAreaProvider>
+    </AuthProvider>
+  );
+}
+
 const styles = StyleSheet.create({
   secretZone: { position: 'absolute', top: 0, right: 0, width: 60, height: 60, zIndex: 999 },
   secretDot: { position: 'absolute', top: 8, right: 8, width: 6, height: 6, borderRadius: 3, backgroundColor: '#F59E0B', opacity: 0.6 },

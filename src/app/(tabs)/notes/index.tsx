@@ -251,7 +251,7 @@ export default function NotesScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: 10 }]}>
       {/* Header */}
       <Animated.View style={[
         styles.header,
@@ -360,8 +360,8 @@ export default function NotesScreen() {
         />
       )}
 
-      {/* FAB */}
-      <TouchableOpacity style={[styles.fab, { bottom: insets.bottom - 20 }]} onPress={openNew} activeOpacity={0.85}>
+    {/* FAB */}
+      <TouchableOpacity style={[styles.fab, { bottom: insets.bottom + 63  }]} onPress={openNew} activeOpacity={0.85}>
         <Icon name="add" size={30} color={WHITE} />
       </TouchableOpacity>
 
@@ -458,7 +458,7 @@ export default function NotesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, paddingBottom: 100 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 22, paddingTop: 8, paddingBottom: 10 },
   headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerTitle: { fontSize: 28, fontWeight: '800' },
