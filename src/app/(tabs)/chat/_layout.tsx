@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { View } from 'react-native';
 import { supabase } from '../../../config/supabase';
-import NotificationBanner from './NotificationBanner';
+ import NotificationBanner from './NotificationBanner';
 
 export default function ChatLayout() {
   const router = useRouter();
@@ -51,6 +51,7 @@ export default function ChatLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="auth" />
         <Stack.Screen name="chatroom" />
+        <Stack.Screen name="notifications" />
       </Stack>
     </View>
   );

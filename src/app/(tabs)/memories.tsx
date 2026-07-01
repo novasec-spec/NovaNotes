@@ -14,6 +14,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../config/supabase';
 import { useTheme } from '../../contexts/ThemeContext';
+import { PremiumGuard } from '../../components/PremiumGuard'
 
 const { width: W } = Dimensions.get('window');
 
@@ -666,7 +667,7 @@ export default function MemoriesScreen() {
           </View>
         </TouchableOpacity>
       </FadeCard>
-    );
+   );
   };
 
   // ── RENDER TIMELINE ITEM ──────────────────────────────────────────────────
@@ -749,6 +750,7 @@ export default function MemoriesScreen() {
 
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
+<PremiumGuard>
     <SafeAreaView style={[styles.root, { backgroundColor: colors.background ?? BG }]} edges={['top']}>
 
       {/* ── Header ── */}
@@ -1218,12 +1220,13 @@ export default function MemoriesScreen() {
         </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
-  );
+</PremiumGuard> 
+ );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG },
+  root: { flex: 1, backgroundColor: BG, paddingBottom: 100 },
 
   // Header
   header:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },

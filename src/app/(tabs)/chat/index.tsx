@@ -10,7 +10,7 @@ import ChatList from './chatlist';
 import ChatRoom from './chatroom';
 import { User } from './types';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { setupNotifications, addNotificationListeners, registerPushToken, getExpoPushToken } from './notifications';
+import { setupNotifications, addNotificationListeners, registerPushToken, getExpoPushToken } from './notification';
 
 export default function ChatScreen() {
   const { colors, isDarkMode } = useTheme();
@@ -51,7 +51,7 @@ export default function ChatScreen() {
         const parsedUser = JSON.parse(userData);
         setUser(parsedUser);
         setIsAuthenticated(true);
-        
+console.log("registerPushToken =", registerPushToken);        
         // ✅ Register push token for this user
         await registerPushToken(parsedUser.id);
       }
@@ -113,7 +113,7 @@ export default function ChatScreen() {
 
 <TouchableOpacity
         style={[styles.settingsBtn, { backgroundColor: isDarkMode ? '#1A1A2E' : '#F0F4FF' }]}
-        onPress={() => router.push('/chat/notification')}
+        onPress={() => router.push('/chat/notifications')}
       >
         <Icon name="notifications" size={24} color={colors.text} />
       </TouchableOpacity>

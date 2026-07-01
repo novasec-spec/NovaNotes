@@ -32,15 +32,23 @@
       "enableBackgroundAudio": true,
       "package": "com.novasec.notes",
       "edgeToEdgeEnabled": true,
+      "softwareKeyboardLayoutMode": "resize",
       "predictiveBackGestureEnabled": true,
       "permissions": [
         "android.permission.INTERNET",
         "RECEIVE_BOOT_COMPLETED",
+          "NOTIFICATIONS",
         "VIBRATE",
         " SCHEDULE_EXACT_ALARM",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
+    },
+ "notification": {
+      "icon": "./assets/images/notification-icon.png",
+      "color": "#FF6B9D",
+      "androidMode": "default",
+      "androidCollapsedTitle": "New Update"
     },
     "web": {
       "output": "static",
@@ -48,8 +56,14 @@
     },
     "plugins": [
       "expo-router",
-      "expo-notifications",
-      "@react-native-community/datetimepicker",
+    [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#FF6B9D"
+        }
+      ],
+     "@react-native-community/datetimepicker",
       "expo-secure-store",
       "expo-web-browser",
       [

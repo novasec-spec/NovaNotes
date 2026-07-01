@@ -450,7 +450,7 @@ export default function SettingsScreen() {
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 const sStyles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, paddingBottom: 100 },
 
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

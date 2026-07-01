@@ -34,7 +34,7 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { User, Message } from './types';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
-import { sendChatNotification, registerPushToken } from './notifications';
+import { sendChatNotification, registerPushToken } from './notification';
 
 const { width: W } = Dimensions.get('window');
 
@@ -1084,22 +1084,30 @@ export default function ChatRoom({ user, otherUser, onBack }: Props) {
   }
 
   return (
-    <SafeAreaProvider>
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Icon name="arrow-back" size={24} color={WHITE} />
-          </TouchableOpacity>
-          <Image source={{ uri: otherUser.avatar_url }} style={styles.headerAvatar} />
-          <View style={styles.headerInfo}>
-            <Text style={styles.headerName}>{otherUser.username}</Text>
-            <View style={styles.headerStatusRow}>
-              {isOnline && !otherUserTyping && <View style={styles.onlineDot} />}
-              <Text style={styles.headerStatus}>{headerStatusText}</Text>
-            </View>
+  <SafeAreaProvider>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      
+      {/* Header */}
+      <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <Icon name="arrow-back" size={24} color={WHITE} />
+        </TouchableOpacity>
+        <Image source={{ uri: otherUser.avatar_url }} style={styles.headerAvatar} />
+        <View style={styles.headerInfo}>
+          <Text style={styles.headerName}>{otherUser.username}</Text>
+          <View style={styles.headerStatusRow}>
+            {isOnline && !otherUserTyping && <View style={styles.onlineDot} />}
+            <Text style={styles.headerStatus}>{headerStatusText}</Text>
           </View>
-        </LinearGradient>
+        </View>
+      </LinearGradient>
 
+      {/* ✅ KeyboardAvoidingView now wraps BOTH the FlatList and the Input */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+      >
         <FlatList
           ref={flatListRef}
           data={messages}
@@ -1124,8 +1132,7 @@ export default function ChatRoom({ user, otherUser, onBack }: Props) {
               onRefresh={() => chatId && loadMessages(chatId, { isRefresh: true })}
               tintColor={PINK}
             />
-          }
-          style={{ flex: 1 }}
+          }          style={{ flex: 1 }}
         />
 
         {otherUserTyping && (
@@ -1137,102 +1144,98 @@ export default function ChatRoom({ user, otherUser, onBack }: Props) {
           </View>
         )}
 
-        <SafeAreaView edges={['bottom']} style={{ backgroundColor: colors.card }}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-          >
-            {isRecording ? (
-              <View style={[styles.recordingBar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-                <View style={styles.recordingPulseDot} />
-                <Text style={[styles.recordingText, { color: colors.text }]}>
-                  Recording... {formatAudioDuration(recordingDuration)}
-                </Text>
-                <TouchableOpacity onPress={stopRecording} style={styles.stopRecordingBtn}>
-                  <Icon name="stop-circle" size={32} color={DANGER} />
-                </TouchableOpacity>
-              </View>
+        {/* Input / Recording Area */}
+        {isRecording ? (
+          <View style={[styles.recordingBar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+            <View style={styles.recordingPulseDot} />
+            <Text style={[styles.recordingText, { color: colors.text }]}>
+              Recording... {formatAudioDuration(recordingDuration)}
+            </Text>
+            <TouchableOpacity onPress={stopRecording} style={styles.stopRecordingBtn}>
+              <Icon name="stop-circle" size={32} color={DANGER} />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={[
+            styles.inputContainer,
+            {
+              backgroundColor: colors.card,
+              borderTopColor: colors.border,
+              paddingBottom: Platform.OS === 'ios' ? 12 : (insets.bottom || 12),
+            }
+          ]}>
+            <TouchableOpacity style={styles.inputButton} onPress={() => setShowImagePicker(true)}>
+              <Icon name="add-circle" size={28} color={PINK} />
+            </TouchableOpacity>
+
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.input, color: colors.text }]}
+              placeholder="Type a message..."
+              placeholderTextColor={colors.muted}
+              value={inputText}
+              onChangeText={handleTyping}
+              multiline
+              maxLength={1000}
+            />
+
+            {inputText.trim() ? (
+              <TouchableOpacity onPress={() => sendMessage(inputText)} disabled={sending}>
+                <LinearGradient colors={GRADIENT} style={styles.sendButton}>
+                  <Icon name="send" size={22} color={WHITE} />                </LinearGradient>
+              </TouchableOpacity>
             ) : (
-              <View style={[
-                styles.inputContainer,
-                {
-                  backgroundColor: colors.card,
-                  borderTopColor: colors.border,
-                  paddingBottom: Platform.OS === 'ios' ? 12 : (insets.bottom || 12),
-                }
-              ]}>
-                <TouchableOpacity style={styles.inputButton} onPress={() => setShowImagePicker(true)}>
-                  <Icon name="add-circle" size={28} color={PINK} />
-                </TouchableOpacity>
-
-                <TextInput
-                  style={[styles.input, { backgroundColor: colors.input, color: colors.text }]}
-                  placeholder="Type a message..."
-                  placeholderTextColor={colors.muted}
-                  value={inputText}
-                  onChangeText={handleTyping}
-                  multiline
-                  maxLength={1000}
-                />
-
-                {inputText.trim() ? (
-                  <TouchableOpacity onPress={() => sendMessage(inputText)} disabled={sending}>
-                    <LinearGradient colors={GRADIENT} style={styles.sendButton}>
-                      <Icon name="send" size={22} color={WHITE} />
-                    </LinearGradient>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity onPressIn={startRecording} disabled={isRecording}>
-                    <LinearGradient colors={['#4CAF50', '#2E9E4F']} style={styles.sendButton}>
-                      <Icon name="mic" size={22} color={WHITE} />
-                    </LinearGradient>
-                  </TouchableOpacity>
-                )}
-              </View>
+              <TouchableOpacity onPressIn={startRecording} disabled={isRecording}>
+                <LinearGradient colors={['#4CAF50', '#2E9E4F']} style={styles.sendButton}>
+                  <Icon name="mic" size={22} color={WHITE} />
+                </LinearGradient>
+              </TouchableOpacity>
             )}
-          </KeyboardAvoidingView>
-        </SafeAreaView>
+          </View>
+        )}
+      </KeyboardAvoidingView>
 
-        <Modal visible={showImagePicker} transparent animationType="slide" onRequestClose={() => setShowImagePicker(false)}>
-          <View style={styles.modalContainer}>
-            <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
-              <View style={styles.modalHandle} />
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Share</Text>
-              <View style={styles.modalOptions}>
-                <TouchableOpacity style={styles.modalOption} onPress={() => { setShowImagePicker(false); pickImage(); }}>
-                  <View style={[styles.modalIconWrap, { backgroundColor: PINK + '18' }]}>
-                    <Icon name="images" size={32} color={PINK} />
-                  </View>
-                  <Text style={[styles.modalOptionText, { color: colors.text }]}>Photos & Videos</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.modalOption} onPress={() => { setShowImagePicker(false); startRecording(); }}>
-                  <View style={[styles.modalIconWrap, { backgroundColor: '#4CAF5018' }]}>
-                    <Icon name="mic" size={32} color="#4CAF50" />
-                  </View>
-                  <Text style={[styles.modalOptionText, { color: colors.text }]}>Voice Note</Text>
-                </TouchableOpacity>
-              </View>
-              <TouchableOpacity style={[styles.modalClose, { backgroundColor: colors.input }]} onPress={() => setShowImagePicker(false)}>
-                <Text style={[styles.modalCloseText, { color: colors.muted }]}>Cancel</Text>
+      {/* Modals and Lightbox stay outside */}
+      <Modal visible={showImagePicker} transparent animationType="slide" onRequestClose={() => setShowImagePicker(false)}>
+        <View style={styles.modalContainer}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+            <View style={styles.modalHandle} />
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Share</Text>
+            <View style={styles.modalOptions}>
+              <TouchableOpacity style={styles.modalOption} onPress={() => { setShowImagePicker(false); pickImage(); }}>
+                <View style={[styles.modalIconWrap, { backgroundColor: PINK + '18' }]}>
+                  <Icon name="images" size={32} color={PINK} />
+                </View>
+                <Text style={[styles.modalOptionText, { color: colors.text }]}>Photos & Videos</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalOption} onPress={() => { setShowImagePicker(false); startRecording(); }}>
+                <View style={[styles.modalIconWrap, { backgroundColor: '#4CAF5018' }]}>
+                  <Icon name="mic" size={32} color="#4CAF50" />
+                </View>
+                <Text style={[styles.modalOptionText, { color: colors.text }]}>Voice Note</Text>
               </TouchableOpacity>
             </View>
+            <TouchableOpacity style={[styles.modalClose, { backgroundColor: colors.input }]} onPress={() => setShowImagePicker(false)}>
+              <Text style={[styles.modalCloseText, { color: colors.muted }]}>Cancel</Text>
+            </TouchableOpacity>
           </View>
-        </Modal>
+        </View>
+      </Modal>
 
-        <MediaLightbox
-          visible={!!lightbox}
-          mediaUri={lightbox?.uri ?? null}
-          mediaType={lightbox?.type ?? null}
-          onClose={() => setLightbox(null)}
-        />
-      </SafeAreaView>
-    </SafeAreaProvider>
-  );
+      <MediaLightbox
+        visible={!!lightbox}
+        mediaUri={lightbox?.uri ?? null}
+        mediaType={lightbox?.type ?? null}
+        onClose={() => setLightbox(null)}
+      />
+    </SafeAreaView>
+  </SafeAreaProvider>
+);
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  paddingBottom: 100
   },
   centerContainer: {
     flex: 1,
