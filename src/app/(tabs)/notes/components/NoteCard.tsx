@@ -95,6 +95,29 @@ export function NoteCard({
         </View>
       )}
 
+
+
+// src/components/NoteCard.tsx
+
+// Add reminder indicator in the card
+{/* Reminder Badge */}
+{item.reminder?.enabled && (
+  <View style={[styles.reminderBadge, { backgroundColor: theme.accent + '22' }]}>
+    <Icon 
+      name={new Date(item.reminder.scheduledFor) > new Date() ? 'alarm-outline' : 'alarm'} 
+      size={12} 
+      color={theme.accent} 
+    />
+    <Text style={[styles.reminderBadgeText, { color: theme.accent }]}>
+      {new Date(item.reminder.scheduledFor).toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      })}
+      {item.reminder.type === 'recurring' && ` 🔄`}
+    </Text>
+  </View>
+)}
+
       <View style={styles.topRightWrap}>
         {!item._synced && <View style={[styles.syncDot, { backgroundColor: WARNING }]} />}
         {sticker && <MCIcon name={sticker.name} size={22} color={sticker.color} />}
@@ -215,6 +238,20 @@ const styles = StyleSheet.create({
   doodleBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, gap: 4, marginBottom: 8 },
   doodleBadgeText: { fontSize: 11, fontWeight: '700' },
   locationBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, gap: 4, marginBottom: 8 },
+reminderBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  alignSelf: 'flex-start',
+  paddingHorizontal: 8,
+  paddingVertical: 4,
+  borderRadius: 10,
+  gap: 4,
+  marginBottom: 8,
+},
+reminderBadgeText: {
+  fontSize: 11,
+  fontWeight: '700',
+},
   locationBadgeText: { fontSize: 11, fontWeight: '700', maxWidth: 120 },
   weatherBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, gap: 4, marginBottom: 8 },
   weatherBadgeText: { fontSize: 11, fontWeight: '700' },

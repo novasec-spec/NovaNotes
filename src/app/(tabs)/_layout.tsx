@@ -1,13 +1,15 @@
 // src/app/(tabs)/_layout.tsx - COMPLETE FIX
 import React, { useState, useContext, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions, Platform } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppContext } from '../_layout';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import { supabase } from '../../config/supabase';
+import NotificationBanner from './chat/NotificationBanner';
 
 const { width: W } = Dimensions.get('window');
 
@@ -160,24 +162,52 @@ function CustomTabBar({ state, navigation }: any) {
 // ── Tabs Layout ────────────────────────────────
 export default function TabsLayout() {
   const { isSecretVisible } = useContext(AppContext);
+  const router = useRouter();
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setCurrentUserId(data.session?.user?.id ?? null);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUserId(session?.user?.id ?? null);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
 
 
   return (
-    <Tabs
-      tabBar={(props) => <CustomTabBar {...props} />}
-      screenOptions={{ 
-        headerShown: false, 
-        animation: 'fade',
-      }}
-    >
-      <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="notes" options={{ title: 'Notes' }} />
-      <Tabs.Screen name="memories" options={{ title: 'Memories' }} />
-      <Tabs.Screen name="vibe" options={{ title: 'Vibe' }} />
-      <Tabs.Screen name="chat" options={{ 
-        title: 'Chat',
-      }} />
-    </Tabs>
+    <View style={{ flex: 1 }}>
+      {/* NotificationBanner lives here — ONE mount for the whole app, above
+          every tab. It uses the real Supabase session user id (never a
+          placeholder) and appears on top of whatever screen is active.
+          Do NOT also mount it in chat/_layout.tsx — that second instance was
+          what caused the "current-user-id is not a real UUID" crash. */}
+      {currentUserId && (
+        <NotificationBanner
+          currentUserId={currentUserId}
+          onOpenChat={(chatId) => router.push(`/chat/${chatId}` as any)}
+        />
+      )}
+
+      <Tabs
+        tabBar={(props) => <CustomTabBar {...props} />}
+        screenOptions={{
+          headerShown: false,
+          animation: 'fade',
+        }}
+      >
+        <Tabs.Screen name="index" options={{ title: 'Home' }} />
+        <Tabs.Screen name="notes" options={{ title: 'Notes' }} />
+        <Tabs.Screen name="memories" options={{ title: 'Memories' }} />
+        <Tabs.Screen name="vibe" options={{ title: 'Vibe' }} />
+        <Tabs.Screen name="chat" options={{ title: 'Chat' }} />
+      </Tabs>
+    </View>
   );
 }
 

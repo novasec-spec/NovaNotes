@@ -157,7 +157,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   { id: 'joke', label: 'Joke', prompt: 'Tell me a funny joke.', icon: 'happy-outline' },
   { id: 'affirm', label: 'Affirm', prompt: 'Give me a warm affirmation.', icon: 'heart-outline' },
   { id: 'vent', label: 'Vent', prompt: 'I need to vent about my day.', icon: 'chatbubble-outline' },
-  { id: 'prayer', label: 'Prayer', prompt: 'Say a prayer for me.', icon: 'church-outline' },
+  { id: 'prayer', label: 'Prayer', prompt: 'Say a prayer for me.', icon: 'business-outline' },
   { id: 'song', label: 'Song', prompt: 'Suggest a song that fits my mood.', icon: 'musical-notes-outline' },
   { id: 'hug', label: 'Hug', prompt: 'Send me a virtual hug.', icon: 'people-outline' },
 ];

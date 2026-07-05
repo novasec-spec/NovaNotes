@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { Alert, View, ActivityIndicator, StyleSheet, TouchableOpacity, Text } from 'react-native'
-import { premiumService } from '../services/premium'
+import { View, ActivityIndicator, Text } from 'react-native'
 import { useRouter } from 'expo-router'
-import { apiClient } from '../services/api'
+import { premiumService } from '../services/premium'
 
 export function PremiumGuard({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
@@ -15,11 +14,17 @@ export function PremiumGuard({ children }: { children: React.ReactNode }) {
 
   const checkPremium = async () => {
     try {
-      const status = await premiumService.checkPremiumStatus()
+      // Use cached status - instant!
+      const status = await premiumService.checkPremiumStatus(true)
       setIsPremium(status.isPremium)
+      
+      if (!status.isPremium) {
+        setTimeout(() => router.replace('/premium'), 500)
+      }
     } catch (error) {
       console.error('Premium check error:', error)
       setIsPremium(false)
+      setTimeout(() => router.replace('/premium'), 500)
     } finally {
       setIsLoading(false)
     }
@@ -29,41 +34,12 @@ export function PremiumGuard({ children }: { children: React.ReactNode }) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#4F46E5" />
-        <Text style={{ marginTop: 12, color: '#6B7280' }}>Checking subscription...</Text>
-// In app/premium.tsx, add this temporary test button:
-
-<TouchableOpacity 
-  style={styles.testButton}
-  onPress={async () => {
-    try {
-      await apiClient.post('/premium/test/activate')
-      Alert.alert('Success', 'Premium activated!')
-      checkPremiumStatus()
-    } catch (error) {
-      Alert.alert('Error', error.message)
-    }
-  }}
->
-  <Text>🔓 Activate Premium (Test)</Text>
-</TouchableOpacity>     
- </View>
+        <Text style={{ marginTop: 12, color: '#6B7280' }}>Loading...</Text>
+      </View>
     )
   }
 
-  if (!isPremium) {
-    router.replace('/premium')
-    return null
-  }
+  if (!isPremium) return null
 
   return <>{children}</>
 }
-
-const styles = StyleSheet.create({
-  testButton: {
-    backgroundColor: '#10B981',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 10,
-    alignItems: 'center',
-  },
-});

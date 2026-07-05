@@ -32,6 +32,25 @@ export async function loadNotesLocally(): Promise<Note[]> {
   }
 }
 
+// services/storage.ts - Add a debug function
+
+export async function debugLocalStorage(): Promise<void> {
+  try {
+    const cached = await AsyncStorage.getItem(STORAGE_KEYS.NOTES);
+    if (cached) {
+      const notes = JSON.parse(cached);
+      console.log(`🔍 Local storage has ${notes.length} notes`);
+      if (notes.length > 0) {
+        console.log(`📝 First note: ${notes[0].id} - ${notes[0].title || 'Untitled'}`);
+      }
+    } else {
+      console.log('🔍 Local storage is empty');
+    }
+  } catch (error) {
+    console.error('Debug error:', error);
+  }
+}
+
 export async function downloadToLocal(remoteUrl: string, suggestedName: string): Promise<string | null> {
   try {
     await ensureLocalDir();

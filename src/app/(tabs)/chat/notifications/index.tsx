@@ -4,7 +4,7 @@
 // like backup-complete, restore-complete, sync errors) grouped by Today /
 // Earlier, with unread dots, swipe-to-mark-read, swipe-to-delete, and tap to
 // open the relevant screen.
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,11 +17,15 @@ import {
   Dimensions,
   Alert,
   ActivityIndicator,
+  RefreshControl,
+  StatusBar,
 } from 'react-native';
 import { router } from 'expo-router';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../../../contexts/ThemeContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import {
   NotificationStore,
   AppNotification,
@@ -42,24 +46,26 @@ const GREY = '#9CA3AF';
 const SWIPE_DELETE_THRESHOLD = -90;
 const SWIPE_READ_THRESHOLD = 70;
 const ROW_HEIGHT_ESTIMATE = 84;
+const CACHE_KEY = 'notifications_cache';
+const CACHE_EXPIRY = 3600000; // 1 hour
 
 // ── Per-kind presentation ────────────────────────────────────────────────────
-function getKindConfig(kind: NotificationKind): { icon: string; color: string } {
-  switch (kind) {
-    case 'chat_message': return { icon: 'chatbubble', color: PINK };
-    case 'backup_complete': return { icon: 'cloud-done', color: SUCCESS };
-    case 'backup_failed': return { icon: 'cloud-offline', color: DANGER };
-    case 'restore_complete': return { icon: 'cloud-download', color: BLUE };
-    case 'sync_error': return { icon: 'alert-circle', color: DANGER };
-    case 'reminder': return { icon: 'alarm', color: WARNING };
-    case 'system':
-    default: return { icon: 'information-circle', color: GREY };
-  }
+function getKindConfig(kind: NotificationKind): { icon: string; color: string; label: string } {
+  const configs: Record<NotificationKind, { icon: string; color: string; label: string }> = {
+    chat_message: { icon: 'chatbubble', color: PINK, label: 'Message' },
+    backup_complete: { icon: 'cloud-done', color: SUCCESS, label: 'Backup Complete' },
+    backup_failed: { icon: 'cloud-offline', color: DANGER, label: 'Backup Failed' },
+    restore_complete: { icon: 'cloud-download', color: BLUE, label: 'Restore Complete' },
+    sync_error: { icon: 'alert-circle', color: DANGER, label: 'Sync Error' },
+    reminder: { icon: 'alarm', color: WARNING, label: 'Reminder' },
+    system: { icon: 'information-circle', color: GREY, label: 'System' },
+  };
+  return configs[kind] || configs.system;
 }
 
 function timeAgo(dateStr: string): string {
   const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (seconds < 60) return 'now';
+  if (seconds < 60) return 'Just now';
   const mins = Math.floor(seconds / 60);
   if (mins < 60) return `${mins}m`;
   const hours = Math.floor(mins / 60);
@@ -75,11 +81,90 @@ function isToday(dateStr: string): boolean {
   return d.toDateString() === today.toDateString();
 }
 
+function getInitials(name?: string): string {
+  if (!name) return '?';
+  return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function avatarColor(id: string): string {
+  const COLORS = ['#FF6B9D', '#A855F7', '#22C55E', '#F59E0B', '#3B82F6', '#F97316', '#EC4899', '#06B6D4', '#8B5CF6'];
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  return COLORS[Math.abs(hash) % COLORS.length];
+}
+
+// ── Cache Manager ────────────────────────────────────────────────────────────
+class NotificationCache {
+  static async save(notifications: AppNotification[]) {
+    try {
+      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
+        data: notifications,
+        timestamp: Date.now(),
+      }));
+    } catch (error) {
+      console.warn('Failed to cache notifications:', error);
+    }
+  }
+
+  static async load(): Promise<AppNotification[] | null> {
+    try {
+      const cached = await AsyncStorage.getItem(CACHE_KEY);
+      if (!cached) return null;
+      
+      const parsed = JSON.parse(cached);
+      if (Date.now() - parsed.timestamp > CACHE_EXPIRY) {
+        return null;
+      }
+      return parsed.data;
+    } catch (error) {
+      console.warn('Failed to load cached notifications:', error);
+      return null;
+    }
+  }
+
+  static async clear() {
+    await AsyncStorage.removeItem(CACHE_KEY);
+  }
+}
+
+// ── Avatar Component ──────────────────────────────────────────────────────────
+function NotificationAvatar({ 
+  uri, 
+  name, 
+  userId, 
+  size = 44 
+}: { 
+  uri?: string; 
+  name?: string; 
+  userId?: string; 
+  size?: number;
+}) {
+  const [imgError, setImgError] = useState(false);
+  const bg = userId ? avatarColor(userId) : '#FF6B9D';
+
+  if (uri && !imgError) {
+    return (
+      <Image
+        source={{ uri }}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+
+  return (
+    <View style={{
+      width: size, height: size, borderRadius: size / 2,
+      backgroundColor: bg, alignItems: 'center', justifyContent: 'center',
+    }}>
+      <Text style={{ fontSize: size * 0.38, color: '#fff', fontWeight: '700' }}>
+        {getInitials(name)}
+      </Text>
+    </View>
+  );
+}
+
 // ── Swipeable row ─────────────────────────────────────────────────────────────
-// Built on PanResponder + Animated (both core React Native) rather than
-// react-native-gesture-handler, to avoid adding a new gesture dependency for
-// a single list screen. If this app adopts RNGH elsewhere later, this row is
-// a reasonable first candidate to port for smoother (UI-thread) gesture feel.
 function SwipeableRow({
   notification,
   onPress,
@@ -95,27 +180,34 @@ function SwipeableRow({
 }) {
   const translateX = useRef(new Animated.Value(0)).current;
   const rowOpacity = useRef(new Animated.Value(1)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
   const [swiping, setSwiping] = useState(false);
 
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gesture) =>
         Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
-      onPanResponderGrant: () => setSwiping(true),
+      onPanResponderGrant: () => {
+        setSwiping(true);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      },
       onPanResponderMove: (_, gesture) => {
-        // Clamp: can swipe left (delete) further than right (mark-read).
         const clamped = Math.max(-140, Math.min(90, gesture.dx));
         translateX.setValue(clamped);
+        const scale = 1 - Math.min(Math.abs(clamped) / 500, 0.03);
+        scaleAnim.setValue(scale);
       },
       onPanResponderRelease: (_, gesture) => {
         setSwiping(false);
         if (gesture.dx < SWIPE_DELETE_THRESHOLD) {
-          // Swiped far enough left — animate fully off and delete.
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           Animated.parallel([
             Animated.timing(translateX, { toValue: -W, duration: 200, useNativeDriver: true }),
             Animated.timing(rowOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+            Animated.timing(scaleAnim, { toValue: 0.8, duration: 200, useNativeDriver: true }),
           ]).start(() => onDelete());
         } else if (gesture.dx > SWIPE_READ_THRESHOLD) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           onMarkRead();
           springBack();
         } else {
@@ -127,7 +219,10 @@ function SwipeableRow({
   ).current;
 
   function springBack() {
-    Animated.spring(translateX, { toValue: 0, friction: 8, tension: 80, useNativeDriver: true }).start();
+    Animated.parallel([
+      Animated.spring(translateX, { toValue: 0, friction: 8, tension: 80, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, friction: 8, tension: 80, useNativeDriver: true }),
+    ]).start();
   }
 
   const kindConfig = getKindConfig(notification.kind);
@@ -142,9 +237,13 @@ function SwipeableRow({
     extrapolate: 'clamp',
   });
 
+  // Determine if this is a chat message notification
+  const isChatMessage = notification.kind === 'chat_message';
+  const avatarUri = notification.senderAvatar;
+  const senderName = notification.senderName || notification.title;
+
   return (
     <View style={styles.rowWrapper}>
-      {/* Background action hints, revealed as the row slides over them */}
       <View style={[styles.actionBackdrop, styles.actionBackdropRight]}>
         <Animated.View style={[styles.actionHint, { opacity: deleteOpacity }]}>
           <Icon name="trash" size={20} color={WHITE} />
@@ -162,7 +261,12 @@ function SwipeableRow({
         {...panResponder.panHandlers}
         style={[
           styles.row,
-          { backgroundColor: colors.card ?? WHITE, opacity: rowOpacity, transform: [{ translateX }] },
+          { 
+            backgroundColor: colors.card ?? WHITE, 
+            opacity: rowOpacity, 
+            transform: [{ translateX }, { scale: scaleAnim }] 
+          },
+          notification.read && styles.rowRead,
         ]}
       >
         <TouchableOpacity
@@ -170,30 +274,51 @@ function SwipeableRow({
           onPress={swiping ? undefined : onPress}
           activeOpacity={0.8}
         >
-          {notification.senderAvatar ? (
-            <Image source={{ uri: notification.senderAvatar }} style={styles.avatar} />
+          {/* Avatar - shows sender avatar for chat messages */}
+          {isChatMessage ? (
+            <NotificationAvatar
+              uri={avatarUri}
+              name={senderName}
+              userId={notification.senderId}
+              size={48}
+            />
           ) : (
-            <View style={[styles.iconCircle, { backgroundColor: kindConfig.color + '1A' }]}>
-              <Icon name={kindConfig.icon as any} size={20} color={kindConfig.color} />
+            <View style={[styles.iconCircle, { backgroundColor: kindConfig.color + '18' }]}>
+              <Icon name={kindConfig.icon as any} size={22} color={kindConfig.color} />
             </View>
           )}
 
           <View style={styles.textCol}>
             <View style={styles.titleRow}>
-              <Text
-                style={[styles.title, { color: colors.text ?? '#1A1A1A' }, !notification.read && styles.titleUnread]}
-                numberOfLines={1}
-              >
-                {notification.title}
+              <View style={styles.titleContainer}>
+                <Text
+                  style={[
+                    styles.title, 
+                    { color: colors.text ?? '#1A1A1A' }, 
+                    !notification.read && styles.titleUnread
+                  ]}
+                  numberOfLines={1}
+                >
+                  {isChatMessage ? senderName : notification.title}
+                </Text>
+                {!notification.read && <View style={styles.unreadDot} />}
+              </View>
+              <Text style={[styles.time, { color: colors.muted ?? GREY }]}>
+                {timeAgo(notification.createdAt)}
               </Text>
-              <Text style={[styles.time, { color: colors.muted ?? GREY }]}>{timeAgo(notification.createdAt)}</Text>
             </View>
             <Text style={[styles.body, { color: colors.muted ?? GREY }]} numberOfLines={2}>
               {notification.body}
             </Text>
+            <View style={styles.tagContainer}>
+              <View style={[styles.tag, { backgroundColor: kindConfig.color + '14' }]}>
+                <Icon name={kindConfig.icon as any} size={10} color={kindConfig.color} />
+                <Text style={[styles.tagText, { color: kindConfig.color }]}>
+                  {kindConfig.label}
+                </Text>
+              </View>
+            </View>
           </View>
-
-          {!notification.read && <View style={styles.unreadDot} />}
         </TouchableOpacity>
       </Animated.View>
     </View>
@@ -201,57 +326,155 @@ function SwipeableRow({
 }
 
 // ── Section header ────────────────────────────────────────────────────────────
-function SectionHeader({ label, colors }: { label: string; colors: any }) {
+function SectionHeader({ label, count, colors }: { label: string; count?: number; colors: any }) {
   return (
-    <Text style={[styles.sectionHeader, { color: colors.muted ?? GREY, backgroundColor: colors.background }]}>
-      {label}
-    </Text>
+    <View style={[styles.sectionHeaderContainer, { backgroundColor: colors.background }]}>
+      <Text style={[styles.sectionHeader, { color: colors.muted ?? GREY }]}>
+        {label}
+      </Text>
+      {count !== undefined && count > 0 && (
+        <View style={[styles.sectionCount, { backgroundColor: colors.border }]}>
+          <Text style={[styles.sectionCountText, { color: colors.muted }]}>{count}</Text>
+        </View>
+      )}
+    </View>
   );
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ── Main Component ────────────────────────────────────────────────────────────
 export default function NotificationsScreen() {
   const { colors } = useTheme();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [isCached, setIsCached] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = NotificationStore.subscribe((all) => {
-      setNotifications(all);
-      setLoading(false);
-    });
-    return unsubscribe;
+    loadNotifications();
+    return () => {};
   }, []);
 
+  const loadNotifications = async (refresh = false) => {
+    try {
+      setLoading(true);
+      
+      if (!refresh) {
+        const cached = await NotificationCache.load();
+        if (cached && cached.length > 0) {
+          setNotifications(cached);
+          setIsCached(true);
+          setLoading(false);
+        }
+      }
+
+      const freshData = await NotificationStore.getAll();
+      if (freshData && freshData.length > 0) {
+        setNotifications(freshData);
+        setIsCached(false);
+        await NotificationCache.save(freshData);
+      }
+    } catch (error) {
+      console.error('Failed to load notifications:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRefreshing(true);
+    await loadNotifications(true);
+  };
+
   const handlePress = useCallback(async (n: AppNotification) => {
-    if (!n.read) await NotificationStore.markRead(n.id);
+    if (!n.read) {
+      await NotificationStore.markRead(n.id);
+      const updated = notifications.map(notif => 
+        notif.id === n.id ? { ...notif, read: true } : notif
+      );
+      setNotifications(updated);
+      await NotificationCache.save(updated);
+    }
 
     if (n.kind === 'chat_message' && n.chatId) {
-      router.push(`/chat/${n.chatId}` as any);
+      // Navigate to chat with the user
+      router.push({
+        pathname: '/(tabs)/chat',
+        params: { chatId: n.chatId },
+      });
+    } else if (n.kind === 'reminder') {
+      router.push('/(tabs)/vibe');
+    } else if (n.kind === 'backup_complete' || n.kind === 'backup_failed') {
+      router.push('/(tabs)/notes');
     } else if (n.screen) {
       router.push(n.screen as any);
     }
-  }, []);
+  }, [notifications]);
 
-  const handleMarkRead = useCallback((id: string) => {
-    NotificationStore.markRead(id);
-  }, []);
+  const handleMarkRead = useCallback(async (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await NotificationStore.markRead(id);
+    const updated = notifications.map(n => 
+      n.id === id ? { ...n, read: true } : n
+    );
+    setNotifications(updated);
+    await NotificationCache.save(updated);
+  }, [notifications]);
 
-  const handleDelete = useCallback((id: string) => {
-    NotificationStore.remove(id);
-  }, []);
+  const handleDelete = useCallback(async (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    const updated = notifications.filter(n => n.id !== id);
+    setNotifications(updated);
+    await NotificationStore.remove(id);
+    await NotificationCache.save(updated);
+  }, [notifications]);
 
-  const handleMarkAllRead = () => {
-    NotificationStore.markAllRead();
+  const handleMarkAllRead = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
+    if (unreadIds.length === 0) return;
+
+    Alert.alert(
+      'Mark All as Read',
+      `Mark ${unreadIds.length} notification${unreadIds.length > 1 ? 's' : ''} as read?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Mark All',
+          onPress: async () => {
+            await NotificationStore.markAllRead();
+            const updated = notifications.map(n => ({ ...n, read: true }));
+            setNotifications(updated);
+            await NotificationCache.save(updated);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ]
+    );
   };
 
   const handleClearAll = () => {
     if (notifications.length === 0) return;
-    Alert.alert('Clear all notifications', 'This removes every notification from this list. This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Clear all', style: 'destructive', onPress: () => NotificationStore.clearAll() },
-    ]);
+    
+    Alert.alert(
+      'Clear All Notifications',
+      'This removes every notification from this list. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Clear All', 
+          style: 'destructive',
+          onPress: async () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            await NotificationStore.clearAll();
+            setNotifications([]);
+            await NotificationCache.clear();
+          },
+        },
+      ]
+    );
   };
 
   const filtered = filter === 'unread' ? notifications.filter(n => !n.read) : notifications;
@@ -259,60 +482,87 @@ export default function NotificationsScreen() {
   const earlierItems = filtered.filter(n => !isToday(n.createdAt));
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  // Build a single flat list with section header sentinels so we keep one
-  // FlatList (cheaper than SectionList for this size, and we already need
-  // custom swipe rows per item).
-  type ListEntry = { type: 'header'; label: string } | { type: 'item'; data: AppNotification };
+  type ListEntry = { type: 'header'; label: string; count?: number } | { type: 'item'; data: AppNotification };
   const listData: ListEntry[] = [
-    ...(todayItems.length > 0 ? [{ type: 'header' as const, label: 'Today' }, ...todayItems.map(d => ({ type: 'item' as const, data: d }))] : []),
-    ...(earlierItems.length > 0 ? [{ type: 'header' as const, label: 'Earlier' }, ...earlierItems.map(d => ({ type: 'item' as const, data: d }))] : []),
+    ...(todayItems.length > 0 ? [{ type: 'header' as const, label: 'Today', count: todayItems.length }, ...todayItems.map(d => ({ type: 'item' as const, data: d }))] : []),
+    ...(earlierItems.length > 0 ? [{ type: 'header' as const, label: 'Earlier', count: earlierItems.length }, ...earlierItems.map(d => ({ type: 'item' as const, data: d }))] : []),
   ];
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]} edges={['top']}>
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
-          {unreadCount > 0 && (
-            <Text style={[styles.headerSub, { color: colors.muted }]}>{unreadCount} unread</Text>
-          )}
-        </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity onPress={handleMarkAllRead} disabled={unreadCount === 0}>
-            <Text style={[styles.headerActionText, unreadCount === 0 && styles.headerActionDisabled]}>
-              Mark all read
+      <StatusBar barStyle={colors.statusBar || 'dark-content'} />
+      
+      {/* ─── Header (matches chat screen style) ─── */}
+      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <View style={styles.headerLeft}>
+          <View style={styles.headerIconContainer}>
+            <Icon name="notifications" size={22} color="#FF6B9D" />
+          </View>
+          <View>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
+            <Text style={[styles.headerSub, { color: colors.muted }]}>
+              {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up ✨'}
             </Text>
+          </View>
+        </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity 
+            onPress={handleMarkAllRead} 
+            disabled={unreadCount === 0}
+            style={[styles.iconButton, { backgroundColor: colors.border }]}
+          >
+            <Icon name="checkmark-done" size={20} color={unreadCount > 0 ? PINK : GREY} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleClearAll} style={{ marginLeft: 14 }}>
-            <Icon name="trash-outline" size={20} color={colors.muted ?? GREY} />
+          <TouchableOpacity 
+            onPress={handleClearAll} 
+            style={[styles.iconButton, { backgroundColor: colors.border }]}
+          >
+            <Icon name="trash-outline" size={20} color={notifications.length > 0 ? colors.muted : GREY} />
           </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.filterRow}>
+      {/* ─── Filter Row ─── */}
+      <View style={[styles.filterRow, { backgroundColor: colors.background }]}>
         <TouchableOpacity
           style={[styles.filterChip, filter === 'all' && styles.filterChipActive]}
           onPress={() => setFilter('all')}
         >
-          <Text style={[styles.filterChipText, filter === 'all' && styles.filterChipTextActive]}>All</Text>
+          <Text style={[styles.filterChipText, filter === 'all' && styles.filterChipTextActive]}>
+            All {notifications.length > 0 && `(${notifications.length})`}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.filterChip, filter === 'unread' && styles.filterChipActive]}
           onPress={() => setFilter('unread')}
         >
-          <Text style={[styles.filterChipText, filter === 'unread' && styles.filterChipTextActive]}>Unread</Text>
+          <Text style={[styles.filterChipText, filter === 'unread' && styles.filterChipTextActive]}>
+            Unread {unreadCount > 0 && `(${unreadCount})`}
+          </Text>
         </TouchableOpacity>
+        {isCached && (
+          <View style={styles.cachedBadge}>
+            <Icon name="cloud-outline" size={12} color={GREY} />
+            <Text style={[styles.cachedBadgeText, { color: GREY }]}>Cached</Text>
+          </View>
+        )}
       </View>
 
+      {/* ─── Loading ─── */}
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={PINK} />
+          <Text style={[styles.loadingText, { color: colors.muted }]}>
+            {isCached ? 'Loading fresh notifications...' : 'Loading notifications...'}
+          </Text>
         </View>
       ) : listData.length === 0 ? (
         <View style={styles.emptyState}>
-          <Icon name="notifications-off-outline" size={48} color={GREY} />
+          <View style={[styles.emptyIconContainer, { backgroundColor: colors.card }]}>
+            <Icon name="notifications-off-outline" size={56} color={GREY} />
+          </View>
           <Text style={[styles.emptyTitle, { color: colors.text }]}>
-            {filter === 'unread' ? 'All caught up' : 'No notifications yet'}
+            {filter === 'unread' ? '🎉 All caught up!' : 'No notifications yet'}
           </Text>
           <Text style={[styles.emptySub, { color: colors.muted }]}>
             {filter === 'unread'
@@ -326,7 +576,7 @@ export default function NotificationsScreen() {
           keyExtractor={(item, index) => item.type === 'header' ? `header_${item.label}_${index}` : item.data.id}
           renderItem={({ item }) =>
             item.type === 'header' ? (
-              <SectionHeader label={item.label} colors={colors} />
+              <SectionHeader label={item.label} count={item.count} colors={colors} />
             ) : (
               <SwipeableRow
                 notification={item.data}
@@ -339,21 +589,35 @@ export default function NotificationsScreen() {
           }
           getItemLayout={(data, index) => {
             const item = data?.[index];
-            const height = item?.type === 'header' ? 34 : ROW_HEIGHT_ESTIMATE;
+            const height = item?.type === 'header' ? 38 : ROW_HEIGHT_ESTIMATE;
             return { length: height, offset: height * index, index };
           }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 24 }}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={PINK}
+              colors={[PINK]}
+            />
+          }
         />
       )}
     </SafeAreaView>
   );
 }
 
-// ── Hook other screens (tab bar badge, etc) can use ─────────────────────────
+// ── Hook other screens (tab bar badge, etc) ─────────────────────────────────
 export function useUnreadNotificationCount(): number {
   const [count, setCount] = useState(0);
   useEffect(() => {
+    const loadCount = async () => {
+      const all = await NotificationStore.getAll();
+      setCount(all.filter(n => !n.read).length);
+    };
+    loadCount();
+    
     const unsubscribe = NotificationStore.subscribe((all) => {
       setCount(all.filter(n => !n.read).length);
     });
@@ -363,27 +627,53 @@ export function useUnreadNotificationCount(): number {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, paddingBottom: 100 },
+  root: { flex: 1 },
+  listContent: { paddingBottom: 100 },
 
+  // ─── Header (matches chat screen) ───
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
   },
-  headerTitle: { fontSize: 26, fontWeight: '800' },
-  headerSub: { fontSize: 12, marginTop: 2 },
-  headerActions: { flexDirection: 'row', alignItems: 'center' },
-  headerActionText: { fontSize: 13, fontWeight: '700', color: PINK },
-  headerActionDisabled: { color: GREY, opacity: 0.5 },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FF6B9D20',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: { fontSize: 20, fontWeight: '700' },
+  headerSub: { fontSize: 12, opacity: 0.7 },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
+  // ─── Filter Row ───
   filterRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 20,
-    paddingBottom: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   filterChip: {
     paddingHorizontal: 14,
@@ -391,44 +681,67 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: 'rgba(153,153,153,0.12)',
   },
-  filterChipActive: {
-    backgroundColor: PINK,
+  filterChipActive: { backgroundColor: PINK },
+  filterChipText: { fontSize: 13, fontWeight: '600', color: GREY },
+  filterChipTextActive: { color: WHITE },
+  cachedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 'auto',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(153,153,153,0.08)',
   },
-  filterChipText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: GREY,
-  },
-  filterChipTextActive: {
-    color: WHITE,
-  },
+  cachedBadgeText: { fontSize: 10, fontWeight: '500' },
 
-  sectionHeader: {
-    fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 6,
-  },
-
+  // ─── Loading ───
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 12, fontSize: 14, fontWeight: '500' },
 
+  // ─── Empty State ───
   emptyState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 100,
     paddingHorizontal: 40,
   },
-  emptyTitle: { fontSize: 17, fontWeight: '700', marginTop: 14, marginBottom: 6 },
-  emptySub: { fontSize: 13, textAlign: 'center' },
-
-  // Swipeable row
-  rowWrapper: {
-    paddingHorizontal: 12,
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
+  emptyTitle: { fontSize: 20, fontWeight: '700', marginTop: 8, textAlign: 'center' },
+  emptySub: { fontSize: 14, textAlign: 'center', marginTop: 4, opacity: 0.6 },
+
+  // ─── Section Header ───
+  sectionHeaderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  sectionHeader: {
+    fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sectionCount: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  sectionCountText: { fontSize: 10, fontWeight: '600' },
+
+  // ─── Swipeable Row ───
+  rowWrapper: { paddingHorizontal: 12 },
   actionBackdrop: {
     position: 'absolute',
     top: 0,
@@ -447,67 +760,63 @@ const styles = StyleSheet.create({
     backgroundColor: SUCCESS,
     borderRadius: 16,
   },
-  actionHint: {
-    alignItems: 'center',
-    gap: 2,
-  },
-  actionHintText: {
-    color: WHITE,
-    fontSize: 11,
-    fontWeight: '700',
-  },
+  actionHint: { alignItems: 'center', gap: 2 },
+  actionHintText: { color: WHITE, fontSize: 11, fontWeight: '700' },
   row: {
     borderRadius: 16,
     marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
+  rowRead: { opacity: 0.7 },
   rowContent: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
     padding: 14,
   },
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-  },
   iconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  textCol: {
-    flex: 1,
-  },
+  textCol: { flex: 1 },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
   },
-  title: {
-    fontSize: 14,
-    fontWeight: '600',
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     flex: 1,
   },
-  titleUnread: {
-    fontWeight: '800',
+  title: { fontSize: 14, fontWeight: '600', flex: 1 },
+  titleUnread: { fontWeight: '800' },
+  time: { fontSize: 11, flexShrink: 0 },
+  body: { fontSize: 13, marginTop: 3, lineHeight: 18 },
+  tagContainer: { marginTop: 4, flexDirection: 'row' },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
   },
-  time: {
-    fontSize: 11,
-  },
-  body: {
-    fontSize: 13,
-    marginTop: 3,
-    lineHeight: 18,
-  },
+  tagText: { fontSize: 9, fontWeight: '600' },
   unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: PINK,
-    marginTop: 4,
+    flexShrink: 0,
   },
 });

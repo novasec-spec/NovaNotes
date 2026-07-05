@@ -38,11 +38,15 @@ import {
 } from './utils/constants';
 import { timeAgo, searchNotes } from './utils/helpers';
 import { Note } from './types';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 export default function NotesScreen() {
   const { colors, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
-  
+  const { sendNotification } = useNotification();
+  const { user } = useAuth();
+  const userEmail = user?.email || null;
   const { 
     notes, 
     folders,
@@ -66,8 +70,11 @@ export default function NotesScreen() {
     restoreBackup,
     exportNotes,
     importNotes,
+    setNoteReminder,
+    getReminderStats,
+    reminderStats,        
   } = useNotes();
-  
+ 
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [sortMode, setSortMode] = useState<'newest' | 'oldest' | 'pinned'>('newest');
@@ -80,11 +87,20 @@ export default function NotesScreen() {
   const [undoNote, setUndoNote] = useState<{ note: Note; timeout: ReturnType<typeof setTimeout> } | null>(null);
   const [showStats, setShowStats] = useState(false);
   const [showFolders, setShowFolders] = useState(false);
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+  const [reminderModalVisible, setReminderModalVisible] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
 
   const headerAnim = useRef(new Animated.Value(0)).current;
   const searchH = useRef(new Animated.Value(0)).current;
   const undoAnim = useRef(new Animated.Value(80)).current;
+
+  useEffect(() => {
+    syncManager.setUserEmail(userEmail);
+    if (userEmail) {
+      syncManager.run(notes, setNotes).catch(() => {});
+    }
+  }, [userEmail]);
 
   useEffect(() => {
     Animated.timing(headerAnim, { toValue: 1, duration: 550, useNativeDriver: true }).start();
@@ -143,6 +159,39 @@ export default function NotesScreen() {
     } catch (error) {
       Alert.alert('Export failed', 'Could not export notes.');
     }
+  };
+
+  // ─── ✅ FIXED: HANDLE SET REMINDER ──────────────────
+
+  const handleSetReminder = async (minutes: number, noteId: string) => {
+    console.log(`⏰ Setting reminder: ${minutes} minutes for note: ${noteId}`);
+    
+    // Find the note
+    const note = notes.find(n => n.id === noteId);
+    if (!note) {
+      console.error('❌ Note not found:', noteId);
+      Alert.alert('Error', 'Note not found');
+      return;
+    }
+
+    const reminder = await setNoteReminder(noteId, minutes);
+
+    if (reminder) {
+      Alert.alert(
+        '⏰ Reminder Set!',
+        `You'll be reminded about "${note.title || 'Note'}" in ${minutes} minutes`
+      );
+      setReminderModalVisible(false);
+    } else {
+      Alert.alert('Error', 'Failed to set reminder');
+    }
+  };
+
+  // ─── OPEN REMINDER MODAL ────────────────────────────
+
+  const openReminderModal = (note: any) => {
+    setSelectedNote(note);
+    setReminderModalVisible(true);
   };
 
   const handleBackup = async () => {
@@ -272,6 +321,7 @@ export default function NotesScreen() {
             {streak?.currentStreak > 0 ? `  •  🔥 ${streak.currentStreak} day streak` : ''}
           </Text>
         </View>
+
         <View style={styles.headerActions}>
           <TouchableOpacity style={[styles.headerIconBtn, { backgroundColor: colors.card }]} onPress={() => setShowStats(true)}>
             <Icon name="stats-chart-outline" size={18} color={PINK} />
@@ -350,7 +400,7 @@ export default function NotesScreen() {
               onPin={togglePin}
               onFav={toggleFav}
               onArchive={toggleArchive}
-              onReminder={(n: any) => setReminderNote(n)}
+              onReminder={(n: any) => openReminderModal(n)}
               onRead={(n: any) => setReadingNote(n)}
               onShare={shareNote}
               onQuickAction={quickAction}
@@ -360,8 +410,8 @@ export default function NotesScreen() {
         />
       )}
 
-    {/* FAB */}
-      <TouchableOpacity style={[styles.fab, { bottom: insets.bottom + 63  }]} onPress={openNew} activeOpacity={0.85}>
+      {/* FAB */}
+      <TouchableOpacity style={[styles.fab, { bottom: insets.bottom + 63 }]} onPress={openNew} activeOpacity={0.85}>
         <Icon name="add" size={30} color={WHITE} />
       </TouchableOpacity>
 
@@ -387,15 +437,14 @@ export default function NotesScreen() {
         />
       )}
 
+      {/* ✅ FIXED: ReminderModal with noteId */}
       <ReminderModal
-        visible={!!reminderNote}
-        note={reminderNote}
-        onSchedule={async (minutes) => {
-          setReminderNote(null);
-          Alert.alert('Reminder set!', `You'll be reminded in ${minutes} minutes.`);
-        }}
+        visible={reminderModalVisible}
+        note={selectedNote}
+        noteId={selectedNote?.id}
+        onSchedule={handleSetReminder}
         onRecurringSchedule={handleRecurringReminder}
-        onClose={() => setReminderNote(null)}
+        onClose={() => setReminderModalVisible(false)}
         colors={colors}
       />
 

@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { Note, SyncStatus } from '../types';
-import { getDeviceOwnerId, ensureLocalDir } from '../utils/helpers';
+import { ensureLocalDir } from '../utils/helpers';
 import { STORAGE_KEYS } from '../utils/constants';
 import { 
   pushNoteToCloud, 
@@ -12,11 +12,19 @@ import {
   uploadVoiceToSupabase
 } from './supabase';
 import { downloadToLocal, saveNotesLocally, getLastBackupTime, setLastBackupTime } from './storage';
+import { useAuth } from '../../../../contexts/AuthContext'; // Import your auth hook
 
 class SyncManager {
   private syncing = false;
   private listeners: ((status: SyncStatus, lastBackup: string | null) => void)[] = [];
   private idleTimer: ReturnType<typeof setInterval> | null = null;
+  private userEmail: string | null = null;
+
+  // Set user email from auth
+  setUserEmail(email: string | null) {
+    this.userEmail = email;
+    console.log(`👤 SyncManager user email set: ${email}`);
+  }
 
   subscribe(fn: (status: SyncStatus, lastBackup: string | null) => void) {
     this.listeners.push(fn);
@@ -61,12 +69,18 @@ class SyncManager {
       return;
     }
 
+    // Check if user is logged in
+    if (!this.userEmail) {
+      console.log('⚠️ No user email - cannot sync');
+      this.emit('error', await getLastBackupTime());
+      return;
+    }
+
     console.log('☁️ Starting sync...');
     this.syncing = true;
     this.emit('syncing', await getLastBackupTime());
 
     try {
-      const ownerId = await getDeviceOwnerId();
       let changed = false;
       const updatedNotes = [...notes];
 
@@ -101,7 +115,8 @@ class SyncManager {
           }
         }
 
-        const pushed = await pushNoteToCloud(noteCopy, ownerId);
+        // Use userEmail instead of owner_id
+        const pushed = await pushNoteToCloud(noteCopy, this.userEmail);
         if (pushed) {
           noteCopy._synced = true;
           updatedNotes[i] = noteCopy;
@@ -118,10 +133,10 @@ class SyncManager {
       const now = new Date().toISOString();
       await setLastBackupTime(now);
       this.emit('synced', now);
-      console.log('✅ Sync completed successfully');
+      console.log('✅ Sync completed');
       
     } catch (error) {
-      console.error('❌ Sync run error:', error);
+      console.error('❌ Sync error:', error);
       this.emit('error', await getLastBackupTime());
     } finally {
       this.syncing = false;
@@ -132,13 +147,17 @@ class SyncManager {
     try {
       const online = await this.isOnline();
       if (!online) {
-        console.log('📡 Offline - cannot restore from cloud');
+        console.log('📡 Offline - cannot restore');
         return [];
       }
 
-      console.log('☁️ Restoring from cloud...');
-      const ownerId = await getDeviceOwnerId();
-      const cloudNotes = await fetchAllNotesFromCloud(ownerId);
+      if (!this.userEmail) {
+        console.log('⚠️ No user email - cannot restore');
+        return [];
+      }
+
+      console.log(`☁️ Restoring for user: ${this.userEmail}`);
+      const cloudNotes = await fetchAllNotesFromCloud(this.userEmail);
       
       if (cloudNotes.length === 0) {
         console.log('ℹ️ No notes found in cloud');
@@ -174,7 +193,7 @@ class SyncManager {
         restored.push(restoredNote);
       }
 
-      console.log(`✅ Restored ${restored.length} notes from cloud`);
+      console.log(`✅ Restored ${restored.length} notes`);
       return restored;
       
     } catch (error) {
@@ -185,8 +204,11 @@ class SyncManager {
 
   async deleteFromCloud(noteId: string) {
     try {
-      const ownerId = await getDeviceOwnerId();
-      await markNoteDeletedInCloud(noteId, ownerId);
+      if (!this.userEmail) {
+        console.log('⚠️ No user email - cannot delete from cloud');
+        return;
+      }
+      await markNoteDeletedInCloud(noteId, this.userEmail);
       console.log(`🗑️ Deleted note ${noteId} from cloud`);
     } catch (error) {
       console.error('❌ deleteFromCloud error:', error);

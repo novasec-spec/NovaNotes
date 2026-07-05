@@ -7,10 +7,13 @@ import {
   Modal,
   StyleSheet,
   ScrollView,
+  Switch,
+  Platform,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Task, TaskPriority, TaskCreateDTO } from '../types/task.types';
+import Icon from 'react-native-vector-icons/Ionicons';
+import { Task, TaskCreateDTO, TaskPriority, TaskList, Project } from '../types/task.types';
+import { PRIORITY_COLORS, DEFAULT_TAGS, REMINDER_TIMES } from '../constants/taskConstants';
 
 interface TaskModalProps {
   visible: boolean;
@@ -18,19 +21,34 @@ interface TaskModalProps {
   onClose: () => void;
   onSave: (task: TaskCreateDTO) => void;
   colors: any;
+  lists?: TaskList[];
+  projects?: Project[];
 }
 
-const PRIORITIES: TaskPriority[] = ['low', 'medium', 'high'];
-const CATEGORIES = ['Work', 'Personal', 'Shopping', 'Health', 'Finance', 'Other'];
-
-export function TaskModal({ visible, editingTask, onClose, onSave, colors }: TaskModalProps) {
+export function TaskModal({ 
+  visible, 
+  editingTask, 
+  onClose, 
+  onSave, 
+  colors,
+  lists = [],
+  projects = [],
+}: TaskModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [category, setCategory] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState<Date | null>(null);
+  const [dueTime, setDueTime] = useState<string>('');
+  const [estimatedHours, setEstimatedHours] = useState<string>('');
+  const [projectId, setProjectId] = useState<string>('');
+  const [listId, setListId] = useState<string>('');
+  const [reminderTime, setReminderTime] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [customCategory, setCustomCategory] = useState('');
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [customTag, setCustomTag] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     if (editingTask) {
@@ -38,7 +56,13 @@ export function TaskModal({ visible, editingTask, onClose, onSave, colors }: Tas
       setDescription(editingTask.description || '');
       setPriority(editingTask.priority);
       setCategory(editingTask.category || '');
+      setTags(editingTask.tags || []);
       setDueDate(editingTask.dueDate ? new Date(editingTask.dueDate) : null);
+      setDueTime(editingTask.dueTime || '');
+      setEstimatedHours(editingTask.estimatedHours?.toString() || '');
+      setProjectId(editingTask.projectId || '');
+      setListId(editingTask.listId || '');
+      setReminderTime(editingTask.reminderTime || '');
     } else {
       resetForm();
     }
@@ -49,44 +73,80 @@ export function TaskModal({ visible, editingTask, onClose, onSave, colors }: Tas
     setDescription('');
     setPriority('medium');
     setCategory('');
+    setTags([]);
     setDueDate(null);
-    setCustomCategory('');
+    setDueTime('');
+    setEstimatedHours('');
+    setProjectId('');
+    setListId('');
+    setReminderTime('');
+    setCustomTag('');
+    setShowAdvanced(false);
   };
 
   const handleSave = () => {
     if (!title.trim()) return;
-    
-    onSave({
+
+    const taskData: TaskCreateDTO = {
       title: title.trim(),
       description: description.trim() || undefined,
       priority,
-      category: customCategory || category || undefined,
+      category: category || undefined,
+      tags: tags.length > 0 ? tags : undefined,
       dueDate: dueDate?.toISOString(),
-    });
+      dueTime: dueTime || undefined,
+      estimatedHours: estimatedHours ? parseFloat(estimatedHours) : undefined,
+      projectId: projectId || undefined,
+      listId: listId || undefined,
+      reminderTime: reminderTime || undefined,
+    };
+
+    onSave(taskData);
+  };
+
+  const toggleTag = (tag: string) => {
+    if (tags.includes(tag)) {
+      setTags(tags.filter(t => t !== tag));
+    } else {
+      setTags([...tags, tag]);
+    }
+  };
+
+  const addCustomTag = () => {
+    if (customTag.trim() && !tags.includes(customTag.trim())) {
+      setTags([...tags, customTag.trim()]);
+      setCustomTag('');
+    }
   };
 
   const renderPriorityButton = (p: TaskPriority) => {
-    const colorsMap = {
-      low: { bg: '#4CAF50', label: '🟢 Low' },
-      medium: { bg: '#FF9800', label: '🟡 Medium' },
-      high: { bg: '#F44336', label: '🔴 High' },
-    };
+    const label = p.charAt(0).toUpperCase() + p.slice(1);
+    const isActive = priority === p;
+    const color = PRIORITY_COLORS[p];
 
     return (
       <TouchableOpacity
         key={p}
         style={[
           styles.priorityBtn,
-          priority === p && { backgroundColor: colorsMap[p].bg },
-          { borderColor: colorsMap[p].bg }
+          { 
+            backgroundColor: isActive ? color : colors.card,
+            borderColor: color,
+            borderWidth: isActive ? 2 : 1,
+          }
         ]}
         onPress={() => setPriority(p)}
       >
+        <Icon 
+          name={isActive ? 'radio-button-on' : 'radio-button-off'} 
+          size={16} 
+          color={isActive ? '#fff' : color} 
+        />
         <Text style={[
           styles.priorityBtnText,
-          priority === p ? { color: '#fff' } : { color: colors.text }
+          { color: isActive ? '#fff' : color }
         ]}>
-          {colorsMap[p].label}
+          {label}
         </Text>
       </TouchableOpacity>
     );
@@ -95,11 +155,11 @@ export function TaskModal({ visible, editingTask, onClose, onSave, colors }: Tas
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+        <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
           <ScrollView showsVerticalScrollIndicator={false}>
-            <View style={styles.modalHeader}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
               <Text style={[styles.modalTitle, { color: colors.text }]}>
-                {editingTask ? '✏️ Edit Task' : '➕ New Task'}
+                {editingTask ? 'Edit Task' : 'New Task'}
               </Text>
               <TouchableOpacity onPress={onClose}>
                 <Icon name="close" size={24} color={colors.text} />
@@ -108,9 +168,13 @@ export function TaskModal({ visible, editingTask, onClose, onSave, colors }: Tas
 
             {/* Title */}
             <TextInput
-              style={[styles.input, { backgroundColor: colors.input, color: colors.text }]}
+              style={[styles.input, { 
+                backgroundColor: colors.card, 
+                color: colors.text,
+                borderColor: colors.border,
+              }]}
               placeholder="Task title *"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.muted}
               value={title}
               onChangeText={setTitle}
               maxLength={100}
@@ -118,9 +182,13 @@ export function TaskModal({ visible, editingTask, onClose, onSave, colors }: Tas
 
             {/* Description */}
             <TextInput
-              style={[styles.input, styles.textArea, { backgroundColor: colors.input, color: colors.text }]}
+              style={[styles.input, styles.textArea, { 
+                backgroundColor: colors.card, 
+                color: colors.text,
+                borderColor: colors.border,
+              }]}
               placeholder="Description (optional)"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.muted}
               value={description}
               onChangeText={setDescription}
               multiline
@@ -131,75 +199,231 @@ export function TaskModal({ visible, editingTask, onClose, onSave, colors }: Tas
             <View style={styles.section}>
               <Text style={[styles.sectionLabel, { color: colors.text }]}>Priority</Text>
               <View style={styles.priorityRow}>
-                {PRIORITIES.map(renderPriorityButton)}
+                {renderPriorityButton('critical')}
+                {renderPriorityButton('high')}
+                {renderPriorityButton('medium')}
+                {renderPriorityButton('low')}
               </View>
             </View>
 
-            {/* Category */}
+            {/* Due Date & Time */}
             <View style={styles.section}>
-              <Text style={[styles.sectionLabel, { color: colors.text }]}>Category</Text>
-              <View style={styles.categoryRow}>
-                {CATEGORIES.map((cat) => (
+              <Text style={[styles.sectionLabel, { color: colors.text }]}>Due Date & Time</Text>
+              <View style={styles.dateTimeRow}>
+                <TouchableOpacity
+                  style={[styles.dateBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Icon name="calendar-outline" size={20} color={colors.primary} />
+                  <Text style={[styles.dateText, { color: colors.text }]}>
+                    {dueDate ? dueDate.toLocaleDateString() : 'Select date'}
+                  </Text>
+                  {dueDate && (
+                    <TouchableOpacity onPress={() => setDueDate(null)}>
+                      <Icon name="close-circle" size={16} color={colors.muted} />
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.dateBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => setShowTimePicker(true)}
+                >
+                  <Icon name="time-outline" size={20} color={colors.primary} />
+                  <Text style={[styles.dateText, { color: colors.text }]}>
+                    {dueTime || 'Select time'}
+                  </Text>
+                  {dueTime && (
+                    <TouchableOpacity onPress={() => setDueTime('')}>
+                      <Icon name="close-circle" size={16} color={colors.muted} />
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Tags */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionLabel, { color: colors.text }]}>Tags</Text>
+              <View style={styles.tagsRow}>
+                {DEFAULT_TAGS.map((tag) => (
                   <TouchableOpacity
-                    key={cat}
+                    key={tag}
                     style={[
-                      styles.categoryBtn,
-                      category === cat && styles.categoryActive,
+                      styles.tagBtn,
+                      { 
+                        backgroundColor: tags.includes(tag) ? colors.primary : colors.card,
+                        borderColor: colors.border,
+                      }
                     ]}
-                    onPress={() => {
-                      setCategory(cat);
-                      setCustomCategory('');
-                    }}
+                    onPress={() => toggleTag(tag)}
                   >
                     <Text style={[
-                      styles.categoryText,
-                      category === cat && styles.categoryTextActive,
-                      { color: category === cat ? '#fff' : colors.text }
+                      styles.tagBtnText,
+                      { color: tags.includes(tag) ? '#fff' : colors.text }
                     ]}>
-                      {cat}
+                      {tag}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.input, color: colors.text, marginTop: 8 }]}
-                placeholder="Custom category"
-                placeholderTextColor="#999"
-                value={customCategory}
-                onChangeText={(text) => {
-                  setCustomCategory(text);
-                  setCategory('');
-                }}
-              />
+              <View style={styles.customTagRow}>
+                <TextInput
+                  style={[styles.input, { 
+                    flex: 1,
+                    backgroundColor: colors.card, 
+                    color: colors.text,
+                    borderColor: colors.border,
+                    marginBottom: 0,
+                  }]}
+                  placeholder="Add custom tag"
+                  placeholderTextColor={colors.muted}
+                  value={customTag}
+                  onChangeText={setCustomTag}
+                />
+                <TouchableOpacity
+                  style={[styles.addTagBtn, { backgroundColor: colors.primary }]}
+                  onPress={addCustomTag}
+                >
+                  <Icon name="add" size={20} color="#fff" />
+                </TouchableOpacity>
+              </View>
             </View>
 
-            {/* Due Date */}
-            <View style={styles.section}>
-              <Text style={[styles.sectionLabel, { color: colors.text }]}>Due Date</Text>
-              <TouchableOpacity
-                style={[styles.dateBtn, { backgroundColor: colors.input }]}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Icon name="calendar-outline" size={20} color={colors.text} />
-                <Text style={[styles.dateText, { color: colors.text }]}>
-                  {dueDate ? dueDate.toLocaleDateString() : 'Set due date'}
-                </Text>
-                {dueDate && (
-                  <TouchableOpacity onPress={() => setDueDate(null)}>
-                    <Icon name="close-circle" size={20} color="#999" />
-                  </TouchableOpacity>
+            {/* Advanced Options */}
+            <TouchableOpacity
+              style={styles.advancedToggle}
+              onPress={() => setShowAdvanced(!showAdvanced)}
+            >
+              <Icon name={showAdvanced ? 'chevron-up' : 'chevron-down'} size={20} color={colors.text} />
+              <Text style={[styles.advancedText, { color: colors.text }]}>
+                {showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options'}
+              </Text>
+            </TouchableOpacity>
+
+            {showAdvanced && (
+              <View style={styles.advancedSection}>
+                {/* Estimated Hours */}
+                <View style={styles.section}>
+                  <Text style={[styles.sectionLabel, { color: colors.text }]}>
+                    Estimated Hours
+                  </Text>
+                  <TextInput
+                    style={[styles.input, { 
+                      backgroundColor: colors.card, 
+                      color: colors.text,
+                      borderColor: colors.border,
+                    }]}
+                    placeholder="e.g., 2.5"
+                    placeholderTextColor={colors.muted}
+                    value={estimatedHours}
+                    onChangeText={setEstimatedHours}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+
+                {/* Project */}
+                {projects.length > 0 && (
+                  <View style={styles.section}>
+                    <Text style={[styles.sectionLabel, { color: colors.text }]}>Project</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      {projects.map((project) => (
+                        <TouchableOpacity
+                          key={project.id}
+                          style={[
+                            styles.selectBtn,
+                            { 
+                              backgroundColor: projectId === project.id ? colors.primary : colors.card,
+                              borderColor: project.color,
+                              borderWidth: 1,
+                            }
+                          ]}
+                          onPress={() => setProjectId(projectId === project.id ? '' : project.id)}
+                        >
+                          <Icon name="folder-outline" size={16} color={projectId === project.id ? '#fff' : project.color} />
+                          <Text style={[
+                            styles.selectBtnText,
+                            { color: projectId === project.id ? '#fff' : colors.text }
+                          ]}>
+                            {project.name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
                 )}
-              </TouchableOpacity>
-            </View>
+
+                {/* List */}
+                {lists.length > 0 && (
+                  <View style={styles.section}>
+                    <Text style={[styles.sectionLabel, { color: colors.text }]}>List</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      {lists.map((list) => (
+                        <TouchableOpacity
+                          key={list.id}
+                          style={[
+                            styles.selectBtn,
+                            { 
+                              backgroundColor: listId === list.id ? colors.primary : colors.card,
+                              borderColor: list.color,
+                              borderWidth: 1,
+                            }
+                          ]}
+                          onPress={() => setListId(listId === list.id ? '' : list.id)}
+                        >
+                          <Icon name={list.icon || 'list-outline'} size={16} color={listId === list.id ? '#fff' : list.color} />
+                          <Text style={[
+                            styles.selectBtnText,
+                            { color: listId === list.id ? '#fff' : colors.text }
+                          ]}>
+                            {list.name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Reminder */}
+                <View style={styles.section}>
+                  <Text style={[styles.sectionLabel, { color: colors.text }]}>Reminder</Text>
+                  <View style={styles.reminderRow}>
+                    {REMINDER_TIMES.map((time) => (
+                      <TouchableOpacity
+                        key={time}
+                        style={[
+                          styles.reminderBtn,
+                          { 
+                            backgroundColor: reminderTime === time ? colors.primary : colors.card,
+                            borderColor: colors.border,
+                          }
+                        ]}
+                        onPress={() => setReminderTime(reminderTime === time ? '' : time)}
+                      >
+                        <Text style={[
+                          styles.reminderBtnText,
+                          { color: reminderTime === time ? '#fff' : colors.text }
+                        ]}>
+                          {time}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            )}
 
             {/* Save Button */}
             <TouchableOpacity
-              style={[styles.saveBtn, { backgroundColor: '#FF6B9D', opacity: title.trim() ? 1 : 0.5 }]}
+              style={[styles.saveBtn, { 
+                backgroundColor: colors.primary,
+                opacity: title.trim() ? 1 : 0.5,
+              }]}
               onPress={handleSave}
               disabled={!title.trim()}
             >
               <Text style={styles.saveBtnText}>
-                {editingTask ? 'Update Task' : 'Add Task'}
+                {editingTask ? 'Update Task' : 'Create Task'}
               </Text>
             </TouchableOpacity>
           </ScrollView>
@@ -210,8 +434,21 @@ export function TaskModal({ visible, editingTask, onClose, onSave, colors }: Tas
               mode="date"
               onChange={(event, selectedDate) => {
                 setShowDatePicker(false);
+                if (selectedDate) setDueDate(selectedDate);
+              }}
+            />
+          )}
+
+          {showTimePicker && (
+            <DateTimePicker
+              value={dueDate || new Date()}
+              mode="time"
+              onChange={(event, selectedDate) => {
+                setShowTimePicker(false);
                 if (selectedDate) {
-                  setDueDate(selectedDate);
+                  const hours = selectedDate.getHours().toString().padStart(2, '0');
+                  const minutes = selectedDate.getMinutes().toString().padStart(2, '0');
+                  setDueTime(`${hours}:${minutes}`);
                 }
               }}
             />
@@ -232,14 +469,16 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    paddingBottom: 40,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    paddingBottom: 16,
+    marginBottom: 16,
+    borderBottomWidth: 1,
   },
   modalTitle: {
     fontSize: 20,
@@ -250,6 +489,7 @@ const styles = StyleSheet.create({
     padding: 14,
     fontSize: 16,
     marginBottom: 12,
+    borderWidth: 1,
   },
   textArea: {
     minHeight: 80,
@@ -266,49 +506,106 @@ const styles = StyleSheet.create({
   priorityRow: {
     flexDirection: 'row',
     gap: 8,
-    flexWrap: 'wrap',
   },
   priorityBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    backgroundColor: '#F0F0F0',
-  },
-  priorityBtnText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  categoryBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#F0F0F0',
-  },
-  categoryActive: {
-    backgroundColor: '#FF6B9D',
-  },
-  categoryText: {
-    fontSize: 12,
-  },
-  categoryTextActive: {
-    color: '#fff',
-  },
-  dateBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 20,
+    gap: 4,
+  },
+  priorityBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dateTimeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dateBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
     borderRadius: 12,
-    gap: 12,
+    borderWidth: 1,
+    gap: 8,
   },
   dateText: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 14,
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  tagBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  tagBtnText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  customTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  addTagBtn: {
+    padding: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  advancedToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+  },
+  advancedText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  advancedSection: {
+    marginTop: 8,
+  },
+  selectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    marginRight: 8,
+    gap: 6,
+  },
+  selectBtnText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  reminderRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  reminderBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  reminderBtnText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   saveBtn: {
     padding: 16,

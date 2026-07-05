@@ -460,6 +460,28 @@ export class NotificationService {
     try {
       console.log('💾 Creating notification:', params.title);
 
+
+    // 🔥 ADD THIS TYPE MAPPING
+    const TYPE_MAPPING: Record<string, string> = {
+      'love_actions': 'system',
+      'morning': 'system',
+      'night': 'system',
+      'message_actions': 'chat',
+      'task_actions': 'task',
+      'reminder_actions': 'reminder',
+      'notes': 'system',
+      'mood': 'system',
+      'daily': 'system',
+      'followup': 'system',
+      'chat_message': 'chat',
+      'question_actions': 'system',
+      'encouragement': 'system',
+    };
+
+    // Map the type
+    const dbType = TYPE_MAPPING[params.type] || params.type;
+
+
       // Check if should show based on preferences
       const shouldShow = await this.checkUserPreferences(params.userId, params.categoryId);
       if (!shouldShow) {
@@ -1221,13 +1243,25 @@ export class NotificationService {
 
   async getById(id: string): Promise<AppNotification | null> {
     try {
-      const { data, error } = await supabase
-        .from(this.table)
-        .select('*')
-        .eq('id', id)
-        .single();
 
-      if (error) throw error;
+    const { data, error } = await supabase
+      .from(this.table)
+      .insert({
+        user_id: params.userId,
+        title: params.title,
+        body: params.body,
+        type: dbType, // ← USE MAPPED TYPE
+        data: dataWithOriginal,
+        read: false,
+        priority: params.priority || 'normal',
+        scheduled_for: params.scheduledFor?.toISOString(),
+        expires_at: params.expiresAt?.toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
       return data;
     } catch (error) {
       console.error('Error fetching notification:', error);

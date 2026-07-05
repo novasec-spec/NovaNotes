@@ -37,6 +37,39 @@ export const MOOD_OPTIONS: MoodOption[] = [
   { label: 'Chill', icon: 'leaf-outline', color: '#10B981' },
 ];
 
+
+export const REMINDER_INTERVALS = [
+  { label: '5 minutes', value: 5 },
+  { label: '15 minutes', value: 15 },
+  { label: '30 minutes', value: 30 },
+  { label: '1 hour', value: 60 },
+  { label: '2 hours', value: 120 },
+  { label: '4 hours', value: 240 },
+  { label: 'Tomorrow', value: 1440 },
+  { label: 'Custom', value: 0 },
+];
+
+export const RECURRING_OPTIONS = [
+  { label: 'Daily', value: 'daily' },
+  { label: 'Weekly', value: 'weekly' },
+  { label: 'Monthly', value: 'monthly' },
+];
+
+export const REMINDER_SOUNDS = {
+  default: 'reminder_default.wav',
+  gentle: 'reminder_gentle.wav',
+  urgent: 'reminder_urgent.wav',
+};
+
+export const REMINDER_CATEGORIES = {
+  note: '📝 Note',
+  task: '✅ Task',
+  idea: '💡 Idea',
+  journal: '📖 Journal',
+  health: '💊 Health',
+  social: '👥 Social',
+};
+
 export const STICKER_OPTIONS: StickerOption[] = [
   { name: 'flower', color: '#FF6B9D' },
   { name: 'star-four-points', color: '#F59E0B' },

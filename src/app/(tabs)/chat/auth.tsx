@@ -17,7 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../../config/supabase';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { registerPushToken } from './notifications';
+import { registerPushToken } from './notification';
 import { User } from './types';
 
 export default function AuthScreen() {

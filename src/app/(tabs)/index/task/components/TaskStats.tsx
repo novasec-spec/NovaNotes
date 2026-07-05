@@ -1,35 +1,98 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { TaskStats as TaskStatsType } from '../types/task.types';
 
 interface TaskStatsProps {
   stats: TaskStatsType;
   colors: any;
+  onPress?: (filter: string) => void;
 }
 
-export function TaskStats({ stats, colors }: TaskStatsProps) {
+export function TaskStats({ stats, colors, onPress }: TaskStatsProps) {
+  const statItems = [
+    {
+      label: 'Total',
+      value: stats.total,
+      icon: 'list-outline',
+      color: colors.text,
+      filter: 'all',
+    },
+    {
+      label: 'Active',
+      value: stats.active,
+      icon: 'radio-button-on-outline',
+      color: colors.primary,
+      filter: 'active',
+    },
+    {
+      label: 'Completed',
+      value: stats.completed,
+      icon: 'checkmark-circle-outline',
+      color: colors.success,
+      filter: 'completed',
+    },
+    {
+      label: 'Overdue',
+      value: stats.overdue,
+      icon: 'alert-circle-outline',
+      color: colors.error,
+      filter: 'overdue',
+    },
+  ];
+
   return (
     <View style={styles.container}>
-      <Text style={[styles.stats, { color: colors.text }]}>
-        {stats.active} active • {stats.completed} done
-      </Text>
-      {stats.overdue > 0 && (
-        <Text style={styles.overdue}>⚠️ {stats.overdue} overdue</Text>
-      )}
+      {statItems.map((item) => (
+        <TouchableOpacity
+          key={item.label}
+          style={[styles.statItem, { backgroundColor: colors.card }]}
+          onPress={() => onPress?.(item.filter)}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.statIcon, { backgroundColor: item.color + '15' }]}>
+            <Icon name={item.icon} size={18} color={item.color} />
+          </View>
+          <Text style={[styles.statValue, { color: colors.text }]}>
+            {item.value}
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.muted }]}>
+            {item.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 8,
+    marginBottom: 12,
   },
-  stats: {
-    fontSize: 14,
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
   },
-  overdue: {
-    fontSize: 12,
-    color: '#F44336',
+  statIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  statLabel: {
+    fontSize: 11,
     marginTop: 2,
   },
 });

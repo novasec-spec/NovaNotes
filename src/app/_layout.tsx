@@ -3,19 +3,34 @@ import { View, Text, StyleSheet, Animated, Pressable } from 'react-native';
 import { Stack, router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Updates from 'expo-updates';
+import * as Sentry from '@sentry/react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { AuthProvider } from '../contexts/AuthContext';
 import { NotificationProvider } from '../contexts/NotificationContext';
 import { useNotificationActions } from '../hooks/useNotificationActions';
-
+import { PremiumProvider } from '../contexts/PremiumContext';
+import { useAuth } from '../contexts/AuthContext';
 
 import { SupabaseBackup } from '../services/supabaseBackup';
 import { MungaBot } from '../components/MungaBot';
 
 const USER_ID = 'Njeri';
 const WHITE = '#FFFFFF';
+
+
+Sentry.init({
+  dsn: 'https://7505066db21919d4bdf65fb56ebdad8e@o4511667237093376.ingest.de.sentry.io/4511667330809936',
+  sendDefaultPii: true,
+  enableLogs: true,
+  replaysSessionSampleRate: 0.1,
+  replaysOnErrorSampleRate: 1,
+  integrations: [Sentry.mobileReplayIntegration(), Sentry.feedbackIntegration()],
+  spotlight: __DEV__,
+});
+
+
 
 export const AppContext = createContext({
   isSecretVisible: false,
@@ -92,6 +107,11 @@ useNotificationActions();
   const backup = useRef(new SupabaseBackup(USER_ID)).current;
   const toggleMunga = () => setIsMungaOpen(!isMungaOpen);
 
+
+  const { user } = useAuth();
+
+  const USER_ID = user?.username || user?.email || 'Guest';
+
   const checkForUpdates = async () => {
     try {
       const update = await Updates.checkForUpdateAsync();
@@ -141,10 +161,7 @@ useNotificationActions();
       <AppContext.Provider value={{ isSecretVisible, setIsSecretVisible }}>
         <View style={{ flex: 1 }}>
           <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
-            <Stack.Screen name="splash" options={{ headerShown: false, animation: 'fade' }} />
             <Stack.Screen name="(tabs)" />
-<Stack.Screen name="notification-playground" options={{ presentation: 'modal', animation: 'slide_from_right' }} />
-// app/_layout.tsx
 
 <Stack.Screen 
   name="mood-checkin" 
@@ -154,14 +171,16 @@ useNotificationActions();
     headerShown: false,
   }} 
 />
-<Stack.Screen 
-  name="notification-settings" 
-  options={{ 
-    presentation: 'modal', 
-    animation: 'slide_from_bottom',
-    headerShown: false,
-  }} 
-/>
+
+<Stack.Screen
+  name="CallScreen"
+  options={{
+    headerShown:   false,
+    presentation:  'fullScreenModal',  // covers the tab bar
+    animation:     'fade',
+  }}
+/>   
+       <Stack.Screen name="IncomingCallScreen" options={{ presentation: 'fullScreenModal' }} />
             <Stack.Screen name="notification" options={{ presentation: 'modal', animation: 'slide_from_right' }} />
           </Stack>
         </View>
@@ -183,20 +202,26 @@ useNotificationActions();
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   return (
     <AuthProvider>
-      <SafeAreaProvider>
-        <InnerLayout />
-      </SafeAreaProvider>
+      <PremiumProvider>
+        <SafeAreaProvider>
+          <InnerLayout />
+        </SafeAreaProvider>
+      </PremiumProvider>
     </AuthProvider>
   );
 }
 
-const styles = StyleSheet.create({
-  secretZone: { position: 'absolute', top: 0, right: 0, width: 60, height: 60, zIndex: 999 },
-  secretDot: { position: 'absolute', top: 8, right: 8, width: 6, height: 6, borderRadius: 3, backgroundColor: '#F59E0B', opacity: 0.6 },
-  devToast: { position: 'absolute', alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#1A1A2E', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, zIndex: 9999, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 14, elevation: 14 },
-  devToastTxt: { color: WHITE, fontWeight: '700', fontSize: 14 },
-  toastStyle: { position: 'absolute', bottom: 100, alignSelf: 'center', backgroundColor: '#FF6B9D', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, zIndex: 9999, shadowColor: '#FF6B9D', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 10 },
+export default Sentry.wrap(RootLayout);
+
+const styles = StyleSheet.create({ secretZone: { position: 'absolute', top: 0, right: 0, width: 60, height: 60, zIndex: 999 }, 
+  secretDot: { position: 'absolute', top: 8, right: 8, width: 6, height: 6, borderRadius: 3, backgroundColor: '#F59E0B', opacity: 0.6 
+  }, devToast: { position: 'absolute', alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 
+  '#1A1A2E', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, zIndex: 9999, shadowColor: '#000', shadowOffset: { width: 
+  0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 14, elevation: 14 }, devToastTxt: { color: WHITE, fontWeight: '700', fontSize: 14 
+  }, toastStyle: { position: 'absolute', bottom: 100, alignSelf: 'center', backgroundColor: '#FF6B9D', paddingHorizontal: 20, 
+  paddingVertical: 12, borderRadius: 24, zIndex: 9999, shadowColor: '#FF6B9D', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 
+  0.4, shadowRadius: 10, elevation: 10 },
 });
