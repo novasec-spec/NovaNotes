@@ -1134,36 +1134,50 @@ export default function ChatRoom({ user, otherUser, onBack }: Props) {
   };
 
   // ── Voice recording ──────────────────────────────────────────────────────
-  const startRecording = async () => {
-    try {
-      await Audio.requestPermissionsAsync();
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-      const { recording: r } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      setRecording(r);
-      setIsRecording(true);
-      setRecDuration(0);
-      haptic('heavy');
-      recTimer.current = setInterval(() => setRecDuration(p => p + 1), 1000);
-    } catch (e) {
-      Alert.alert('Error', 'Could not start recording.');
-    }
-  };
-
-  const stopRecording = async () => {
-    if (!recording) return;
-    if (recTimer.current) clearInterval(recTimer.current);
+const startRecording = async () => {
+  if (isRecording || recording) {
+    console.log('Recording already in progress');
+    return;
+  }
+  
+  try {
+    await Audio.requestPermissionsAsync();
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+    });
+    const { recording: r } = await Audio.Recording.createAsync(
+      Audio.RecordingOptionsPresets.HIGH_QUALITY
+    );
+    setRecording(r);
+    setIsRecording(true);
+    setRecDuration(0);
+    haptic('heavy');
+    recTimer.current = setInterval(() => setRecDuration(p => p + 1), 1000);
+  } catch (e) {
+    console.error('Recording error:', e);
+    Alert.alert('Error', 'Could not start recording.');
+    // Reset state on error
+    setRecording(null);
     setIsRecording(false);
-    haptic('light');
-    const dur = recDuration;
+  }
+};
+
+const stopRecording = async () => {
+  if (!recording) return;
+  
+  if (recTimer.current) clearInterval(recTimer.current);
+  setIsRecording(false);
+  haptic('light');
+  
+  const dur = recDuration;
+  
+  try {
     await recording.stopAndUnloadAsync();
     const uri = recording.getURI();
     setRecording(null);
     setRecDuration(0);
+    
     if (uri && dur >= 1) {
       await sendMessage('', {
         type: 'audio',
@@ -1174,7 +1188,12 @@ export default function ChatRoom({ user, otherUser, onBack }: Props) {
     } else if (dur < 1) {
       Alert.alert('Too short', 'Hold to record a longer voice note.');
     }
-  };
+  } catch (e) {
+    console.error('Stop recording error:', e);
+    setRecording(null);
+    setRecDuration(0);
+  }
+};
 
   // ── Scroll helpers ──────────────────────────────────────────────────────
   const scrollToBottom = () => {
