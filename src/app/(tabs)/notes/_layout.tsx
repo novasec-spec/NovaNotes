@@ -12,7 +12,14 @@ export default function ChatLayout() {
         }}
       >
         <Stack.Screen name="index" />
-      </Stack>
+    <Stack.Screen
+        name="reminders"
+        options={{
+          presentation: 'modal',
+          animation: 'slide_from_bottom',
+        }}
+      /> 
+     </Stack>
     </View>
   );
 }

@@ -17,7 +17,9 @@
       "jsEngine": "jsc",
       "bundleIdentifier": "com.novasec.notes",
       "infoPlist": {
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": [
+          "audio"
+        ]
       }
     },
     "android": {
@@ -37,14 +39,14 @@
       "permissions": [
         "android.permission.INTERNET",
         "RECEIVE_BOOT_COMPLETED",
-          "NOTIFICATIONS",
+        "NOTIFICATIONS",
         "VIBRATE",
-        " SCHEDULE_EXACT_ALARM",
+        "android.permission.SCHEDULE_EXACT_ALARM",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
- "notification": {
+    "notification": {
       "icon": "./assets/images/notification-icon.png",
       "color": "#FF6B9D",
       "androidMode": "default",
@@ -56,14 +58,14 @@
     },
     "plugins": [
       "expo-router",
-    [
+      [
         "expo-notifications",
         {
           "icon": "./assets/images/notification-icon.png",
           "color": "#FF6B9D"
         }
       ],
-     "@react-native-community/datetimepicker",
+      "@react-native-community/datetimepicker",
       "expo-secure-store",
       "expo-web-browser",
       [
@@ -87,11 +89,18 @@
               "previewImage": "./assets/widget-preview/bubbles.png"
             }
           ]
-      }  
-       ],
-       "expo-audio"
-],
-"experiments": {
+        }
+      ],
+
+      "expo-audio",
+      ["@sentry/react-native/expo", {
+        "url": "https://sentry.io/",
+        "project": "novasec",
+        "organization": "novasec-z3"
+      }]
+
+    ],
+    "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
@@ -105,5 +114,3 @@
     }
   }
 }
-
-

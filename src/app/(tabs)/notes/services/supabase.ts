@@ -50,11 +50,24 @@ export async function uploadVoiceToSupabase(uri: string) {
   return uploadFileToSupabase(uri, 'voice', 'audio/m4a', 'm4a');
 }
 
-export async function pushNoteToCloud(note: Note, ownerId: string): Promise<boolean> {
+// Use user_email instead of owner_id
+export async function pushNoteToCloud(note: Note, userEmail: string): Promise<boolean> {
   try {
+
+const {
+  data: { user },
+} = await supabase.auth.getUser();
+
+if (!user) {
+  console.error("No authenticated user");
+  return false;
+}
+
+    console.log(`📤 Pushing note for user: ${userEmail}`);
     const { error } = await supabase.from('notes').upsert({
       id: note.id,
-      owner_id: ownerId,
+     owner_id: user.id, 
+     user_email: userEmail,  // Changed from owner_id
       payload: note,
       updated_at: note.updatedAt,
       deleted: false,
@@ -63,6 +76,7 @@ export async function pushNoteToCloud(note: Note, ownerId: string): Promise<bool
       console.error('pushNoteToCloud error:', error);
       return false;
     }
+    console.log(`✅ Note pushed: ${note.id}`);
     return true;
   } catch (error) {
     console.error('pushNoteToCloud error:', error);
@@ -70,13 +84,13 @@ export async function pushNoteToCloud(note: Note, ownerId: string): Promise<bool
   }
 }
 
-export async function markNoteDeletedInCloud(noteId: string, ownerId: string): Promise<boolean> {
+export async function markNoteDeletedInCloud(noteId: string, userEmail: string): Promise<boolean> {
   try {
     const { error } = await supabase
       .from('notes')
       .update({ deleted: true })
       .eq('id', noteId)
-      .eq('owner_id', ownerId);
+      .eq('user_email', userEmail);  // Changed from owner_id
     if (error) {
       console.error('markNoteDeletedInCloud error:', error);
       return false;
@@ -88,12 +102,13 @@ export async function markNoteDeletedInCloud(noteId: string, ownerId: string): P
   }
 }
 
-export async function fetchAllNotesFromCloud(ownerId: string): Promise<Note[]> {
+export async function fetchAllNotesFromCloud(userEmail: string): Promise<Note[]> {
   try {
+    console.log(`🔍 Fetching notes for user: ${userEmail}`);
     const { data, error } = await supabase
       .from('notes')
       .select('payload')
-      .eq('owner_id', ownerId)
+      .eq('user_email', userEmail)  // Changed from owner_id
       .eq('deleted', false)
       .order('updated_at', { ascending: false });
       
@@ -102,7 +117,9 @@ export async function fetchAllNotesFromCloud(ownerId: string): Promise<Note[]> {
       return [];
     }
     
-    return (data || []).map((row: any) => row.payload as Note);
+    const notes = (data || []).map((row: any) => row.payload as Note);
+    console.log(`✅ Fetched ${notes.length} notes`);
+    return notes;
   } catch (error) {
     console.error('fetchAllNotesFromCloud error:', error);
     return [];

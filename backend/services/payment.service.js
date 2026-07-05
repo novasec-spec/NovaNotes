@@ -79,52 +79,63 @@ const response = await intasendClient.post('/payment/mpesa-stk-push/', {
     }
   }
 
-  /**
-   * Verify payment status
-   */
-  async verifyPayment(transactionId) {
-    try {
-      // Get transaction
-      const { data: transaction, error: dbError } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('id', transactionId)
-        .single()
 
-      if (dbError || !transaction) {
-        throw new Error('Transaction not found')
-      }
+async verifyPayment(transactionId) {
+  try {
+    const { data: transaction, error: dbError } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('id', transactionId)
+      .single()
 
-      // Check with IntaSend
-      const response = await intasendClient.get(`/payment/status/${transaction.checkout_id}`)
-      
-      const isSuccessful = response.data.status === 'completed'
-
-      if (isSuccessful) {
-        // Update transaction
-        await supabase
-          .from('transactions')
-          .update({
-            status: 'completed',
-            completed_at: new Date().toISOString()
-          })
-          .eq('id', transactionId)
-
-        // Update user's subscription
-        await this.updateUserSubscription(transaction.user_id, transaction.plan)
-      }
-
-      return {
-        status: response.data.status,
-        isSuccessful,
-        transaction
-      }
-    } catch (error) {
-      console.error('Verification error:', error)
-      throw error
+    if (dbError || !transaction) {
+      throw new Error('Transaction not found')
     }
-  }
 
+    // CORRECT ENDPOINT - use checkout_id from transaction
+    const checkoutId = transaction.checkout_id
+    
+    if (!checkoutId) {
+      throw new Error('No checkout ID found for this transaction')
+    }
+
+    // Correct IntaSend status endpoint
+    const response = await intasendClient.get(`/payment/status/${checkoutId}/`)
+    // OR try this if above doesn't work:
+    // const response = await intasendClient.get(`/api/v1/payment/status/${checkoutId}/`)
+
+    console.log('📡 Status response:', response.data)
+
+    const isSuccessful = response.data.status === 'completed' || 
+                        response.data.state === 'completed' ||
+                        response.data.status === 'success'
+
+    if (isSuccessful) {
+      // Update transaction
+      await supabase
+        .from('transactions')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          mpesa_code: response.data.mpesa_code || response.data.mpesa_receipt || null
+        })
+        .eq('id', transactionId)
+
+      // Update user's subscription
+      await this.updateUserSubscription(transaction.user_id, transaction.plan)
+    }
+
+    return {
+      status: response.data.status || response.data.state || 'unknown',
+      isSuccessful,
+      transaction,
+      data: response.data
+    }
+  } catch (error) {
+    console.error('Verification error:', error.response?.data || error.message)
+    throw new Error('Failed to check payment status: ' + (error.response?.data?.message || error.message))
+  }
+}
   /**
    * Handle webhook from IntaSend
    */

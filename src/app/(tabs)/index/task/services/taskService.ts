@@ -1,10 +1,24 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../../../../config/supabase';
-import { Task, TaskCreateDTO, TaskUpdateDTO } from '../types/task.types';
+import { 
+  Task, 
+  TaskCreateDTO, 
+  TaskUpdateDTO,
+  TaskList,
+  Project,
+  ActivityLog,
+  TaskTemplate 
+} from '../types/task.types';
 
-const TASKS_STORAGE_KEY = 'tasks_data';
-const PENDING_SYNC_KEY = 'pending_sync_tasks';
-const SYNC_STATUS_KEY = 'last_sync_time';
+const STORAGE_KEYS = {
+  TASKS: 'tasks_data',
+  LISTS: 'task_lists',
+  PROJECTS: 'task_projects',
+  TEMPLATES: 'task_templates',
+  ACTIVITY: 'task_activity',
+  PENDING_SYNC: 'pending_sync_tasks',
+  SYNC_STATUS: 'last_sync_time',
+};
 
 export class TaskService {
   private static instance: TaskService;
@@ -18,11 +32,11 @@ export class TaskService {
     return TaskService.instance;
   }
 
-  // ============ LOCAL STORAGE OPERATIONS ============
+  // ============ LOCAL STORAGE ============
   
   async getLocalTasks(): Promise<Task[]> {
     try {
-      const cached = await AsyncStorage.getItem(TASKS_STORAGE_KEY);
+      const cached = await AsyncStorage.getItem(STORAGE_KEYS.TASKS);
       return cached ? JSON.parse(cached) : [];
     } catch {
       return [];
@@ -30,63 +44,102 @@ export class TaskService {
   }
 
   async saveLocalTasks(tasks: Task[]): Promise<void> {
-    await AsyncStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+    const validTasks = tasks.filter(t => t && t.id);
+    await AsyncStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(validTasks));
   }
 
-  async getPendingSync(): Promise<Task[]> {
+  async getTaskLists(): Promise<TaskList[]> {
     try {
-      const pending = await AsyncStorage.getItem(PENDING_SYNC_KEY);
-      return pending ? JSON.parse(pending) : [];
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.LISTS);
+      return data ? JSON.parse(data) : [];
     } catch {
       return [];
     }
   }
 
-
-// Add to TaskService
-async cleanInvalidTasks(): Promise<void> {
-  try {
-    const tasks = await this.getLocalTasks();
-    const validTasks = tasks.filter(task => task && task.id);
-    
-    if (validTasks.length !== tasks.length) {
-      console.log(`🧹 Cleaned ${tasks.length - validTasks.length} invalid tasks`);
-      await this.saveLocalTasks(validTasks);
-    }
-  } catch (error) {
-    console.error('Clean invalid tasks error:', error);
-  }
-}
-
-  async savePendingSync(tasks: Task[]): Promise<void> {
-    await AsyncStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(tasks));
+  async saveTaskLists(lists: TaskList[]): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.LISTS, JSON.stringify(lists));
   }
 
-  async clearPendingSync(): Promise<void> {
-    await AsyncStorage.removeItem(PENDING_SYNC_KEY);
-  }
-
-  async getLastSyncTime(): Promise<number | null> {
+  async getProjects(): Promise<Project[]> {
     try {
-      const time = await AsyncStorage.getItem(SYNC_STATUS_KEY);
-      return time ? parseInt(time, 10) : null;
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.PROJECTS);
+      return data ? JSON.parse(data) : [];
     } catch {
-      return null;
+      return [];
     }
   }
 
-  async updateLastSyncTime(): Promise<void> {
-    await AsyncStorage.setItem(SYNC_STATUS_KEY, Date.now().toString());
+  async saveProjects(projects: Project[]): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
   }
 
-  // ============ CRUD OPERATIONS (Offline-First) ============
+  async getTemplates(): Promise<TaskTemplate[]> {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.TEMPLATES);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async saveTemplates(templates: TaskTemplate[]): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.TEMPLATES, JSON.stringify(templates));
+  }
+
+  async getActivityLog(taskId?: string): Promise<ActivityLog[]> {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVITY);
+      const logs: ActivityLog[] = data ? JSON.parse(data) : [];
+      return taskId ? logs.filter(log => log.taskId === taskId) : logs;
+    } catch {
+      return [];
+    }
+  }
+
+  async addActivityLog(log: ActivityLog): Promise<void> {
+    try {
+      const logs = await this.getActivityLog();
+      logs.unshift(log);
+      // Keep last 1000 logs
+      while (logs.length > 1000) logs.pop();
+      await AsyncStorage.setItem(STORAGE_KEYS.ACTIVITY, JSON.stringify(logs));
+    } catch (error) {
+      console.error('Add activity log error:', error);
+    }
+  }
+
+  // ============ TASK CRUD OPERATIONS (OFFLINE-FIRST) ============
 
   async addTaskLocally(taskData: TaskCreateDTO): Promise<Task> {
+    const now = new Date().toISOString();
     const newTask: Task = {
       id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      ...taskData,
+      title: taskData.title,
+      description: taskData.description || '',
       completed: false,
-      createdAt: new Date().toISOString(),
+      priority: taskData.priority || 'medium',
+      category: taskData.category || '',
+      tags: taskData.tags || [],
+      dueDate: taskData.dueDate || '',
+      dueTime: taskData.dueTime || '',
+      estimatedHours: taskData.estimatedHours || 0,
+      actualHours: 0,
+      createdAt: now,
+      subtasks: [],
+      attachments: [],
+      comments: [],
+      assignees: taskData.assignees || [],
+      sharedWith: [],
+      isTemplate: false,
+      recurring: taskData.recurring || null,
+      progress: 0,
+      priorityScore: this.calculatePriorityScore(taskData),
+      projectId: taskData.projectId,
+      listId: taskData.listId,
+      parentTaskId: taskData.parentTaskId,
+      reminderTime: taskData.reminderTime,
+      reminderSent: false,
       _synced: false,
       _deleted: false,
     };
@@ -95,12 +148,18 @@ async cleanInvalidTasks(): Promise<void> {
     const updated = [newTask, ...tasks];
     await this.saveLocalTasks(updated);
 
-    // Add to pending sync
-    const pending = await this.getPendingSync();
-    pending.push(newTask);
-    await this.savePendingSync(pending);
+    // Add to activity log
+    await this.addActivityLog({
+      id: `act_${Date.now()}`,
+      taskId: newTask.id,
+      userId: 'local_user',
+      action: 'created',
+      details: { title: newTask.title },
+      timestamp: now,
+    });
 
-    // Schedule background sync
+    // Add to pending sync
+    await this.addPendingSync(newTask);
     this.scheduleSync();
 
     return newTask;
@@ -121,20 +180,26 @@ async cleanInvalidTasks(): Promise<void> {
       _synced: false,
     };
 
+    if (updates.completed && !tasks[index].completed) {
+      updatedTask.completedAt = new Date().toISOString();
+      updatedTask.progress = 100;
+      updatedTask.actualHours = this.calculateActualHours(tasks[index]);
+    }
+
     tasks[index] = updatedTask;
     await this.saveLocalTasks(tasks);
 
-    // Add to pending sync
-    const pending = await this.getPendingSync();
-    const pendingIndex = pending.findIndex(t => t.id === taskId);
-    if (pendingIndex !== -1) {
-      pending[pendingIndex] = updatedTask;
-    } else {
-      pending.push(updatedTask);
-    }
-    await this.savePendingSync(pending);
+    // Add activity log
+    await this.addActivityLog({
+      id: `act_${Date.now()}`,
+      taskId: updatedTask.id,
+      userId: 'local_user',
+      action: 'updated',
+      details: { updates },
+      timestamp: new Date().toISOString(),
+    });
 
-    // Schedule background sync
+    await this.addPendingSync(updatedTask);
     this.scheduleSync();
 
     return updatedTask;
@@ -146,14 +211,11 @@ async cleanInvalidTasks(): Promise<void> {
     
     if (!task) return;
 
-    // If it's a local task that was never synced, just remove it
+    // If local only, just remove
     if (task.id.startsWith('local_') && !task._synced) {
       const updated = tasks.filter(t => t.id !== taskId);
       await this.saveLocalTasks(updated);
-      
-      // Remove from pending sync
-      const pending = await this.getPendingSync();
-      await this.savePendingSync(pending.filter(t => t.id !== taskId));
+      await this.removePendingSync(taskId);
       return;
     }
 
@@ -163,151 +225,255 @@ async cleanInvalidTasks(): Promise<void> {
     );
     await this.saveLocalTasks(updated);
 
-    // Add to pending sync
-    const pending = await this.getPendingSync();
-    const pendingIndex = pending.findIndex(t => t.id === taskId);
-    if (pendingIndex !== -1) {
-      pending[pendingIndex] = { ...task, _deleted: true, _synced: false };
-    } else {
-      pending.push({ ...task, _deleted: true, _synced: false });
-    }
-    await this.savePendingSync(pending);
-
-    // Schedule background sync
+    await this.addPendingSync({ ...task, _deleted: true, _synced: false });
     this.scheduleSync();
   }
 
   async toggleCompleteLocally(taskId: string): Promise<Task> {
     const tasks = await this.getLocalTasks();
     const task = tasks.find(t => t.id === taskId);
+    if (!task) throw new Error('Task not found');
     
-    if (!task) {
-      throw new Error('Task not found');
+    return this.updateTaskLocally(taskId, { 
+      completed: !task.completed,
+      progress: !task.completed ? 100 : 0,
+      completedAt: !task.completed ? new Date().toISOString() : undefined,
+    });
+  }
+
+  // ============ LIST AND PROJECT OPERATIONS ============
+
+  async createList(name: string, icon: string, color: string): Promise<TaskList> {
+    const lists = await this.getTaskLists();
+    const newList: TaskList = {
+      id: `list_${Date.now()}`,
+      name,
+      icon,
+      color,
+      tasks: [],
+      isDefault: lists.length === 0,
+      order: lists.length,
+    };
+    
+    lists.push(newList);
+    await this.saveTaskLists(lists);
+    return newList;
+  }
+
+  async createProject(data: Omit<Project, 'id' | 'progress'>): Promise<Project> {
+    const projects = await this.getProjects();
+    const newProject: Project = {
+      ...data,
+      id: `proj_${Date.now()}`,
+      progress: 0,
+      status: 'active',
+    };
+    
+    projects.push(newProject);
+    await this.saveProjects(projects);
+    return newProject;
+  }
+
+  // ============ TEMPLATE OPERATIONS ============
+
+  async createTemplate(name: string, tasks: Task[], category: string): Promise<TaskTemplate> {
+    const templates = await this.getTemplates();
+    const newTemplate: TaskTemplate = {
+      id: `tpl_${Date.now()}`,
+      name,
+      description: '',
+      tasks: tasks.map(t => ({ ...t, isTemplate: true })),
+      category,
+      tags: [],
+      isPublic: false,
+      createdBy: 'local_user',
+      usageCount: 0,
+    };
+    
+    templates.push(newTemplate);
+    await this.saveTemplates(templates);
+    return newTemplate;
+  }
+
+  async applyTemplate(templateId: string): Promise<Task[]> {
+    const templates = await this.getTemplates();
+    const template = templates.find(t => t.id === templateId);
+    if (!template) throw new Error('Template not found');
+
+    const createdTasks: Task[] = [];
+    for (const task of template.tasks) {
+      const newTask = await this.addTaskLocally({
+        title: task.title,
+        description: task.description,
+        priority: task.priority,
+        category: task.category,
+        tags: task.tags,
+        estimatedHours: task.estimatedHours,
+      });
+      createdTasks.push(newTask);
     }
 
-    return this.updateTaskLocally(taskId, { completed: !task.completed });
+    // Update template usage
+    template.usageCount++;
+    await this.saveTemplates(templates);
+
+    return createdTasks;
+  }
+
+  // ============ SHARING OPERATIONS ============
+
+  async shareTask(taskId: string, userIds: string[]): Promise<Task> {
+    const tasks = await this.getLocalTasks();
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) throw new Error('Task not found');
+
+    const updatedTask = {
+      ...task,
+      sharedWith: [...new Set([...task.sharedWith, ...userIds])],
+      _synced: false,
+    };
+
+    await this.updateTaskLocally(taskId, { sharedWith: updatedTask.sharedWith });
+    
+    // Log sharing activity
+    await this.addActivityLog({
+      id: `act_${Date.now()}`,
+      taskId: taskId,
+      userId: 'local_user',
+      action: 'shared',
+      details: { sharedWith: userIds },
+      timestamp: new Date().toISOString(),
+    });
+
+    return updatedTask;
   }
 
   // ============ SYNC OPERATIONS ============
+
+  private async addPendingSync(task: Task): Promise<void> {
+    try {
+      const pending = await this.getPendingSync();
+      const index = pending.findIndex(t => t.id === task.id);
+      if (index !== -1) {
+        pending[index] = task;
+      } else {
+        pending.push(task);
+      }
+      await AsyncStorage.setItem(STORAGE_KEYS.PENDING_SYNC, JSON.stringify(pending));
+    } catch (error) {
+      console.error('Add pending sync error:', error);
+    }
+  }
+
+  private async removePendingSync(taskId: string): Promise<void> {
+    try {
+      const pending = await this.getPendingSync();
+      const filtered = pending.filter(t => t.id !== taskId);
+      await AsyncStorage.setItem(STORAGE_KEYS.PENDING_SYNC, JSON.stringify(filtered));
+    } catch (error) {
+      console.error('Remove pending sync error:', error);
+    }
+  }
+
+  async getPendingSync(): Promise<Task[]> {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.PENDING_SYNC);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async getPendingSyncCount(): Promise<number> {
+    const pending = await this.getPendingSync();
+    return pending.length;
+  }
 
   scheduleSync(delay: number = 5000): void {
     if (this.syncTimeout) {
       clearTimeout(this.syncTimeout);
     }
-    
-    this.syncTimeout = setTimeout(() => {
-      this.performSync();
-    }, delay);
+    this.syncTimeout = setTimeout(() => this.performSync(), delay);
   }
 
   async performSync(): Promise<void> {
     if (this.isSyncing) return;
-    
     try {
       this.isSyncing = true;
       const pending = await this.getPendingSync();
-      
       if (pending.length === 0) {
-        // Still check for remote updates
         await this.syncFromRemote();
         return;
       }
 
       console.log(`🔄 Syncing ${pending.length} tasks...`);
 
-      // Group tasks by operation
-      const toDelete = pending.filter(t => t._deleted);
-      const toUpdate = pending.filter(t => !t._deleted && t.id && !t.id.startsWith('local_'));
-      const toCreate = pending.filter(t => !t._deleted && t.id && t.id.startsWith('local_'));
-
-      // Process deletes
-      for (const task of toDelete) {
+      for (const task of pending) {
         try {
-          await supabase.from('tasks').delete().eq('id', task.id);
-        } catch (error) {
-          console.error('Delete sync error:', error);
-        }
-      }
+          if (task._deleted) {
+            await supabase.from('tasks').delete().eq('id', task.id);
+          } else if (task.id.startsWith('local_')) {
+            // Create new
+            const { data, error } = await supabase
+              .from('tasks')
+              .insert({
+                title: task.title,
+                description: task.description,
+                completed: task.completed,
+                priority: task.priority,
+                category: task.category,
+                tags: task.tags,
+                due_date: task.dueDate,
+                due_time: task.dueTime,
+                estimated_hours: task.estimatedHours,
+                project_id: task.projectId,
+                list_id: task.listId,
+                parent_task_id: task.parentTaskId,
+                created_at: task.createdAt,
+              })
+              .select()
+              .single();
 
-      // Process updates
-      for (const task of toUpdate) {
-        try {
-          const { error } = await supabase
-            .from('tasks')
-            .update({
-              title: task.title,
-              description: task.description,
-              completed: task.completed,
-              priority: task.priority,
-              category: task.category,
-              due_date: task.dueDate,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', task.id);
-
-          if (error) throw error;
-        } catch (error) {
-          console.error('Update sync error:', error);
-        }
-      }
-
-      // Process creates
-      for (const task of toCreate) {
-        try {
-          const { data, error } = await supabase
-            .from('tasks')
-            .insert({
-              title: task.title,
-              description: task.description,
-              completed: task.completed,
-              priority: task.priority,
-              category: task.category,
-              due_date: task.dueDate,
-              created_at: task.createdAt,
-            })
-            .select()
-            .single();
-
-          if (error) throw error;
-
-          if (data) {
-            // Update local task with server ID
-            const tasks = await this.getLocalTasks();
-            const updated = tasks.map(t => 
-              t.id === task.id ? { 
-                ...t, 
-                id: data.id, 
-                _synced: true,
-                _deleted: false,
-                createdAt: data.created_at,
-              } : t
-            );
-            await this.saveLocalTasks(updated);
+            if (error) throw error;
+            if (data) {
+              // Update local with server ID
+              const tasks = await this.getLocalTasks();
+              const updated = tasks.map(t => 
+                t.id === task.id ? { ...t, id: data.id, _synced: true } : t
+              );
+              await this.saveLocalTasks(updated);
+            }
+          } else {
+            // Update existing
+            await supabase
+              .from('tasks')
+              .update({
+                title: task.title,
+                description: task.description,
+                completed: task.completed,
+                priority: task.priority,
+                category: task.category,
+                tags: task.tags,
+                due_date: task.dueDate,
+                due_time: task.dueTime,
+                estimated_hours: task.estimatedHours,
+                actual_hours: task.actualHours,
+                progress: task.progress,
+                project_id: task.projectId,
+                list_id: task.listId,
+                parent_task_id: task.parentTaskId,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', task.id);
           }
         } catch (error) {
-          console.error('Create sync error:', error);
+          console.error('Sync error for task:', task.id, error);
         }
       }
 
-      // Clear pending sync for successfully synced items
-      const remainingPending = pending.filter(t => {
-        if (t._deleted) return false;
-        if (t.id.startsWith('local_')) {
-          // Check if it was successfully synced
-          const tasks = this.getLocalTasks();
-          const task = tasks.find(t => t.id === t.id);
-          return task?._synced === false;
-        }
-        return false;
-      });
-
-      await this.savePendingSync(remainingPending);
-      await this.updateLastSyncTime();
-
-      console.log('✅ Sync completed successfully');
-
-      // Fetch latest from remote
+      await this.clearPendingSync();
       await this.syncFromRemote();
+      console.log('✅ Sync completed');
 
     } catch (error) {
       console.error('Sync error:', error);
@@ -334,18 +500,33 @@ async cleanInvalidTasks(): Promise<void> {
           completed: t.completed,
           priority: t.priority,
           category: t.category,
+          tags: t.tags || [],
           dueDate: t.due_date,
+          dueTime: t.due_time,
+          estimatedHours: t.estimated_hours,
+          actualHours: t.actual_hours,
+          progress: t.progress || 0,
           createdAt: t.created_at,
           updatedAt: t.updated_at,
+          projectId: t.project_id,
+          listId: t.list_id,
+          parentTaskId: t.parent_task_id,
+          subtasks: t.subtasks || [],
+          attachments: t.attachments || [],
+          comments: t.comments || [],
+          assignees: t.assignees || [],
+          sharedWith: t.shared_with || [],
+          isTemplate: t.is_template || false,
+          recurring: t.recurring || null,
+          reminderTime: t.reminder_time,
+          reminderSent: t.reminder_sent || false,
           _synced: true,
           _deleted: false,
         }));
 
-        // Merge with local tasks (keep local unsynced changes)
         const localTasks = await this.getLocalTasks();
         const merged = this.mergeTasks(localTasks, remoteTasks);
         await this.saveLocalTasks(merged);
-        await this.updateLastSyncTime();
       }
     } catch (error) {
       console.error('Remote sync error:', error);
@@ -354,62 +535,94 @@ async cleanInvalidTasks(): Promise<void> {
 
   private mergeTasks(local: Task[], remote: Task[]): Task[] {
     const map = new Map<string, Task>();
-    
-    // Add remote tasks
     remote.forEach(t => map.set(t.id, t));
     
-    // Merge local tasks (keep local unsynced changes)
     local.forEach(localTask => {
       if (!localTask._synced || localTask._deleted) {
         map.set(localTask.id, localTask);
-      } else {
-        // If synced, keep remote version but preserve local metadata
-        const remoteTask = map.get(localTask.id);
-        if (remoteTask) {
-          map.set(localTask.id, {
-            ...remoteTask,
-            _synced: true,
-            _deleted: false,
-          });
-        }
       }
     });
 
     return Array.from(map.values());
   }
 
+  private async clearPendingSync(): Promise<void> {
+    await AsyncStorage.removeItem(STORAGE_KEYS.PENDING_SYNC);
+  }
+
+  // ============ UTILITY FUNCTIONS ============
+
+  private calculatePriorityScore(taskData: TaskCreateDTO): number {
+    let score = 0;
+    if (taskData.priority === 'critical') score += 100;
+    else if (taskData.priority === 'high') score += 75;
+    else if (taskData.priority === 'medium') score += 50;
+    else score += 25;
+
+    if (taskData.dueDate) {
+      const daysUntilDue = Math.ceil(
+        (new Date(taskData.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+      );
+      if (daysUntilDue <= 0) score += 50;
+      else if (daysUntilDue <= 1) score += 40;
+      else if (daysUntilDue <= 3) score += 30;
+      else if (daysUntilDue <= 7) score += 20;
+      else score += 10;
+    }
+
+    if (taskData.tags?.includes('urgent')) score += 25;
+    if (taskData.tags?.includes('important')) score += 15;
+
+    return Math.min(score, 100);
+  }
+
+  private calculateActualHours(task: Task): number {
+    if (!task.estimatedHours) return 0;
+    const completedAt = task.completedAt ? new Date(task.completedAt) : new Date();
+    const createdAt = new Date(task.createdAt);
+    const hours = (completedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+    return Math.round(hours * 10) / 10;
+  }
+
   // ============ NOTIFICATION HELPERS ============
 
-  async getTasksDueSoon(): Promise<Task[]> {
+  async getTasksDueToday(): Promise<Task[]> {
     const tasks = await this.getLocalTasks();
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    
     return tasks.filter(task => {
       if (!task.dueDate || task.completed) return false;
+      return task.dueDate.split('T')[0] === todayStr;
+    });
+  }
+
+  async getTasksDueSoon(hours: number = 24): Promise<Task[]> {
+    const tasks = await this.getLocalTasks();
+    const now = new Date();
+    const future = new Date(now.getTime() + hours * 60 * 60 * 1000);
+    
+    return tasks.filter(task => {
+      if (!task.dueDate || task.completed || task.reminderSent) return false;
       const dueDate = new Date(task.dueDate);
-      return dueDate >= now && dueDate <= tomorrow;
+      return dueDate >= now && dueDate <= future;
     });
   }
 
   async getOverdueTasks(): Promise<Task[]> {
     const tasks = await this.getLocalTasks();
     const now = new Date();
-
     return tasks.filter(task => {
       if (!task.dueDate || task.completed) return false;
       return new Date(task.dueDate) < now;
     });
   }
 
-  async getTaskCount(): Promise<number> {
+  async markReminderSent(taskId: string): Promise<void> {
     const tasks = await this.getLocalTasks();
-    return tasks.length;
-  }
-
-  async getPendingSyncCount(): Promise<number> {
-    const pending = await this.getPendingSync();
-    return pending.length;
+    const updated = tasks.map(t => 
+      t.id === taskId ? { ...t, reminderSent: true } : t
+    );
+    await this.saveLocalTasks(updated);
   }
 }

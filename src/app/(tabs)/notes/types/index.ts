@@ -44,7 +44,48 @@ export interface Note {
   reminderRecurring?: RecurringReminder;
   weather?: WeatherData;
   writingPrompt?: string;
+  reminder?: NoteReminder;
+  reminderScheduled?: boolean;
+  reminderId?: string;
 }
+
+
+export interface NoteReminder {
+  id: string;
+  noteId: string;
+  scheduledFor: Date;
+  type: 'single' | 'recurring';
+  recurringPattern?: 'daily' | 'weekly' | 'monthly';
+  daysOfWeek?: number[]; // 0-6 for weekly
+  dayOfMonth?: number; // 1-31 for monthly
+  message?: string;
+  enabled: boolean;
+  lastTriggered?: string;
+  nextTrigger?: string;
+}
+
+export interface NoteNotification {
+  id: string;
+  noteId: string;
+  userId: string;
+  type: 'reminder' | 'daily_summary' | 'streak' | 'draft' | 'sync';
+  title: string;
+  body: string;
+  data?: any;
+  read: boolean;
+  created_at: string;
+  delivered_at?: string;
+}
+
+
+export interface ReminderStats {
+  total: number;
+  active: number;
+  completed: number;
+  upcoming: number;
+  overdue: number;
+}
+
 
 export interface LocationData {
   latitude: number;

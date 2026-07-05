@@ -1696,6 +1696,7 @@ const styles = StyleSheet.create({
     gap: 10,
     backgroundColor: '#1E1E1E',
     borderRadius: 18,
+   paddingBottom: 100,
     paddingVertical: 10,
     paddingHorizontal: 12,
     shadowColor: '#000',

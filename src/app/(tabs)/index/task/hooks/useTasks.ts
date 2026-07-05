@@ -1,95 +1,60 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
-import { Task, TaskFilterType, TaskStats } from '../types/task.types';
+import { useState, useEffect, useCallback } from 'react';
+import { AppState } from 'react-native';
+import { Task, TaskFilterType, TaskStats, TaskCreateDTO, TaskList, Project } from '../types/task.types';
 import { TaskService } from '../services/taskService';
-import { NotificationService } from '../services/NotificationService';
+import { NotificationService } from '../services/notificationService';
 
 export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [syncCount, setSyncCount] = useState(0);
+  const [lists, setLists] = useState<TaskList[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   
   const taskService = TaskService.getInstance();
   const notificationService = NotificationService.getInstance();
-  const appState = useRef(AppState.currentState);
 
-const loadTasks = useCallback(async () => {
-  try {
-    setLoading(true);
-    setError(null);
+  const loadTasks = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Load all data
+      const [localTasks, taskLists, taskProjects] = await Promise.all([
+        taskService.getLocalTasks(),
+        taskService.getTaskLists(),
+        taskService.getProjects(),
+      ]);
 
-    // Load local tasks immediately
-    const localTasks = await taskService.getLocalTasks();
-
-    // Ensure all tasks have IDs and are valid objects
-    const validTasks = localTasks.filter(task => {
-      if (!task) return false;
-      if (!task.id && !task._id) return false;
-      // Ensure id is set
-      if (!task.id) {
-        task.id = task._id || `task_${Date.now()}_${Math.random()}`;
-      }
-      return true;
-    });
-
-    if (validTasks.length > 0) {
+      const validTasks = localTasks.filter(t => t && t.id);
       setTasks(validTasks);
-      // Save back cleaned data
-      await taskService.saveLocalTasks(validTasks);
-    } else {
-      setTasks([]);
+      setLists(taskLists);
+      setProjects(taskProjects);
+
+      // Initialize notifications
+      await notificationService.initialize();
+
+    } catch (err) {
+      console.error('Load tasks error:', err);
+      setError('Failed to load tasks');
+    } finally {
+      setLoading(false);
     }
-
-    // Check pending sync count
-    const pending = await taskService.getPendingSyncCount();
-    if (pending > 0) {
-      setSyncCount(pending);
-      // Trigger background sync
-      taskService.scheduleSync(2000);
-    }
-
-    // Start notification checks
-    await notificationService.scheduleTaskNotifications();
-
-  } catch (err) {
-    console.error('Load tasks error:', err);
-    setError('Failed to load tasks');
-  } finally {
-    setLoading(false);
-  }
-}, []);
-
-  // Listen to app state changes for background sync
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
-      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        console.log('📱 App came to foreground - checking sync');
-        const pending = await taskService.getPendingSyncCount();
-        if (pending > 0) {
-          setSyncCount(pending);
-          taskService.scheduleSync(1000);
-        }
-        await notificationService.checkAndNotifyTasks();
-      }
-      appState.current = nextAppState;
-    });
-
-    return () => {
-      subscription.remove();
-    };
   }, []);
 
-  const addTask = useCallback(async (taskData: Omit<Task, 'id' | 'createdAt' | '_synced' | '_deleted'>) => {
+  // Add these getter functions
+  const getLists = useCallback(() => {
+    return lists;
+  }, [lists]);
+
+  const getProjects = useCallback(() => {
+    return projects;
+  }, [projects]);
+
+  const addTask = useCallback(async (taskData: TaskCreateDTO) => {
     try {
       const newTask = await taskService.addTaskLocally(taskData);
       setTasks(prev => [newTask, ...prev]);
-      setSyncCount(prev => prev + 1);
-      
-      // Notify
-      await notificationService.notifyTaskCreated(newTask);
-      
       return newTask;
     } catch (err) {
       console.error('Add task error:', err);
@@ -102,13 +67,6 @@ const loadTasks = useCallback(async () => {
     try {
       const updated = await taskService.updateTaskLocally(taskId, updates);
       setTasks(prev => prev.map(t => t.id === taskId ? updated : t));
-      setSyncCount(prev => prev + 1);
-      
-      // Notify if completed
-      if (updates.completed === true) {
-        await notificationService.notifyTaskCompleted(updated);
-      }
-      
       return updated;
     } catch (err) {
       console.error('Update task error:', err);
@@ -121,7 +79,6 @@ const loadTasks = useCallback(async () => {
     try {
       await taskService.deleteTaskLocally(taskId);
       setTasks(prev => prev.filter(t => t.id !== taskId));
-      setSyncCount(prev => prev + 1);
     } catch (err) {
       console.error('Delete task error:', err);
       setError('Failed to delete task');
@@ -133,12 +90,6 @@ const loadTasks = useCallback(async () => {
     try {
       const updated = await taskService.toggleCompleteLocally(taskId);
       setTasks(prev => prev.map(t => t.id === taskId ? updated : t));
-      setSyncCount(prev => prev + 1);
-      
-      if (updated.completed) {
-        await notificationService.notifyTaskCompleted(updated);
-      }
-      
       return updated;
     } catch (err) {
       console.error('Toggle complete error:', err);
@@ -147,43 +98,81 @@ const loadTasks = useCallback(async () => {
     }
   }, []);
 
+  const createList = useCallback(async (name: string, icon: string, color: string) => {
+    try {
+      const newList = await taskService.createList(name, icon, color);
+      setLists(prev => [...prev, newList]);
+      return newList;
+    } catch (err) {
+      console.error('Create list error:', err);
+      setError('Failed to create list');
+      throw err;
+    }
+  }, []);
+
+  const createProject = useCallback(async (data: any) => {
+    try {
+      const newProject = await taskService.createProject(data);
+      setProjects(prev => [...prev, newProject]);
+      return newProject;
+    } catch (err) {
+      console.error('Create project error:', err);
+      setError('Failed to create project');
+      throw err;
+    }
+  }, []);
+
+  const applyTemplate = useCallback(async (templateId: string) => {
+    try {
+      const newTasks = await taskService.applyTemplate(templateId);
+      setTasks(prev => [...newTasks, ...prev]);
+      return newTasks;
+    } catch (err) {
+      console.error('Apply template error:', err);
+      setError('Failed to apply template');
+      throw err;
+    }
+  }, []);
+
   const forceSync = useCallback(async () => {
     try {
-      setSyncing(true);
       await taskService.performSync();
-      
-      // Reload tasks after sync
       const localTasks = await taskService.getLocalTasks();
       setTasks(localTasks);
-      
-      const pending = await taskService.getPendingSyncCount();
-      setSyncCount(pending);
-      
-      // Notify sync status
-      await notificationService.notifySyncStatus(pending === 0, pending);
-      
     } catch (err) {
       console.error('Force sync error:', err);
       setError('Sync failed');
-    } finally {
-      setSyncing(false);
     }
   }, []);
 
   const getFilteredTasks = useCallback((filter: TaskFilterType) => {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    
     return tasks
       .filter(t => !t._deleted)
       .filter(t => {
-        if (filter === 'active') return !t.completed;
-        if (filter === 'completed') return t.completed;
-        return true;
+        switch (filter) {
+          case 'active': return !t.completed;
+          case 'completed': return t.completed;
+          case 'overdue': 
+            return !t.completed && t.dueDate && new Date(t.dueDate) < now;
+          case 'today':
+            return t.dueDate && t.dueDate.split('T')[0] === today;
+          case 'upcoming':
+            return t.dueDate && new Date(t.dueDate) >= now && !t.completed;
+          default: return true;
+        }
       })
       .sort((a, b) => {
-        // Priority sorting: high > medium > low
-        const priorityOrder = { high: 0, medium: 1, low: 2 };
+        // Sort by priority and date
+        const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
         if (a.completed !== b.completed) return a.completed ? 1 : -1;
         if (a.priority !== b.priority) {
           return priorityOrder[a.priority] - priorityOrder[b.priority];
+        }
+        if (a.dueDate && b.dueDate) {
+          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
         }
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
@@ -191,23 +180,40 @@ const loadTasks = useCallback(async () => {
 
   const getStats = useCallback((): TaskStats => {
     const activeTasks = tasks.filter(t => !t._deleted);
+    const now = new Date();
+    
     const stats: TaskStats = {
       total: activeTasks.length,
       completed: 0,
       active: 0,
       overdue: 0,
-      byPriority: { low: 0, medium: 0, high: 0 },
+      dueToday: 0,
+      byPriority: { critical: 0, high: 0, medium: 0, low: 0 },
       byCategory: {},
+      byProject: {},
+      completionRate: 0,
+      averageCompletionTime: 0,
     };
+
+    const today = now.toISOString().split('T')[0];
+    let totalCompletionTime = 0;
+    let completedTasks = 0;
 
     activeTasks.forEach(task => {
       if (task.completed) {
         stats.completed++;
+        completedTasks++;
+        if (task.completedAt && task.createdAt) {
+          const time = new Date(task.completedAt).getTime() - new Date(task.createdAt).getTime();
+          totalCompletionTime += time;
+        }
       } else {
         stats.active++;
-        
-        if (task.dueDate && new Date(task.dueDate) < new Date()) {
+        if (task.dueDate && new Date(task.dueDate) < now) {
           stats.overdue++;
+        }
+        if (task.dueDate && task.dueDate.split('T')[0] === today) {
+          stats.dueToday++;
         }
       }
 
@@ -216,31 +222,40 @@ const loadTasks = useCallback(async () => {
       if (task.category) {
         stats.byCategory[task.category] = (stats.byCategory[task.category] || 0) + 1;
       }
+      if (task.projectId) {
+        stats.byProject[task.projectId] = (stats.byProject[task.projectId] || 0) + 1;
+      }
     });
+
+    stats.completionRate = stats.total > 0 ? (stats.completed / stats.total) * 100 : 0;
+    stats.averageCompletionTime = completedTasks > 0 
+      ? totalCompletionTime / completedTasks / (1000 * 60 * 60) 
+      : 0;
 
     return stats;
   }, [tasks]);
 
-  // Load tasks on mount
   useEffect(() => {
     loadTasks();
-    
-    // Periodic sync every hour
-    const syncInterval = setInterval(() => {
-      taskService.scheduleSync(100);
-    }, 60 * 60 * 1000);
+
+    // Listen for app state changes
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        taskService.scheduleSync(1000);
+      }
+    });
 
     return () => {
-      clearInterval(syncInterval);
+      subscription.remove();
     };
   }, []);
 
   return {
     tasks,
     loading,
-    syncing,
     error,
-    syncCount,
+    lists,
+    projects,
     loadTasks,
     addTask,
     updateTask,
@@ -249,5 +264,10 @@ const loadTasks = useCallback(async () => {
     forceSync,
     getFilteredTasks,
     getStats,
+    getLists,      // Add this
+    getProjects,   // Add this
+    createList,
+    createProject,
+    applyTemplate,
   };
 }

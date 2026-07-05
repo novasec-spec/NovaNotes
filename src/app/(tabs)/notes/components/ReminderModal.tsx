@@ -12,10 +12,12 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import { PINK, TEXT_SOFT, WHITE, REMINDER_OPTIONS } from '../utils/constants';
 
+// ReminderModal.tsx - Add noteId prop
 interface ReminderModalProps {
   visible: boolean;
   note: any | null;
-  onSchedule: (minutes: number) => void;
+  noteId?: string; // ← ADD THIS
+  onSchedule: (minutes: number, noteId: string) => void; // ← CHANGE
   onRecurringSchedule?: (reminder: any) => void;
   onClose: () => void;
   colors: any;
@@ -24,11 +26,12 @@ interface ReminderModalProps {
 export function ReminderModal({ 
   visible, 
   note, 
+  noteId,
   onSchedule, 
   onRecurringSchedule,
   onClose, 
   colors 
-}: ReminderModalProps) {
+}:ReminderModalProps) {
   const [showRecurring, setShowRecurring] = useState(false);
   const [recurringFrequency, setRecurringFrequency] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [recurringTime, setRecurringTime] = useState('09:00');
@@ -52,6 +55,29 @@ export function ReminderModal({
       onClose();
     }
   };
+// src/components/ReminderModal.tsx
+
+// Add notification sending when reminder is set
+const handleSchedule = async (minutes: number) => {
+  // If minutes is 0, show custom time picker
+  if (minutes === 0) {
+    setShowCustomTime(true);
+    return;
+  }
+
+  // Schedule notification via useNotes hook
+  if (onSchedule) {
+    const reminder = await onSchedule(minutes);
+    if (reminder) {
+      Alert.alert(
+        '✅ Reminder Set!',
+        `You'll be reminded in ${minutes} minutes`,
+        [{ text: 'OK' }]
+      );
+    }
+  }
+  onClose();
+};
 
   const toggleDay = (dayIndex: number) => {
     if (selectedDays.includes(dayIndex)) {
@@ -61,8 +87,10 @@ export function ReminderModal({
     }
   };
 
-  return (
-    <Modal visible={visible} transparent animationType="slide">
+
+
+
+   return ( <Modal visible={visible} transparent animationType="slide">
       <View style={styles.overlay}>
         <View style={[styles.sheet, { backgroundColor: colors.card }]}>
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
@@ -84,17 +112,17 @@ export function ReminderModal({
               </Text>
 
               <ScrollView showsVerticalScrollIndicator={false}>
-                {REMINDER_OPTIONS.map(opt => (
-                  <TouchableOpacity 
-                    key={opt.minutes} 
-                    style={[styles.option, { borderBottomColor: colors.border }]} 
-                    onPress={() => {
-                      if (opt.minutes === 0) {
-                        setShowRecurring(true);
-                      } else {
-                        onSchedule(opt.minutes);
-                      }
-                    }}>
+   
+             {REMINDER_OPTIONS.map(opt => (
+<TouchableOpacity
+    onPress={() => {
+      if (opt.minutes === 0) {
+        setShowRecurring(true);
+      } else {
+        onSchedule(opt.minutes, noteId || note?.id); // ← Pass noteId!
+      }
+    }}
+  >
                     <Icon name={opt.icon} size={18} color={PINK} />
                     <Text style={[styles.optionText, { color: colors.text }]}>{opt.label}</Text>
                     <Icon name="chevron-forward" size={16} color={TEXT_SOFT} style={{ marginLeft: 'auto' }} />
