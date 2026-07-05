@@ -212,7 +212,7 @@ export class TaskService {
     if (!task) return;
 
     // If local only, just remove
-    if (task.id.startsWith('local_') && !task._synced) {
+    if (String(task.id).startsWith('local_') && !task._synced) {
       const updated = tasks.filter(t => t.id !== taskId);
       await this.saveLocalTasks(updated);
       await this.removePendingSync(taskId);
@@ -412,7 +412,7 @@ export class TaskService {
         try {
           if (task._deleted) {
             await supabase.from('tasks').delete().eq('id', task.id);
-          } else if (task.id.startsWith('local_')) {
+          } else if (String(task.id).startsWith('local_')) {
             // Create new
             const { data, error } = await supabase
               .from('tasks')
@@ -439,7 +439,7 @@ export class TaskService {
               // Update local with server ID
               const tasks = await this.getLocalTasks();
               const updated = tasks.map(t => 
-                t.id === task.id ? { ...t, id: data.id, _synced: true } : t
+                t.id === task.id ? { ...t, id: String(data.id), _synced: true } : t
               );
               await this.saveLocalTasks(updated);
             }
@@ -494,7 +494,7 @@ export class TaskService {
 
       if (data && data.length > 0) {
         const remoteTasks = data.map((t: any) => ({
-          id: t.id,
+          id: String(t.id),
           title: t.title,
           description: t.description,
           completed: t.completed,
