@@ -44,5 +44,5 @@ app-example
 
 #credentials
 taptap-377d9-firebase-adminsdk-fbsvc-fa08ecb002.json
-
+.env
 .env.local
