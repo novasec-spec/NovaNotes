@@ -16,7 +16,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { SupabaseBackup } from '../services/supabaseBackup';
 import { MungaBot } from '../components/MungaBot';
 
-const USER_ID = 'Njeri';
 const WHITE = '#FFFFFF';
 
 
@@ -173,7 +172,7 @@ useNotificationActions();
 />
 
 <Stack.Screen
-  name="CallScreen"
+  name="call"
   options={{
     headerShown:   false,
     presentation:  'fullScreenModal',  // covers the tab bar
@@ -181,7 +180,7 @@ useNotificationActions();
   }}
 />   
        <Stack.Screen name="IncomingCallScreen" options={{ presentation: 'fullScreenModal' }} />
-            <Stack.Screen name="notification" options={{ presentation: 'modal', animation: 'slide_from_right' }} />
+            <Stack.Screen name="premium" options={{ presentation: 'modal', animation: 'slide_from_right' }} />
           </Stack>
         </View>
 

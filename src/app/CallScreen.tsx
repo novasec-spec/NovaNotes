@@ -1,4 +1,4 @@
-// src/app/call/CallScreen.tsx
+// src/app/(tabs)/chat/CallScreen.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import Icon from 'react-native-vector-icons/Ionicons';
+import { Ionicons as Icon } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { RTCView, MediaStream } from 'react-native-webrtc';
 import CallService from '../services/CallService';
@@ -122,7 +122,7 @@ export default function CallScreen() {
       if (success) {
         setCallState('connected');
         startTimer();
-        
+
         // Setup event listeners
         CallService.onRoomEvents({
           onParticipantConnected: (participant) => {
@@ -223,7 +223,7 @@ export default function CallScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: '#1A1A2E' }]}>
         <StatusBar barStyle="light-content" />
-        
+
         {/* Remote Video (full screen) */}
         {remoteStream && (
           <RTCView
@@ -260,7 +260,7 @@ export default function CallScreen() {
 
           {params.type === 'video' && (
             <TouchableOpacity style={styles.controlButton} onPress={toggleCamera}>
-              <Icon name={isCameraOn ? 'camera' : 'camera-off'} size={28} color="#fff" />
+              <Icon name={isCameraOn ? 'camera' : 'camera-reverse'} size={28} color="#fff" />
             </TouchableOpacity>
           )}
 

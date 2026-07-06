@@ -5,6 +5,26 @@ const {
 
 const config = getSentryExpoConfig(__dirname);
 
+const { getDefaultConfig } = require("expo/metro-config");
+const resolveFrom = require("resolve-from");
+
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (
+    moduleName.startsWith("event-target-shim") &&
+    context.originModulePath.includes("react-native-webrtc")
+  ) {
+    // The nested event-target-shim@6 exports map has no "./index" subpath —
+    // only ".", "./es5", "./umd". Strip it so resolution hits "." instead.
+    const normalizedModuleName = moduleName === "event-target-shim/index"
+      ? "event-target-shim"
+      : moduleName;
+
+    const eventTargetShimPath = resolveFrom(context.originModulePath, normalizedModuleName);
+    return { filePath: eventTargetShimPath, type: "sourceFile" };
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 config.resolver.blockList = [
   // Block C++/native source trees in react-native (never needed by Metro)
   /node_modules\/react-native\/ReactCommon\/.*/,

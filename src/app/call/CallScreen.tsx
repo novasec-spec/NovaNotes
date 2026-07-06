@@ -13,10 +13,10 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useTheme } from '../../../contexts/ThemeContext';
-import { RTCView, MediaStream } from 'react-native-webrtc';
-import CallService from '../../../services/CallService';
+import { useTheme } from '../../contexts/ThemeContext';
+import CallService from '../../services/CallService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../../config/supabase';
 
 const { width, height } = Dimensions.get('window');
 
@@ -36,8 +36,8 @@ export default function CallScreen() {
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [isSpeakerOn, setIsSpeakerOn] = useState(false);
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [localStream, setLocalStream] = useState(null);
+  const [remoteStream, setRemoteStream] = useState(null);
 
   const durationInterval = useRef<NodeJS.Timeout | null>(null);
   const calleeName = params.calleeName || 'User';
@@ -57,7 +57,6 @@ export default function CallScreen() {
         // Caller initiates call
         const call = await CallService.initiateCall(params.calleeId || '');
         if (call) {
-          // Wait for callee to accept (polling or socket)
           await waitForAcceptance(call.id);
         }
       } else {
@@ -74,7 +73,6 @@ export default function CallScreen() {
   };
 
   const waitForAcceptance = async (callId: string) => {
-    // Poll for call status
     const checkStatus = async () => {
       try {
         const { data, error } = await supabase
@@ -86,7 +84,6 @@ export default function CallScreen() {
         if (error) throw error;
 
         if (data.status === 'connected') {
-          // Get token and join call
           const tokenData = await CallService.acceptCall(callId);
           if (tokenData) {
             await joinCall(tokenData);
@@ -100,7 +97,6 @@ export default function CallScreen() {
           return;
         }
 
-        // Check again in 2 seconds
         setTimeout(checkStatus, 2000);
       } catch (error) {
         console.error('Status check error:', error);
@@ -122,16 +118,12 @@ export default function CallScreen() {
         setCallState('connected');
         startTimer();
         
-        // Setup event listeners
         CallService.onRoomEvents({
           onParticipantConnected: (participant) => {
             console.log('Participant connected:', participant);
           },
           onTrackSubscribed: (track, participant) => {
-            // Handle remote track
-            if (track.kind === 'video' || track.kind === 'audio') {
-              // Add track to remote stream
-            }
+            console.log('Track subscribed:', track.kind);
           },
           onDisconnected: () => {
             endCall();

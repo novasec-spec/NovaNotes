@@ -23,15 +23,19 @@
       }
     },
     "android": {
+      "splash": {
+        "image": "./assets/images/splash-icon.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#111827"
+      },
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "jsEngine": "jsc",
+      "jsEngine": "hermes",
       "googleServicesFile": "./google-services.json",
-      "enableBackgroundAudio": true,
       "package": "com.novasec.notes",
       "edgeToEdgeEnabled": true,
       "softwareKeyboardLayoutMode": "resize",
@@ -91,14 +95,23 @@
           ]
         }
       ],
-
       "expo-audio",
-      ["@sentry/react-native/expo", {
-        "url": "https://sentry.io/",
-        "project": "novasec",
-        "organization": "novasec-z3"
-      }]
-
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "novasec",
+          "organization": "novasec-z3"
+        }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera",
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone"
+        }
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
