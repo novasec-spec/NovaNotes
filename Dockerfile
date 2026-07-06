@@ -1,4 +1,5 @@
 FROM livekit/livekit-server:latest
+COPY livekit.yaml /etc/livekit.yaml
 
 ENV LIVEKIT_KEYS="API9109947220747f8a:3Sf5sEC8etXj977xe3gs8z7ZDKLOXUC8SfoECdrV86Y="
 ENV LIVEKIT_PORT=7880
@@ -9,3 +10,6 @@ ENV LIVEKIT_RTC_UDP_PORT=7883
 EXPOSE 7880 7881 7882 7883
 
 CMD ["--config", "/etc/livekit.yaml"]
+
+
+
