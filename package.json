@@ -1,6 +1,6 @@
 {
   "name": "novanote",
-   "main": "index.js",
+  "main": "index.js",
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
@@ -45,7 +45,6 @@
     "expo-linking": "~8.0.12",
     "expo-location": "~19.0.8",
     "expo-notifications": "~0.32.17",
-    "expo-permissions": "^14.4.0",
     "expo-router": "~6.0.23",
     "expo-secure-store": "~15.0.8",
     "expo-sensors": "~15.0.8",
