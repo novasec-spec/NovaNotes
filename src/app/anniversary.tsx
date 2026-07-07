@@ -43,7 +43,12 @@ export default function AnniversaryScreen() {
     })();
   }, []);
 
-  const onChangeDate = useCallback((event: any, selected?: Date) => {
+
+
+
+ 
+
+ const onChangeDate = useCallback((event: any, selected?: Date) => {
     if (Platform.OS === 'android') setShowPicker(false);
     if (event.type === 'dismissed') return;
     if (selected) setDate(selected);

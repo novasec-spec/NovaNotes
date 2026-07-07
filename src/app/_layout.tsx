@@ -12,12 +12,20 @@ import { NotificationProvider } from '../contexts/NotificationContext';
 import { useNotificationActions } from '../hooks/useNotificationActions';
 import { PremiumProvider } from '../contexts/PremiumContext';
 import { useAuth } from '../contexts/AuthContext';
+import NotificationHandler from '../services/NotificationHandler';
+import { useWidgetForegroundSync } from '../widgets/useWidgetForegroundSync';
 
 import { SupabaseBackup } from '../services/supabaseBackup';
 import { MungaBot } from '../components/MungaBot';
 
-const WHITE = '#FFFFFF';
+try {
+  const { registerGlobals } = require('@livekit/react-native');
+  registerGlobals();
+} catch (e) {
+  console.warn('LiveKit native module unavailable — build a dev client to enable calls.', e);
+}
 
+const WHITE = '#FFFFFF';
 
 Sentry.init({
   dsn: 'https://7505066db21919d4bdf65fb56ebdad8e@o4511667237093376.ingest.de.sentry.io/4511667330809936',
@@ -58,6 +66,9 @@ function SecretZone({ onUnlock, isDevMode }: { onUnlock: () => void; isDevMode: 
     }
   };
 
+
+
+
   useEffect(() => { return () => { if (tapTimer.current) clearTimeout(tapTimer.current); }; }, []);
   return (
     <Pressable style={styles.secretZone} onPress={handleTap} hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}>
@@ -70,6 +81,8 @@ function DevToast({ visible }: { visible: boolean }) {
   const translateY = useRef(new Animated.Value(-60)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
+
+
 
   useEffect(() => {
     if (visible) {
@@ -97,6 +110,7 @@ function DevToast({ visible }: { visible: boolean }) {
 
 function InnerLayout() {
 useNotificationActions();
+useWidgetForegroundSync();
   const [isMungaVisible, setIsMungaVisible] = useState(true);
   const [isMungaOpen, setIsMungaOpen] = useState(false);
   const [responseToast, setResponseToast] = useState<string | null>(null);
@@ -136,6 +150,7 @@ useNotificationActions();
     } catch (error) { console.error('Error checking secret access:', error); }
   };
 
+
   const handleSecretUnlock = useCallback(async () => {
     try {
       const currentAccess = await AsyncStorage.getItem('dev_access');
@@ -150,6 +165,7 @@ useNotificationActions();
       }
     } catch (error) { console.error('Secret unlock error:', error); }
   }, []);
+
 
   useEffect(() => { checkForUpdates(); }, []);
   useEffect(() => { setupApp(); checkSecretAccess(); }, []);
@@ -172,14 +188,14 @@ useNotificationActions();
 />
 
 <Stack.Screen
-  name="call"
+  name="/call/IncomingScreen"
   options={{
     headerShown:   false,
     presentation:  'fullScreenModal',  // covers the tab bar
     animation:     'fade',
   }}
 />   
-       <Stack.Screen name="IncomingCallScreen" options={{ presentation: 'fullScreenModal' }} />
+       <Stack.Screen name="/call/CallScreen" options={{ presentation: 'fullScreenModal' }} />
             <Stack.Screen name="premium" options={{ presentation: 'modal', animation: 'slide_from_right' }} />
           </Stack>
         </View>

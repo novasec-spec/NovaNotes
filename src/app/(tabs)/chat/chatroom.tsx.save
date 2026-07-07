@@ -1714,6 +1714,7 @@ const stopRecording = async () => {
               <Icon name="call-outline" size={22} color={WHITE} />
             </TouchableOpacity>
            <TouchableOpacity
+
   style={s.hdrBtn}
   onPress={() => {
     router.push({
