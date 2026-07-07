@@ -58,6 +58,7 @@ import { useNotification } from '../../../contexts/NotificationContext';
 import { useRouter, router } from 'expo-router';
 import { useDailyGreeting } from '../../../hooks/useDailyGreeting';
 import { useMoodNotifications } from '../../../hooks/useMoodNotifications';
+import { syncBubblesWidget } from '../../../widgets/syncBubblesWidget';
 
 const { width: W } = Dimensions.get('window');
 
@@ -260,6 +261,7 @@ function BadgeUnlockModal({
 }
 
 export default function HomeScreen() {
+syncBubblesWidget();
   const { sendGreetingOnAppLoad, sendGreeting, greetingSent } = useDailyGreeting();
   const { processScheduledChecks, getTodayMood, handleMoodFromNotification } = useMoodNotifications();
   const router = useRouter();
