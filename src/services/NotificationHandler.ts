@@ -81,7 +81,7 @@ export class NotificationHandler {
           const tokenData = await CallService.acceptCall(data.callId);
           if (tokenData) {
             router.push({
-              pathname: '/call/CallScreen',
+              pathname: '/CallScreen',
               params: {
                 callId: data.callId,
                 calleeId: data.callerId,
@@ -99,7 +99,7 @@ export class NotificationHandler {
         // Default tap (opened the app) — show the full incoming-call screen
         // so the user can still see who's calling before deciding.
         router.push({
-          pathname: '/call/IncomingCallScreen',
+          pathname: '/IncomingCallScreen',
           params: {
             callId: data.callId,
             callerId: data.callerId,
@@ -114,7 +114,7 @@ export class NotificationHandler {
 
       case 'call_accepted':
         router.push({
-          pathname: '/call/CallScreen',
+          pathname: '/CallScreen',
           params: {
             callId: data.callId,
             calleeId: data.calleeId,

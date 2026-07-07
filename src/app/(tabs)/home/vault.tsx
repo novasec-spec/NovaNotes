@@ -26,7 +26,7 @@ let NetInfo: any = null;
 try { NetInfo = require('@react-native-community/netinfo').default; } catch {}
 
 let supabase: any = null;
-try { supabase = require('../../services/supabase').supabase; } catch {}
+try { supabase = require('../../../config/supabase').supabase; } catch {}
 
 const { width: W } = Dimensions.get('window');
 

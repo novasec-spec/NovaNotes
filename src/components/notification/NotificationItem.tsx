@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatDistanceToNow } from 'date-fns';
-import { AppNotification } from '../types/notifications';
+import { AppNotification } from '../../types/notifications';
 import * as Haptics from 'expo-haptics';
 
 interface NotificationItemProps {

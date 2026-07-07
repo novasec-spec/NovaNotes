@@ -188,14 +188,14 @@ useWidgetForegroundSync();
 />
 
 <Stack.Screen
-  name="/call/IncomingScreen"
+  name="/IncomingScreen"
   options={{
     headerShown:   false,
     presentation:  'fullScreenModal',  // covers the tab bar
     animation:     'fade',
   }}
 />   
-       <Stack.Screen name="/call/CallScreen" options={{ presentation: 'fullScreenModal' }} />
+       <Stack.Screen name="/CallScreen" options={{ presentation: 'fullScreenModal' }} />
             <Stack.Screen name="premium" options={{ presentation: 'modal', animation: 'slide_from_right' }} />
           </Stack>
         </View>
