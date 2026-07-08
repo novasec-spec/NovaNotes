@@ -1,4 +1,5 @@
 // src/widgets/syncBubblesWidget.ts
+"use no memo";
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import { Platform } from 'react-native';
 import { BubblesWidget } from './BubblesWidget';

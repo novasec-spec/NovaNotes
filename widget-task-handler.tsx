@@ -6,7 +6,7 @@
 // `previewImage` you configured in app.json forever because nothing ever
 // told it what to actually render, and no element had a `clickAction` so
 // taps did nothing.
-
+"use no memo";
 import React from 'react';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
 import { BubblesWidget } from './src/widgets/BubblesWidget';

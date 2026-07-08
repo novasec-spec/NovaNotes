@@ -24,7 +24,7 @@ const TAB_CONFIG: Record<string, { icon: string; iconActive: string; color: stri
 
 // Helper to format the label
 const getTabLabel = (name: string) => {
-  if (name === 'home') return 'Home';
+  if (name === 'index') return 'Home';
   return name.charAt(0).toUpperCase() + name.slice(1);
 };
 
@@ -201,7 +201,7 @@ useEffect(() => {
           animation: 'fade',
         }}
       >
-        <Tabs.Screen name="home" options={{ title: 'Home' }} />
+        <Tabs.Screen name="index" options={{ title: 'Home' }} />
         <Tabs.Screen name="notes" options={{ title: 'Notes' }} />
         <Tabs.Screen name="memories" options={{ title: 'Memories' }} />
         <Tabs.Screen name="vibe" options={{ title: 'Vibe' }} />

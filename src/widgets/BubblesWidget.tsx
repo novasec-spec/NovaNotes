@@ -1,11 +1,12 @@
 // src/widgets/BubblesWidget.tsx
+"use no memo";
 import React from 'react';
 import { FlexWidget, TextWidget, IconWidget } from 'react-native-android-widget';
 import type { WidgetData } from './getWidgetData';
 
 // Change this if your "new note" screen lives at a different deep-link path.
 // Requires `"scheme": "novanotes"` in app.json — see README-WIDGET.md.
-const NEW_NOTE_DEEP_LINK = 'novanotes://notes';
+const NEW_NOTE_DEEP_LINK = 'novanote://notes';
 
 interface Props extends WidgetData {
   /** Current widget size in dp, passed from the task handler so the layout can adapt. */
@@ -75,7 +76,7 @@ export function BubblesWidget(props: Props) {
           marginTop: 8,
         }}
       >
-        <IconWidget font="material" icon="add" size={16} color="#ffffff" />
+        <IconWidget font="material" icon="📋" size={16} color="#ffffff" />
         <TextWidget text="Take a note" style={{ fontSize: 13, color: '#ffffff', fontWeight: 'bold', marginStart: 4 }} />
       </FlexWidget>
     </FlexWidget>

@@ -18,12 +18,8 @@ import { useWidgetForegroundSync } from '../widgets/useWidgetForegroundSync';
 import { SupabaseBackup } from '../services/supabaseBackup';
 import { MungaBot } from '../components/MungaBot';
 
-try {
-  const { registerGlobals } = require('@livekit/react-native');
-  registerGlobals();
-} catch (e) {
-  console.warn('LiveKit native module unavailable — build a dev client to enable calls.', e);
-}
+import { registerGlobals } from '@livekit/react-native';
+registerGlobals();
 
 const WHITE = '#FFFFFF';
 
@@ -116,14 +112,14 @@ useWidgetForegroundSync();
   const [responseToast, setResponseToast] = useState<string | null>(null);
   const [isSecretVisible, setIsSecretVisible] = useState(false);
   const [showDevToast, setShowDevToast] = useState(false);
+  const { user } = useAuth();
+
+  const USER_ID = user?.username || user?.email || 'Guest';
   
   const backup = useRef(new SupabaseBackup(USER_ID)).current;
   const toggleMunga = () => setIsMungaOpen(!isMungaOpen);
 
 
-  const { user } = useAuth();
-
-  const USER_ID = user?.username || user?.email || 'Guest';
 
   const checkForUpdates = async () => {
     try {
@@ -167,7 +163,11 @@ useWidgetForegroundSync();
   }, []);
 
 
-  useEffect(() => { checkForUpdates(); }, []);
+useEffect(() => {
+  if (!__DEV__) {
+    checkForUpdates();
+  }
+}, []);
   useEffect(() => { setupApp(); checkSecretAccess(); }, []);
 
   return (
@@ -188,14 +188,14 @@ useWidgetForegroundSync();
 />
 
 <Stack.Screen
-  name="/IncomingScreen"
+  name="IncomingScreen"
   options={{
     headerShown:   false,
     presentation:  'fullScreenModal',  // covers the tab bar
     animation:     'fade',
   }}
 />   
-       <Stack.Screen name="/CallScreen" options={{ presentation: 'fullScreenModal' }} />
+       <Stack.Screen name="CallScreen" options={{ presentation: 'fullScreenModal' }} />
             <Stack.Screen name="premium" options={{ presentation: 'modal', animation: 'slide_from_right' }} />
           </Stack>
         </View>

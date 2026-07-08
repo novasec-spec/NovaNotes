@@ -591,7 +591,7 @@ interface Props {
 export default function ChatRoom({ user, otherUser, onBack }: Props) {
   const { colors, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
-
+  const [isInitiating, setIsInitiating] = useState(false);
   // ── State ──────────────────────────────────────────────────────────────────
   const [msgs, dispatch] = useReducer(msgReducer, []);
   const [inputText, setInputText] = useState('');
@@ -1713,13 +1713,29 @@ const stopRecording = async () => {
             >
               <Icon name="call-outline" size={22} color={WHITE} />
             </TouchableOpacity>
-           <TouchableOpacity
+
+<TouchableOpacity
   style={s.hdrBtn}
-  onPress={() => {
+  disabled={isInitiating}
+  onPress={async () => {
+    if (isInitiating) return;
+    setIsInitiating(true);
+
+    const call = await CallService.initiateCall(otherUser.id, 'video');
+
+    setIsInitiating(false);
+
+    if (!call) {
+      // initiateCall already logs the real reason via console.error /
+      // Sentry — surface something to the user here, e.g.:
+      // Alert.alert('Call failed', 'Could not start the call. Try again.');
+      return;
+    }
+
     router.push({
       pathname: '/CallScreen',
       params: {
-        callId: 'some-id',
+        callId: call.id, // ← the real id from Supabase, not a placeholder
         calleeId: otherUser.id,
         calleeName: otherUser.username,
         calleeAvatar: otherUser.avatar_url ?? '',
@@ -1729,8 +1745,13 @@ const stopRecording = async () => {
     });
   }}
 >
-  <Icon name="videocam-outline" size={22} color={WHITE} />
+  {isInitiating ? (
+    <ActivityIndicator size="small" color="#fff" />
+  ) : (
+    <Icon name="videocam" size={24} color="#fff" />
+  )}
 </TouchableOpacity>
+
             <TouchableOpacity
               style={s.hdrBtn}
               onPress={() => setShowSearch(v => !v)}
