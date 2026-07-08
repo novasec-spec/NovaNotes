@@ -14,6 +14,7 @@ const SCREEN_MAP: Record<string, string> = {
   home: 'home',
   settings: 'settings',
   moodmusic: 'moodmusic',
+ incoming_call: 'IncomingCallScreen',
 };
 
 export function useDeepLinkNavigation() {
@@ -66,6 +67,22 @@ export function useDeepLinkNavigation() {
     } as any);
   };
 
+  // Navigate to chat
+  const navigateToCall = (userId: string, message?: string) => {
+    router.push({
+      pathname: '/IncomingCallScreen',
+       params: {
+            callId: data.callId,
+            callerId: data.callerId,
+            callerName: data.callerName,
+            callerAvatar: data.callerAvatar,
+            roomName: data.roomName,
+            type: data.callType || 'video',
+          },
+    } as any);
+  };
+
+
   // Navigate to notifications
   const navigateToNotifications = (filter?: string) => {
     router.push({
@@ -84,6 +101,7 @@ export function useDeepLinkNavigation() {
     navigateToChat,
     navigateToTask,
     navigateToProfile,
+    navigateToCall,
     navigateToNotifications,
     navigateToSettings,
     deepLinkHandler,

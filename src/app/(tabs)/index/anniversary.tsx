@@ -19,7 +19,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useTheme } from '../contexts/ThemeContext'; // ⚠️ adjust relative path to match this file's actual location
+import { useTheme } from '../../../contexts/ThemeContext'; // ⚠️ adjust relative path to match this file's actual location
 
 export default function AnniversaryScreen() {
   const router = useRouter();

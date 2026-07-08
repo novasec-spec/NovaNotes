@@ -161,7 +161,6 @@ function CustomTabBar({ state, navigation }: any) {
 
 // ── Tabs Layout ────────────────────────────────
 export default function TabsLayout() {
-  const { isSecretVisible } = useContext(AppContext);
   const router = useRouter();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 

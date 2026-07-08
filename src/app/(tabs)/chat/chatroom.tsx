@@ -67,7 +67,9 @@ import ReAnimated, {
   FadeIn, FadeOut, SlideInRight, SlideOutLeft,
   Layout, ZoomIn, ZoomOut,
 } from 'react-native-reanimated';
-import { CallService } from '../../../services/CallService';
+import { useCall } from '../../../contexts/CallContext';
+import { Ionicons } from '@expo/vector-icons';
+
 
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -126,6 +128,8 @@ type MsgAction =
   | { type: 'REPLACE_OPTIMISTIC'; payload: { oid: string; real: ChatMessage } }
   | { type: 'PREPEND'; payload: ChatMessage[] }
   | { type: 'BULK_DELETE'; payload: string[] };
+
+
 
 function msgReducer(state: ChatMessage[], action: MsgAction): ChatMessage[] {
   switch (action.type) {
@@ -293,6 +297,7 @@ function ChatAvatar({ uri, name, userId, size = 40, online, onPress }: {
     </TouchableOpacity>
   );
 }
+
 
 // ── Typing dots ───────────────────────────────────────────────────────────────
 function TypingDots({ color = WHITE }: { color?: string }) {
@@ -591,7 +596,6 @@ interface Props {
 export default function ChatRoom({ user, otherUser, onBack }: Props) {
   const { colors, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
-  const [isInitiating, setIsInitiating] = useState(false);
   // ── State ──────────────────────────────────────────────────────────────────
   const [msgs, dispatch] = useReducer(msgReducer, []);
   const [inputText, setInputText] = useState('');
@@ -625,6 +629,9 @@ export default function ChatRoom({ user, otherUser, onBack }: Props) {
   const [isOffline, setIsOffline] = useState(false);
   const [showScrollFab, setShowScrollFab] = useState(false);
   const [emojiPickerVisible, setEmojiPickerVisible] = useState(false);
+  const { startCall, nativeModulesAvailable, state } = useCall();
+  const otherUserId = otherUser.id; // Your chat partner's ID
+  const otherUserName = otherUser.username; // Your chat partner's name
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const listRef = useRef<FlatList>(null);
@@ -642,8 +649,6 @@ export default function ChatRoom({ user, otherUser, onBack }: Props) {
       ? insets.bottom + TAB_BAR_HEIGHT + 10
       : TAB_BAR_HEIGHT + 16;
   };
-
-
 
   // ── getOrCreateChat ──────────────────────────────────────────────────────
   const getOrCreateChat = async () => {
@@ -1713,43 +1718,33 @@ const stopRecording = async () => {
             >
               <Icon name="call-outline" size={22} color={WHITE} />
             </TouchableOpacity>
-
 <TouchableOpacity
-  style={s.hdrBtn}
-  disabled={isInitiating}
-  onPress={async () => {
-    if (isInitiating) return;
-    setIsInitiating(true);
-
-    const call = await CallService.initiateCall(otherUser.id, 'video');
-
-    setIsInitiating(false);
-
-    if (!call) {
-      // initiateCall already logs the real reason via console.error /
-      // Sentry — surface something to the user here, e.g.:
-      // Alert.alert('Call failed', 'Could not start the call. Try again.');
+  onPress={() => {
+    if (!nativeModulesAvailable) {
+      Alert.alert('Build Required', 'Please build the app to make calls');
       return;
     }
-
-    router.push({
-      pathname: '/CallScreen',
-      params: {
-        callId: call.id, // ← the real id from Supabase, not a placeholder
-        calleeId: otherUser.id,
-        calleeName: otherUser.username,
-        calleeAvatar: otherUser.avatar_url ?? '',
-        type: 'video',
-        isCaller: 'true',
-      },
-    });
+    startCall(otherUserId, otherUserName, false); // false = voice call
   }}
+  disabled={state !== 'idle'}
+  style={styles.callButton}
 >
-  {isInitiating ? (
-    <ActivityIndicator size="small" color="#fff" />
-  ) : (
-    <Icon name="videocam" size={24} color="#fff" />
-  )}
+  <Ionicons name="call-outline" size={24} color={state === 'idle' ? '#007AFF' : '#ccc'} />
+</TouchableOpacity>
+
+// For video call variant
+<TouchableOpacity
+  onPress={() => {
+    if (!nativeModulesAvailable) {
+      Alert.alert('Build Required', 'Please build the app to make video calls');
+      return;
+    }
+    startCall(otherUserId, otherUserName, true); // true = video call
+  }}
+  disabled={state !== 'idle'}
+  style={styles.callButton}
+>
+  <Ionicons name="videocam-outline" size={24} color={state === 'idle' ? '#007AFF' : '#ccc'} />
 </TouchableOpacity>
 
             <TouchableOpacity
