@@ -126,7 +126,8 @@
             "extraMavenRepos": [
               "https://jitpack.io"
             ],
-            "enableMinifyInReleaseBuilds": true
+            "enableMinifyInReleaseBuilds": false,
+             "enableShrinkResourcesInReleaseBuilds": false
           },
           "ios": {
             "useFrameworks": "static"
