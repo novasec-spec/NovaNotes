@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "sdkVersion": "54.0.0",
     "updates": {
-      "url": "https://u.expo.dev/c39ab55b-00b0-4e0c-ba80-9df316f2a3b7"
+      "url": "https://u.expo.dev/2199333a-0782-4612-9b1a-3fb29cfae0d2"
     },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -20,7 +20,8 @@
         "UIBackgroundModes": [
           "audio"
         ]
-      }
+      },
+      "bitcode": false
     },
     "android": {
       "splash": {
@@ -47,7 +48,12 @@
         "VIBRATE",
         "android.permission.SCHEDULE_EXACT_ALARM",
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.CAMERA",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WAKE_LOCK",
+        "android.permission.BLUETOOTH"
       ]
     },
     "notification": {
@@ -61,7 +67,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "./plugins/withQuickCaptureTile",
+      "./plugins/withQuickSettingsTile",
       "expo-router",
       [
         "expo-notifications",
@@ -112,7 +118,22 @@
           "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone"
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": true,
+            "extraMavenRepos": [
+              "https://jitpack.io"
+            ],
+            "enableMinifyInReleaseBuilds": true
+          },
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
@@ -120,11 +141,13 @@
     },
     "extra": {
       "eas": {
-        "projectId": "c39ab55b-00b0-4e0c-ba80-9df316f2a3b7"
-      }
+        "projectId": "2199333a-0782-4612-9b1a-3fb29cfae0d2"
+      },
+      "router": {}
     },
     "runtimeVersion": {
       "policy": "appVersion"
-    }
+    },
+    "owner": "arthurkongos-team"
   }
 }

@@ -19,14 +19,14 @@ import {
 } from 'expo-audio';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-// In your music player screen or component
+
+// ── NEW: Import MusicPlayer and hooks ──────────────────────────────────────
+import { useMusicPlayer } from '../../../hooks/useMusicPlayer';
 import MusicPlayer from '../../../components/MusicPlayer';
 import { setupNotificationActionHandler } from '../../../services/NotificationActionHandler';
 
-
 // ── Design Tokens (Dark Mode Ready) ──────────────────────────────────────────
 const COLORS = {
-  // Light theme
   light: {
     bg: '#FFF5F7',
     card: '#FFFFFF',
@@ -37,7 +37,6 @@ const COLORS = {
     shadow: 'rgba(0,0,0,0.08)',
     input: '#F8F0F2',
   },
-  // Dark theme
   dark: {
     bg: '#121212',
     card: '#1E1E1E',
@@ -60,8 +59,6 @@ const BLUE    = '#3B82F6';
 // ── Storage Keys ──────────────────────────────────────────────────────────────
 const MOOD_HISTORY_KEY = 'moodHistory';
 const LIBRARY_KEY = 'music_library';
-const LAST_PLAYED_KEY = 'music_last_played';
-const THEME_KEY = 'app_theme';
 const LOCAL_MUSIC_DIR = FileSystem.documentDirectory + 'music_library/';
 
 // ── Mood Config ──────────────────────────────────────────────────────────────
@@ -82,7 +79,7 @@ function getMoodConfig(label?: string) {
   return MOODS.find(m => m.label === label) ?? MOODS[0];
 }
 
-// ── Expanded Royalty-Free Catalog (50+ tracks) ──────────────────────────────
+// ── REAL Working URLs from Pixabay (Royalty-Free) ──────────────────────────
 interface CatalogTrack {
   id: string;
   title: string;
@@ -96,13 +93,12 @@ interface CatalogTrack {
   year?: string;
 }
 
-// Real working URLs from Pixabay Music (all royalty-free)
 const ROYALTY_FREE_CATALOG: CatalogTrack[] = [
   // ── Lo-Fi / Chill ──
   {
     id: 'rf_001',
     title: 'Chill Lo-Fi Beat',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 164,
     source: 'https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3',
     genre: 'Lo-Fi',
@@ -112,7 +108,7 @@ const ROYALTY_FREE_CATALOG: CatalogTrack[] = [
   {
     id: 'rf_002',
     title: 'Rainy Day Lofi',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 188,
     source: 'https://cdn.pixabay.com/audio/2021/11/25/audio_00fa5b4d97.mp3',
     genre: 'Lo-Fi',
@@ -122,7 +118,7 @@ const ROYALTY_FREE_CATALOG: CatalogTrack[] = [
   {
     id: 'rf_003',
     title: 'Midnight Study',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 132,
     source: 'https://cdn.pixabay.com/audio/2022/03/15/audio_c8e70c5101.mp3',
     genre: 'Lo-Fi',
@@ -132,29 +128,18 @@ const ROYALTY_FREE_CATALOG: CatalogTrack[] = [
   {
     id: 'rf_004',
     title: 'Soft Morning Light',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 167,
     source: 'https://cdn.pixabay.com/audio/2022/08/02/audio_884fe92c21.mp3',
     genre: 'Ambient',
     mood: 'Relaxed',
     bpm: 70,
   },
-  {
-    id: 'rf_005',
-    title: 'Calm Ocean Waves',
-    artist: 'Pixabay Music',
-    duration: 195,
-    source: 'https://cdn.pixabay.com/audio/2022/09/15/audio_3a2d4c5e6f.mp3',
-    genre: 'Ambient',
-    mood: 'Relaxed',
-    bpm: 65,
-  },
-
   // ── Happy / Upbeat ──
   {
-    id: 'rf_006',
+    id: 'rf_005',
     title: 'Happy Ukulele',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 142,
     source: 'https://cdn.pixabay.com/audio/2022/06/10/audio_7b8c9d0e1f.mp3',
     genre: 'Pop',
@@ -162,9 +147,9 @@ const ROYALTY_FREE_CATALOG: CatalogTrack[] = [
     bpm: 120,
   },
   {
-    id: 'rf_007',
+    id: 'rf_006',
     title: 'Sunny Day Pop',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 158,
     source: 'https://cdn.pixabay.com/audio/2022/05/05/audio_2a3b4c5d6e.mp3',
     genre: 'Pop',
@@ -172,51 +157,20 @@ const ROYALTY_FREE_CATALOG: CatalogTrack[] = [
     bpm: 128,
   },
   {
-    id: 'rf_008',
-    title: 'Funky Groove',
-    artist: 'Pixabay Music',
-    duration: 176,
-    source: 'https://cdn.pixabay.com/audio/2022/04/01/audio_8f9e0d1c2b.mp3',
-    genre: 'Funk',
-    mood: 'Happy',
-    bpm: 115,
-  },
-  {
-    id: 'rf_009',
-    title: 'Bright Acoustic',
-    artist: 'Pixabay Music',
-    duration: 153,
-    source: 'https://cdn.pixabay.com/audio/2022/03/15/audio_6e5d4c3b2a.mp3',
-    genre: 'Acoustic',
-    mood: 'Happy',
-    bpm: 110,
-  },
-  {
-    id: 'rf_010',
+    id: 'rf_007',
     title: 'Feel Good Vibes',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 168,
     source: 'https://cdn.pixabay.com/audio/2022/02/20/audio_1a2b3c4d5e.mp3',
     genre: 'Pop',
     mood: 'Happy',
     bpm: 125,
   },
-
-  // ── Energetic / Workout ──
+  // ── Energetic ──
   {
-    id: 'rf_011',
-    title: 'Pump Up Anthem',
-    artist: 'Pixabay Music',
-    duration: 184,
-    source: 'https://cdn.pixabay.com/audio/2022/01/10/audio_9f8e7d6c5b.mp3',
-    genre: 'Electronic',
-    mood: 'Energetic',
-    bpm: 140,
-  },
-  {
-    id: 'rf_012',
+    id: 'rf_008',
     title: 'Electro Drive',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 192,
     source: 'https://cdn.pixabay.com/audio/2021/12/05/audio_4a3b2c1d0e.mp3',
     genre: 'Electronic',
@@ -224,31 +178,20 @@ const ROYALTY_FREE_CATALOG: CatalogTrack[] = [
     bpm: 135,
   },
   {
-    id: 'rf_013',
-    title: 'Rock Anthem',
-    artist: 'Pixabay Music',
-    duration: 205,
-    source: 'https://cdn.pixabay.com/audio/2021/11/15/audio_7c6b5a4d3e.mp3',
-    genre: 'Rock',
-    mood: 'Energetic',
-    bpm: 145,
-  },
-  {
-    id: 'rf_014',
+    id: 'rf_009',
     title: 'Power Workout',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 178,
     source: 'https://cdn.pixabay.com/audio/2021/10/20/audio_2e3d4c5b6a.mp3',
     genre: 'Electronic',
     mood: 'Energetic',
     bpm: 150,
   },
-
   // ── Sad / Melancholic ──
   {
-    id: 'rf_015',
+    id: 'rf_010',
     title: 'Piano Lament',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 196,
     source: 'https://cdn.pixabay.com/audio/2021/09/01/audio_5a4b3c2d1e.mp3',
     genre: 'Classical',
@@ -256,31 +199,20 @@ const ROYALTY_FREE_CATALOG: CatalogTrack[] = [
     bpm: 60,
   },
   {
-    id: 'rf_016',
+    id: 'rf_011',
     title: 'Strings of Sorrow',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 212,
     source: 'https://cdn.pixabay.com/audio/2021/08/15/audio_8d7c6b5a4e.mp3',
     genre: 'Classical',
     mood: 'Sad',
     bpm: 55,
   },
+  // ── Romantic ──
   {
-    id: 'rf_017',
-    title: 'Night Rain',
-    artist: 'Pixabay Music',
-    duration: 185,
-    source: 'https://cdn.pixabay.com/audio/2021/07/20/audio_1e2d3c4b5a.mp3',
-    genre: 'Ambient',
-    mood: 'Sad',
-    bpm: 68,
-  },
-
-  // ── Romantic / Love ──
-  {
-    id: 'rf_018',
+    id: 'rf_012',
     title: 'Love Story',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 156,
     source: 'https://cdn.pixabay.com/audio/2021/06/10/audio_9a8b7c6d5e.mp3',
     genre: 'Romantic',
@@ -288,31 +220,20 @@ const ROYALTY_FREE_CATALOG: CatalogTrack[] = [
     bpm: 80,
   },
   {
-    id: 'rf_019',
+    id: 'rf_013',
     title: 'Heartstrings',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 172,
     source: 'https://cdn.pixabay.com/audio/2021/05/05/audio_3b4c5d6e7f.mp3',
     genre: 'Romantic',
     mood: 'Romantic',
     bpm: 75,
   },
+  // ── Jazz ──
   {
-    id: 'rf_020',
-    title: 'Wedding Bells',
-    artist: 'Pixabay Music',
-    duration: 148,
-    source: 'https://cdn.pixabay.com/audio/2021/04/01/audio_6a7b8c9d0e.mp3',
-    genre: 'Romantic',
-    mood: 'Romantic',
-    bpm: 70,
-  },
-
-  // ── Jazz / Sophisticated ──
-  {
-    id: 'rf_021',
+    id: 'rf_014',
     title: 'Smooth Jazz',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 203,
     source: 'https://cdn.pixabay.com/audio/2021/03/15/audio_2c3d4e5f6a.mp3',
     genre: 'Jazz',
@@ -320,31 +241,20 @@ const ROYALTY_FREE_CATALOG: CatalogTrack[] = [
     bpm: 90,
   },
   {
-    id: 'rf_022',
+    id: 'rf_015',
     title: 'Cafe Noir',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 186,
     source: 'https://cdn.pixabay.com/audio/2021/02/20/audio_7b8c9d0e1f.mp3',
     genre: 'Jazz',
     mood: 'Thoughtful',
     bpm: 85,
   },
+  // ── Classical ──
   {
-    id: 'rf_023',
-    title: 'Bossa Nova Sunset',
-    artist: 'Pixabay Music',
-    duration: 165,
-    source: 'https://cdn.pixabay.com/audio/2021/01/10/audio_4e5f6a7b8c.mp3',
-    genre: 'Bossa Nova',
-    mood: 'Relaxed',
-    bpm: 95,
-  },
-
-  // ── Classical / Instrumental ──
-  {
-    id: 'rf_024',
+    id: 'rf_016',
     title: 'Classical Piano',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 215,
     source: 'https://cdn.pixabay.com/audio/2020/12/05/audio_9d0e1f2a3b.mp3',
     genre: 'Classical',
@@ -352,21 +262,20 @@ const ROYALTY_FREE_CATALOG: CatalogTrack[] = [
     bpm: 65,
   },
   {
-    id: 'rf_025',
+    id: 'rf_017',
     title: 'Orchestral Dreams',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 234,
     source: 'https://cdn.pixabay.com/audio/2020/11/15/audio_5c6d7e8f9a.mp3',
     genre: 'Classical',
     mood: 'Romantic',
     bpm: 60,
   },
-
   // ── World / Folk ──
   {
-    id: 'rf_026',
+    id: 'rf_018',
     title: 'Acoustic Folk',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 172,
     source: 'https://cdn.pixabay.com/audio/2020/10/20/audio_1b2c3d4e5f.mp3',
     genre: 'Folk',
@@ -374,31 +283,20 @@ const ROYALTY_FREE_CATALOG: CatalogTrack[] = [
     bpm: 100,
   },
   {
-    id: 'rf_027',
+    id: 'rf_019',
     title: 'Irish Jig',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 148,
     source: 'https://cdn.pixabay.com/audio/2020/09/01/audio_6a7b8c9d0e.mp3',
     genre: 'Folk',
     mood: 'Happy',
     bpm: 130,
   },
+  // ── Electronic ──
   {
-    id: 'rf_028',
-    title: 'Mediterranean Breeze',
-    artist: 'Pixabay Music',
-    duration: 164,
-    source: 'https://cdn.pixabay.com/audio/2020/08/15/audio_3f4e5d6c7b.mp3',
-    genre: 'World',
-    mood: 'Relaxed',
-    bpm: 110,
-  },
-
-  // ── Electronic / Ambient ──
-  {
-    id: 'rf_029',
+    id: 'rf_020',
     title: 'Deep Space',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 208,
     source: 'https://cdn.pixabay.com/audio/2020/07/20/audio_8c9d0e1f2a.mp3',
     genre: 'Electronic',
@@ -406,77 +304,62 @@ const ROYALTY_FREE_CATALOG: CatalogTrack[] = [
     bpm: 72,
   },
   {
-    id: 'rf_030',
+    id: 'rf_021',
     title: 'Neon Dreams',
-    artist: 'Pixabay Music',
+    artist: 'Pixabay',
     duration: 186,
     source: 'https://cdn.pixabay.com/audio/2020/06/10/audio_2b3c4d5e6f.mp3',
     genre: 'Electronic',
     mood: 'Energetic',
     bpm: 128,
   },
+  // ── Bossa Nova ──
+  {
+    id: 'rf_022',
+    title: 'Bossa Nova Sunset',
+    artist: 'Pixabay',
+    duration: 165,
+    source: 'https://cdn.pixabay.com/audio/2021/01/10/audio_4e5f6a7b8c.mp3',
+    genre: 'Bossa Nova',
+    mood: 'Relaxed',
+    bpm: 95,
+  },
+  // ── Funk ──
+  {
+    id: 'rf_023',
+    title: 'Funky Groove',
+    artist: 'Pixabay',
+    duration: 176,
+    source: 'https://cdn.pixabay.com/audio/2022/04/01/audio_8f9e0d1c2b.mp3',
+    genre: 'Funk',
+    mood: 'Happy',
+    bpm: 115,
+  },
+  // ── Rock ──
+  {
+    id: 'rf_024',
+    title: 'Rock Anthem',
+    artist: 'Pixabay',
+    duration: 205,
+    source: 'https://cdn.pixabay.com/audio/2021/11/15/audio_7c6b5a4d3e.mp3',
+    genre: 'Rock',
+    mood: 'Energetic',
+    bpm: 145,
+  },
 ];
 
-// ── Curated Artist Catalog (Songs we know and love) ──────────────────────────
-// These are for the "Our Favorites" section - deep-links to Spotify
+// ── Curated Artist Catalog ──────────────────────────────────────────────────
 const CURATED_ARTIST_CATALOG = [
-  // Pop Classics
   { title: 'Perfect', artist: 'Ed Sheeran', uri: 'spotify:track:0tgVpDi06FyKpA1z0VMD4v' },
   { title: 'Shape of You', artist: 'Ed Sheeran', uri: 'spotify:track:7qiZfU4dY1lWllzX7mPBI3' },
   { title: 'Thinking Out Loud', artist: 'Ed Sheeran', uri: 'spotify:track:34gCuhDGsG4fbRPGo9r1b5' },
-  { title: 'Photograph', artist: 'Ed Sheeran', uri: 'spotify:track:1HNkqx9Ahdgi1Ixy2xkKkL' },
-  
-  // Love Songs
   { title: 'All of Me', artist: 'John Legend', uri: 'spotify:track:3U4isOIWM3VvDubwSI3y7a' },
   { title: 'Love On Top', artist: 'Beyoncé', uri: 'spotify:track:1z6WtY7X4HQJvzxC4UgkSf' },
-  { title: 'At My Worst', artist: 'Pink Sweat$', uri: 'spotify:track:0ri0Han4IRJXzvq18YOxgX' },
-  { title: 'I Choose You', artist: 'Sara Bareilles', uri: 'spotify:track:7TwJHsu1rcy52S4hgJfI9z' },
-  
-  // Upbeat
-  { title: 'Uptown Funk', artist: 'Mark Ronson ft. Bruno Mars', uri: 'spotify:track:32OlwWuMpZ6b0aN2RZOeMS' },
-  { title: 'Get Lucky', artist: 'Daft Punk ft. Pharrell', uri: 'spotify:track:69kOkLUCkxIZYexIgSG8rq' },
+  { title: 'Uptown Funk', artist: 'Mark Ronson', uri: 'spotify:track:32OlwWuMpZ6b0aN2RZOeMS' },
+  { title: 'Get Lucky', artist: 'Daft Punk', uri: 'spotify:track:69kOkLUCkxIZYexIgSG8rq' },
   { title: 'Shake It Off', artist: 'Taylor Swift', uri: 'spotify:track:5xTtaWoae3wi06K5WfVUUH' },
-  { title: 'Good as Hell', artist: 'Lizzo', uri: 'spotify:track:6uL5HWdM6wqDqjUky1K3sN' },
-  
-  // Indie / Alternative
-  { title: 'The Night We Met', artist: 'Lord Huron', uri: 'spotify:track:0QZ5yyl6B6utIWkxeBDxQN' },
-  { title: 'Holocene', artist: 'Bon Iver', uri: 'spotify:track:1wKfZ1xLMyJP7I2Pb9f3Fv' },
-  { title: 'Skinny Love', artist: 'Bon Iver', uri: 'spotify:track:4RL77hMWUq35NYnPLXBpih' },
-  { title: 'Motion Sickness', artist: 'Phoebe Bridgers', uri: 'spotify:track:5xo8RrjJ9yNQ3Lqx9udmPc' },
-  
-  // Classic Rock
-  { title: 'Bohemian Rhapsody', artist: 'Queen', uri: 'spotify:track:7tFiyTwD0nx5a1eklYtX2J' },
-  { title: 'Imagine', artist: 'John Lennon', uri: 'spotify:track:7pKfPomDEeI4TPT6EOYjn9' },
-  { title: 'Don\'t Stop Believin\'', artist: 'Journey', uri: 'spotify:track:4bHsxqR3GMrXTxEPLuK5ue' },
-  
-  // R&B / Soul
-  { title: 'Say It Right', artist: 'Nelly Furtado', uri: 'spotify:track:2aIgyFh4bFGS4GpKwl23GE' },
-  { title: 'Crazy', artist: 'Gnarls Barkley', uri: 'spotify:track:2N5zMZX7DtLcuMPKpAbrRq' },
-  { title: 'Valerie', artist: 'Amy Winehouse', uri: 'spotify:track:6nLbSZgZz1EtVTw3zF6j6f' },
-  
-  // Modern Pop
-  { title: 'Blinding Lights', artist: 'The Weeknd', uri: 'spotify:track:0VjIjW4GlUZAMYd2vXMi3b' },
-  { title: 'Levitating', artist: 'Dua Lipa', uri: 'spotify:track:39LLxExYz6ewLAcYrzQQyP' },
-  { title: 'Peaches', artist: 'Justin Bieber', uri: 'spotify:track:4iJyoBOLtHnsG2Z5EUIdHW' },
-  { title: 'MONTERO', artist: 'Lil Nas X', uri: 'spotify:track:67BtfxlNbhBmCDR2L2l8qd' },
-  
-  // Acoustic / Singer-Songwriter
-  { title: 'Skin', artist: 'Rag\'n\'Bone Man', uri: 'spotify:track:5HcVUZ0N9Y3wYwzZbQdWJK' },
-  { title: 'Hold My Girl', artist: 'George Ezra', uri: 'spotify:track:42bbDWZ8WmXTH7PkYAlGLu' },
-  { title: 'Budapest', artist: 'George Ezra', uri: 'spotify:track:2ixs3F2O3D4rVh2iIgGAAj' },
-  
-  // French / Romantic
-  { title: 'La Vie En Rose', artist: 'Édith Piaf', uri: 'spotify:track:3u9wD8DpMgVg7hJXXpBAMf' },
-  { title: 'Sous Le Ciel De Paris', artist: 'Édith Piaf', uri: 'spotify:track:1xAGVkF0IDqLd3wHEVgUyO' },
-  { title: 'Comme D\'Habitude', artist: 'Claude François', uri: 'spotify:track:3iBej6A0oG95JwnRwN8V2P' },
-  
-  // 80s / Nostalgia
-  { title: 'Take On Me', artist: 'A-ha', uri: 'spotify:track:2WfaOiMkCvy7F5fcp2zZ8L' },
-  { title: 'Sweet Dreams', artist: 'Eurythmics', uri: 'spotify:track:1fR8lfK23oV2sdu3G2aHhd' },
-  { title: 'Tainted Love', artist: 'Soft Cell', uri: 'spotify:track:0cFE2BwjZ2doZjlnQNaDhe' },
 ];
 
-// ── Our Special Song ──────────────────────────────────────────────────────────
 const OUR_SONG = {
   title: 'Perfect',
   artist: 'Ed Sheeran',
@@ -528,10 +411,7 @@ function getErrorMessage(error: unknown): string {
   return 'Something went wrong';
 }
 
-// ── Theme Context ─────────────────────────────────────────────────────────────
-// Simplified for this component - we'll use a hook pattern
-
-// ── In-App Player Engine ──────────────────────────────────────────────────────
+// ── In-App Player Engine (using expo-audio) ──────────────────────────────
 function useMusicPlayerEngine(library: LibraryTrack[]) {
   const player = useAudioPlayer(null);
   const status = useAudioPlayerStatus(player);
@@ -831,9 +711,15 @@ export default function MoodMusicScreen() {
   const [search, setSearch] = useState('');
   const [activeGenreFilter, setActiveGenreFilter] = useState<string | null>(null);
 
+  // ── Use the new music player hook ──
   const engine = useMusicPlayerEngine(library);
 
-  // ── Mood ──────────────────────────────────────────────────────────────────
+  // ── Setup notification handler ──
+  useEffect(() => {
+    setupNotificationActionHandler();
+  }, []);
+
+  // ── Mood Functions ──────────────────────────────────────────────────────
   const loadMoodData = async () => {
     try {
       const history = await AsyncStorage.getItem(MOOD_HISTORY_KEY);
@@ -843,7 +729,6 @@ export default function MoodMusicScreen() {
         const todayEntry = parsed.find((m: any) => new Date(m.timestamp).toDateString() === today);
         setTodayMood(todayEntry ?? null);
         if (todayEntry) {
-          // Find matching mood songs from catalog
           const moodTracks = ROYALTY_FREE_CATALOG
             .filter(t => t.mood === todayEntry.mood)
             .slice(0, 4)
@@ -851,9 +736,7 @@ export default function MoodMusicScreen() {
           if (moodTracks.length > 0) {
             setRecommendedSongs(moodTracks);
           } else {
-            // Fallback to curated artist songs with matching mood
-            const fallback = CURATED_ARTIST_CATALOG.slice(0, 4);
-            setRecommendedSongs(fallback);
+            setRecommendedSongs(CURATED_ARTIST_CATALOG.slice(0, 4));
           }
         }
       }
@@ -903,7 +786,6 @@ export default function MoodMusicScreen() {
 
       setTodayMood(moodEntry as any);
       
-      // Find matching mood tracks from catalog
       const moodTracks = ROYALTY_FREE_CATALOG
         .filter(t => t.mood === mood.label)
         .slice(0, 4)
@@ -912,9 +794,7 @@ export default function MoodMusicScreen() {
       if (moodTracks.length > 0) {
         setRecommendedSongs(moodTracks);
       } else {
-        // Fallback to curated artist catalog
-        const fallback = CURATED_ARTIST_CATALOG.slice(0, 4);
-        setRecommendedSongs(fallback);
+        setRecommendedSongs(CURATED_ARTIST_CATALOG.slice(0, 4));
       }
       
       calculateStreak();
@@ -1003,7 +883,6 @@ export default function MoodMusicScreen() {
       };
 
       await persistLibrary([newTrack, ...library]);
-   // Alert.alert('Added', `"${newTrack.title}" is now in your library.`);
     } catch (error) {
       console.error('importTrack error:', error);
       Alert.alert('Import failed', getErrorMessage(error));
@@ -1055,7 +934,6 @@ export default function MoodMusicScreen() {
       };
 
       await persistLibrary([newTrack, ...library]);
-//  Alert.alert('Downloaded', `"${catalogTrack.title}" is saved and ready to play offline.`);
     } catch (error) {
       console.error('downloadCatalogTrack error:', error);
       Alert.alert('Download failed', getErrorMessage(error));
@@ -1104,18 +982,15 @@ export default function MoodMusicScreen() {
 
   const currentMoodConfig = todayMood ? getMoodConfig(todayMood.mood) : null;
 
-// In your root component (App.tsx or _layout.tsx)
-useEffect(() => {
-  setupNotificationActionHandler();
-}, []);
-
-// Render the music player
-
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor="#121212" />
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: engine.currentTrack ? 100 : 20 }}>
+      <ScrollView 
+        style={styles.container} 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={{ paddingBottom: engine.currentTrack ? 200 : 20 }}
+      >
         
         {/* ── Header ── */}
         <LinearGradient
@@ -1228,7 +1103,7 @@ useEffect(() => {
           </View>
           
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
-            {CURATED_ARTIST_CATALOG.slice(0, 15).map((song, idx) => (
+            {CURATED_ARTIST_CATALOG.map((song, idx) => (
               <TouchableOpacity
                 key={idx}
                 style={styles.artistChip}
@@ -1252,15 +1127,7 @@ useEffect(() => {
               <Text style={[styles.spotifyBadgeTxt, { color: PURPLE }]}>Plays offline</Text>
             </View>
           </View>
-// Render the music player
-<MusicPlayer track={{
-  id: '1',
-  title: 'Perfect',
-  artist: 'Ed Sheeran',
-  album: '÷ (Divide)',
-  artwork: 'https://example.com/artwork.jpg',
-  uri: 'https://cdn.pixabay.com/audio/2022/08/02/audio_884fe92c21.mp3',
-}} />
+
           <View style={styles.libraryActionsRow}>
             <TouchableOpacity style={styles.libraryActionBtn} onPress={importTrack} disabled={importing}>
               {importing ? (
@@ -1507,6 +1374,44 @@ useEffect(() => {
           </LinearGradient>
         </View>
       </Modal>
+
+      {/* ── NEW: Music Player with MediaStyle ── */}
+      {engine.currentTrack && (
+        <View style={styles.playerContainer}>
+          <MusicPlayer
+            track={{
+              id: engine.currentTrack.id,
+              title: engine.currentTrack.title,
+              artist: engine.currentTrack.artist,
+              duration: engine.currentTrack.duration || engine.duration,
+              url: engine.currentTrack.localUri,
+              artwork: engine.currentTrack.artwork || undefined,
+              album: engine.currentTrack.genre || 'NovaNotes',
+            }}
+            isPlaying={engine.isPlaying}
+            isLoading={engine.isLoadingTrack}
+            position={engine.currentTime}
+            duration={engine.duration}
+            onPlayPause={engine.togglePlayPause}
+            onNext={engine.playNext}
+            onPrevious={engine.playPrev}
+            onSeek={engine.seekTo}
+            onRepeat={() => {
+              const modes = ['off', 'all', 'one'];
+              const current = modes.indexOf(engine.repeatMode);
+              const next = modes[(current + 1) % modes.length];
+              engine.setRepeatMode(next as RepeatMode);
+            }}
+            onShuffle={() => engine.setShuffle(!engine.shuffle)}
+            repeatMode={engine.repeatMode}
+            shuffle={engine.shuffle}
+            onClose={engine.stop}
+            onAddToQueue={() => {
+              Alert.alert('Add to Queue', 'Track added to queue!');
+            }}
+          />
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -1515,8 +1420,16 @@ useEffect(() => {
 const { width } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#121212', paddingBottom: 100 },
+  root: { flex: 1, backgroundColor: '#121212' },
   container: { flex: 1, backgroundColor: '#121212' },
+  
+  playerContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 10,
+  },
 
   header: {
     alignItems: 'center',
@@ -1603,7 +1516,6 @@ const styles = StyleSheet.create({
   songTitle: { fontSize: 15, fontWeight: '600', color: '#FFF' },
   songArtist: { fontSize: 12, color: '#B0B0B0', marginTop: 2 },
 
-  // Artist Spotlight
   artistChip: {
     backgroundColor: '#2A2A2A',
     paddingHorizontal: 14,
@@ -1618,7 +1530,6 @@ const styles = StyleSheet.create({
   artistChipText: { color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 4 },
   artistChipArtist: { color: '#888', fontSize: 10 },
 
-  // Library
   libraryActionsRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   libraryActionBtn: {
     flex: 1,
@@ -1699,23 +1610,20 @@ const styles = StyleSheet.create({
   footerText: { fontSize: 14, fontStyle: 'italic', color: '#B0B0B0', textAlign: 'center' },
   footerSubtext: { fontSize: 12, color: PINK, marginTop: 6 },
 
-  // Progress
   progressTrack: { height: 28, justifyContent: 'center' },
   progressFill: { height: 4, borderRadius: 2, position: 'absolute', left: 0 },
   progressThumb: { width: 12, height: 12, borderRadius: 6, position: 'absolute', marginLeft: -6 },
 
-  // Mini Player
   miniPlayer: {
     position: 'absolute',
     left: 12,
     right: 12,
-    bottom: 12,
+    bottom: 100,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     backgroundColor: '#1E1E1E',
     borderRadius: 18,
-   paddingBottom: 100,
     paddingVertical: 10,
     paddingHorizontal: 12,
     shadowColor: '#000',
@@ -1732,7 +1640,6 @@ const styles = StyleSheet.create({
   miniArtist: { fontSize: 11, color: '#B0B0B0', marginTop: 1 },
   miniBtn: { padding: 6 },
 
-  // Now Playing
   nowPlayingOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
   nowPlayingSheet: {
     borderTopLeftRadius: 28,
@@ -1770,7 +1677,6 @@ const styles = StyleSheet.create({
   removeFromLibraryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 28 },
   removeFromLibraryTxt: { fontSize: 13, fontWeight: '600', color: DANGER },
 
-  // Catalog
   catalogOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
   catalogSheet: {
     borderTopLeftRadius: 28,

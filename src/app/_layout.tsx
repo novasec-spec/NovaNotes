@@ -19,6 +19,9 @@ import { useIncomingCallListener } from '../hooks/useIncomingCallListener';
 import { NotificationHandler } from '../services/NotificationHandler';
 import CallService from '../services/CallService'; // default import — no curly braces
 import { markNavigationReady } from '../utils/navigation';
+import { identifyDevice, vexo } from 'vexo-analytics'; 
+import * as Linking from 'expo-linking';
+import { useQuickNoteTileListener } from '../lib/quickNoteTile';
 
 const WHITE = '#FFFFFF';
 
@@ -52,9 +55,20 @@ if (!__DEV__) {
   });
 }
 
+
+
+if (!__DEV__) {
+  try {
+    vexo('2328404c-0edd-4c3b-804b-790b9964f4d8');
+  } catch (e) {
+    console.log('Vexo initialization failed:', e);
+  }
+}
+
 function InnerLayout() {
   useNotificationActions();
   useWidgetForegroundSync();
+useQuickNoteTileListener('/notes'); // point at your actual quick-note route
   const [isMungaVisible, setIsMungaVisible] = useState(true);
   const [isMungaOpen, setIsMungaOpen] = useState(false);
   // ✅ PERF FIX: mount MungaBot one tick after first paint instead of
@@ -89,6 +103,13 @@ useIncomingCallListener(user?.id);
     }
   };
 
+  useEffect(() => {
+    // Handle quick tile click when app is closed/killed
+    Linking.getInitialURL().then((url) => {
+      if (url && url.includes('quick-note')) {
+        openNewNoteModal();
+      }
+    });
 
 useEffect(() => {
   markNavigationReady();
@@ -118,6 +139,23 @@ useEffect(() => {
       NotificationHandler.registerForPushNotifications();
     }
   }, [user?.id]);
+
+
+useEffect(() => {
+  if (!user?.id) return;
+
+  identifyDevice(user.id);
+}, [user?.id]);
+
+   const subscription = Linking.addEventListener('url', (event) => {
+      if (event.url.includes('quick-note')) {
+        openNewNoteModal();
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
 
   return (
     <ThemeProvider>
