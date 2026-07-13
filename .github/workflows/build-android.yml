@@ -12,8 +12,10 @@ jobs:
       GRADLE_OPTS: >-
         -Xmx6g
         -XX:MaxMetaspaceSize=2g
-       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-     steps:
+       SENTRY_AUTH_TOKEN:
+       ${{ secrets.SENTRY_AUTH_TOKEN }}
+    
+ steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
