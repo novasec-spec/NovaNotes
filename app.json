@@ -145,9 +145,7 @@
       },
       "router": {}
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+     "runtimeVersion": "1.0.0",
     "owner": "arthurkongos-team"
   }
 }

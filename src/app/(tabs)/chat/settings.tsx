@@ -66,7 +66,6 @@ import FA5Icon                   from 'react-native-vector-icons/FontAwesome5';
 import { useTheme }              from '../../../contexts/ThemeContext';
 import { supabase }              from '../../../config/supabase';
 import { User }                  from './types';
-import { requestAddQuickNoteTile } from '../../../lib/quickNoteTile';
 
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -291,16 +290,6 @@ function EditProfileModal({
   };
 
 
-const handleAddQuickTile = async () => {
-  const result = await requestAddQuickNoteTile();
-
-  if (result === 'unavailable') {
-    Alert.alert(
-      'Quick Tile Unavailable',
-      "Pull down Quick Settings twice, tap the edit icon, and add the 'Quick Note' tile manually."
-    );
-  }
-};
 
   const handleSave = async () => {
     if (!username.trim()) { Alert.alert('Error', 'Username is required'); return; }
@@ -341,17 +330,6 @@ const handleAddQuickTile = async () => {
 
   const currentAvatarUri = tempAvatar ?? (user?.avatar_url ? `${user.avatar_url}` : undefined);
   const initial = (displayName || username || '?').charAt(0).toUpperCase();
-useEffect(() => {
-  const setupTile = async () => {
-    const result = await requestAddQuickNoteTile();
-
-    if (result === 'unavailable') {
-      console.log('Quick Note tile unavailable');
-    }
-  };
-
-  setupTile();
-}, []);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>

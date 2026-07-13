@@ -15,11 +15,9 @@ import './polyfills/event';
 // @expo/metro-runtime MUST be the first import — it enables Fast Refresh.
 import '@expo/metro-runtime';
 import { App } from 'expo-router/build/qualified-entry';
-import { AppRegistry } from 'react-native';
 import { renderRootComponent } from 'expo-router/build/renderRootComponent';
 import { registerWidgetTaskHandler } from 'react-native-android-widget';
 import { widgetTaskHandler } from './widget-task-handler';
-import TrackPlayer from 'react-native-track-player';
 // This file should only import and register the root — no other
 // components or exports belong here
   renderRootComponent(App);
@@ -28,7 +26,5 @@ registerWidgetTaskHandler(widgetTaskHandler);
 
 
 // Register the track player service (Android)
-AppRegistry.registerComponent('trackPlayerServices', () => require('./trackPlayerServices.js'));
 
 // Register headless tasks
-TrackPlayer.registerPlaybackService(() => require('./trackPlayerServices.js'));

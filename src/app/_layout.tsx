@@ -19,9 +19,6 @@ import { useIncomingCallListener } from '../hooks/useIncomingCallListener';
 import { NotificationHandler } from '../services/NotificationHandler';
 import CallService from '../services/CallService'; // default import — no curly braces
 import { markNavigationReady } from '../utils/navigation';
-import { identifyDevice, vexo } from 'vexo-analytics'; 
-import * as Linking from 'expo-linking';
-import { useQuickNoteTileListener } from '../lib/quickNoteTile';
 
 const WHITE = '#FFFFFF';
 
@@ -43,7 +40,6 @@ export function ensureLiveKitGlobals() {
 }
 
 // ✅ FIX: Only initialize Sentry in production
-if (!__DEV__) {
   Sentry.init({
     dsn: 'https://7505066db21919d4bdf65fb56ebdad8e@o4511667237093376.ingest.de.sentry.io/4511667330809936',
     sendDefaultPii: true,
@@ -53,22 +49,13 @@ if (!__DEV__) {
     integrations: [Sentry.mobileReplayIntegration(), Sentry.feedbackIntegration()],
     spotlight: __DEV__,
   });
-}
 
 
 
-if (!__DEV__) {
-  try {
-    vexo('2328404c-0edd-4c3b-804b-790b9964f4d8');
-  } catch (e) {
-    console.log('Vexo initialization failed:', e);
-  }
-}
 
 function InnerLayout() {
   useNotificationActions();
   useWidgetForegroundSync();
-useQuickNoteTileListener('/notes'); // point at your actual quick-note route
   const [isMungaVisible, setIsMungaVisible] = useState(true);
   const [isMungaOpen, setIsMungaOpen] = useState(false);
   // ✅ PERF FIX: mount MungaBot one tick after first paint instead of
@@ -103,13 +90,6 @@ useIncomingCallListener(user?.id);
     }
   };
 
-  useEffect(() => {
-    // Handle quick tile click when app is closed/killed
-    Linking.getInitialURL().then((url) => {
-      if (url && url.includes('quick-note')) {
-        openNewNoteModal();
-      }
-    });
 
 useEffect(() => {
   markNavigationReady();
@@ -140,21 +120,6 @@ useEffect(() => {
     }
   }, [user?.id]);
 
-
-useEffect(() => {
-  if (!user?.id) return;
-
-  identifyDevice(user.id);
-}, [user?.id]);
-
-   const subscription = Linking.addEventListener('url', (event) => {
-      if (event.url.includes('quick-note')) {
-        openNewNoteModal();
-      }
-    });
-
-    return () => subscription.remove();
-  }, []);
 
 
   return (
