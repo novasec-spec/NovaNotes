@@ -45,6 +45,16 @@
     <service android:name=".MainApplication$ReactNativeHost$ReactNativeActivity"/>
     <service android:name=".MainApplication$ReactNativeHost$ReactNativeActivity"/>
     <service android:name=".MainApplication$ReactNativeHost"/>
+        <service
+            android:name=".QuickNoteTileService"
+            android:label="Take Note"
+            android:icon="@drawable/ic_note_tile_icon"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
     <service android:name=".QuickNoteTileService" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE" android:exported="true" android:label="Take Note" android:icon="@drawable/ic_note_tile">
       <intent-filter>
         <action android:name="android.service.quicksettings.action.QS_TILE"/>
