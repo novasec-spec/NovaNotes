@@ -16,6 +16,13 @@ import { CallProvider } from '../contexts/CallContext';
 import { CallPushHandler } from '../components/CallPushHandler';
 import { IncomingCallModal } from '../components/IncomingCallModal';
 
+import { vexo } from 'vexo-analytics';
+
+// Initialize Vexo at the root level, outside of any component
+if (__DEV__ === false) {
+  vexo('2328404c-0edd-4c3b-804b-790b9964f4d8');
+}
+
 const WHITE = '#FFFFFF';
 
 
@@ -91,7 +98,6 @@ function InnerLayout() {
     </ThemeProvider>
   );
 }
-
 
 function RootLayout() {
   return (
