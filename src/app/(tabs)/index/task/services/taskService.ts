@@ -417,6 +417,7 @@ export class TaskService {
             const { data, error } = await supabase
               .from('tasks')
               .insert({
+               id: task.id,
                 title: task.title,
                 description: task.description,
                 completed: task.completed,
@@ -448,7 +449,8 @@ export class TaskService {
             await supabase
               .from('tasks')
               .update({
-                title: task.title,
+               id: task.id,
+                 title: task.title,
                 description: task.description,
                 completed: task.completed,
                 priority: task.priority,

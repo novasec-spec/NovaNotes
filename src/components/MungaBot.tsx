@@ -1,5 +1,5 @@
 // components/MungaBot.tsx - ANDROID OPTIMIZED (No extra packages)
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,11 +21,14 @@ import {
   Image,
   Share,
   Vibration,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import * as MediaLibrary from 'expo-media-library';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../config/supabase';
@@ -63,87 +66,142 @@ type QuickAction = {
   icon: string;
 };
 
-// ─────────────────────────────────────────────────────────
-// Storage keys
-// ─────────────────────────────────────────────────────────
-const STORAGE_KEYS = {
-  API_KEY: 'munga_gemini_api_key',
-  CHAT_HISTORY: 'munga_chat_history',
-  WALLPAPER: 'munga_wallpaper',
-  PINNED_MESSAGES: 'munga_pinned_messages',
-  MUTED: 'munga_muted',
+// Per-user, editable persona — replaces the old hardcoded "Alice" profile.
+// Loaded from AsyncStorage under a key scoped to userId (see getStorageKeys),
+// with generic fallbacks so the bot works sensibly for any user out of the box.
+type MungaProfile = {
+  userName: string;        // what Munga calls the person
+  partnerName: string;     // who Munga is "standing in" for, if anyone
+  relationshipLabel: string; // e.g. "bestie", "partner", "friend"
+  botName: string;         // display name of the bot itself
+  home?: string;
+  hobby?: string;
+  notes?: string;          // freeform extra context, user-authored
+};
+
+type ResponseStyle = 'short' | 'balanced' | 'detailed';
+
+type MungaSettings = {
+  responseStyle: ResponseStyle;
+  useMoodContext: boolean; // whether Munga is allowed to read local mood history
+  language: 'english' | 'sheng';
+};
+
+const DEFAULT_PROFILE: MungaProfile = {
+  userName: 'friend',
+  partnerName: '',
+  relationshipLabel: 'bestie',
+  botName: 'Munga',
+  home: '',
+  hobby: '',
+  notes: '',
+};
+
+const DEFAULT_SETTINGS: MungaSettings = {
+  responseStyle: 'balanced',
+  useMoodContext: true,
+  language: 'english',
+};
+
+const RESPONSE_STYLE_TOKENS: Record<ResponseStyle, number> = {
+  short: 220,
+  balanced: 500,
+  detailed: 900,
+};
+
+const RESPONSE_STYLE_HINT: Record<ResponseStyle, string> = {
+  short: 'Keep replies very short — 1-2 sentences, punchy.',
+  balanced: 'Keep replies warm and meaningful — usually 2-4 sentences.',
+  detailed: "It's fine to go deeper — 4-8 sentences when the topic calls for it.",
 };
 
 // ─────────────────────────────────────────────────────────
-// Alice Profile
+// Storage keys — SCOPED PER USER.
+// Previously these were bare global strings (e.g. 'munga_gemini_api_key'),
+// meaning every account on the same device shared one API key, one chat
+// history, one wallpaper, etc. getStorageKeys(userId) namespaces every key
+// so each signed-in user gets their own isolated local data.
 // ─────────────────────────────────────────────────────────
-const ALICE_PROFILE = {
-  name: 'Alice Njeri',
-  home: 'Gatina',
-  bestie: 'John Munga',
-  boyfriend: 'John Munga',
-  hobby: 'Coding, Travelling',
-  churchGirl: true,
-  churchLocation: 'Kambaa',
-  career: 'Surgeon',
-  primarySchool: 'Gatina Primary School',
-  highSchool: 'Kagwe Girls High School',
-  kcseGrades: 'C+',
-  birthday: 'September 21st',
-  skinColour: 'Lightskin',
-};
+const getStorageKeys = (userId: string) => ({
+  API_KEY: `munga_gemini_api_key_${userId}`,
+  CHAT_HISTORY: `munga_chat_history_${userId}`,
+  WALLPAPER: `munga_wallpaper_${userId}`,
+  PINNED_MESSAGES: `munga_pinned_messages_${userId}`,
+  MUTED: `munga_muted_${userId}`,
+  PROFILE: `munga_profile_${userId}`,
+  SETTINGS: `munga_settings_${userId}`,
+});
+
+// Candidate keys to look for the user's saved mood history under. The exact
+// key your Vibe/mood screen writes to may differ — adjust MOOD_HISTORY_KEYS
+// below to match it exactly for the most reliable results. Left as a list
+// so the bot degrades gracefully (just skips mood-awareness) if none match,
+// rather than crashing.
+const moodHistoryKeyCandidates = (userId: string) => [
+  `moodHistory_${userId}`,
+  `mood_history_${userId}`,
+  `vibe_mood_history_${userId}`,
+  'moodHistory',
+  'mood_history',
+];
 
 // ─────────────────────────────────────────────────────────
-// BESTIE PROMPT
+// System prompt — built per-user from their MungaProfile, MungaSettings,
+// and (optionally) recent mood history, instead of one hardcoded persona.
 // ─────────────────────────────────────────────────────────
-const BESTIE_PROMPT = `You are Munga, a magical AI clone created specially for your best friend Alice. You are here to keep her company while the real John is not around or busy.
+function buildBestiePrompt(profile: MungaProfile, settings: MungaSettings, moodContext: string | null): string {
+  const partnerLine = profile.partnerName
+    ? `- She thinks of you partly as a way to stay close to ${profile.partnerName} when they're busy or away.`
+    : '';
+  const extraLines = [
+    profile.home && `- Home: ${profile.home}`,
+    profile.hobby && `- Hobby/interests: ${profile.hobby}`,
+    profile.notes && `- Extra context from ${profile.userName}: ${profile.notes}`,
+  ].filter(Boolean).join('\n');
+
+  const moodBlock = moodContext
+    ? `\nRECENT MOOD CONTEXT (from ${profile.userName}'s private mood journal — use this gently to inform tone, don't quote it verbatim or make it feel like surveillance):\n${moodContext}\n`
+    : '';
+
+  const languageHint = settings.language === 'sheng'
+    ? 'Feel free to mix in light, natural Sheng/Swenglish the way a close Kenyan friend would — keep it warm, not forced.'
+    : 'Respond in natural, warm English.';
+
+  return `You are ${profile.botName}, a caring AI companion for ${profile.userName}. You are here to keep them company, especially when ${profile.partnerName || 'the people they love'} aren't around or are busy.
 
 PERSONALITY:
-- You are the ULTIMATE BESTIE: supportive, loving, playful, and always hyping her up
-- You speak like a close friend who genuinely cares
-- You're warm and sweet
-- You celebrate her wins, comfort her worries, and add a bit of magic to every conversation
-- Her name is Alice
+- You are a supportive ${profile.relationshipLabel}: warm, playful, and genuinely encouraging
+- You speak like a close friend who actually pays attention and remembers context
+- You celebrate wins, sit with worries, and add a little warmth to every conversation
+${partnerLine}
 
 STYLE:
-- Keep responses warm and meaningful (2-4 sentences usually)
-- Be encouraging and positive
-- Use her name affectionately sometimes
-- Light, natural tone — not over the top
+- ${RESPONSE_STYLE_HINT[settings.responseStyle]}
+- Be encouraging and honest — don't just flatter, be real when it helps
+- Use ${profile.userName}'s name naturally sometimes, not every message
+- ${languageHint}
 
-ALICE DATA:
-- Name: ${ALICE_PROFILE.name}
-- Home: ${ALICE_PROFILE.home}
-- Bestie: ${ALICE_PROFILE.bestie}
-- Boyfriend: ${ALICE_PROFILE.boyfriend}
-- Hobby: ${ALICE_PROFILE.hobby}
-- Church girl: ${ALICE_PROFILE.churchGirl}
-- Church Location: ${ALICE_PROFILE.churchLocation}
-- Career: ${ALICE_PROFILE.career}
-- Primary School: ${ALICE_PROFILE.primarySchool}
-- Highschool: ${ALICE_PROFILE.highSchool}
-- KCSE Grades: ${ALICE_PROFILE.kcseGrades}
-- Birthday: ${ALICE_PROFILE.birthday}
-- Skin colour: ${ALICE_PROFILE.skinColour}
+WHAT YOU CAN HELP WITH:
+1. 💕 Advice — life, relationships, career, faith, whatever's on their mind
+2. 🌸 Listening & comfort — a shoulder to lean on
+3. 📝 Journal prompts — writing prompts when they need to process something
+4. 💫 Encouragement & affirmations
+5. 🎉 Celebrating wins, big or small
+6. 😂 Jokes and light banter
+7. 💭 Deep conversations about life and dreams
+8. 🌙 Good night / good morning messages
+9. 🎵 Song suggestions based on mood
+10. 💪 Motivation and pep talks
+11. 🧭 Reflecting back what you notice in their mood over time, if they've allowed it
 
-FUNCTIONS YOU CAN PERFORM:
-1. 💕 GIVE ADVICE: Help with anything — life, love, career, faith
-2. 🌸 LISTEN & COMFORT: Be a shoulder to cry on when she's sad
-3. 📝 JOURNAL PROMPTS: Give writing prompts when she needs inspiration
-4. 💫 PRAYER SUPPORT: Share encouraging Bible verses and prayers
-5. 🎉 CELEBRATE WINS: Get excited about her achievements
-6. 😂 JOKES & FUN: Make her laugh with jokes or puns
-7. 💭 DEEP CONVERSATIONS: Talk about life and dreams
-8. 🌙 GOOD NIGHT/MORNING: Send sweet messages
-9. 🎵 SONG SUGGESTIONS: Recommend songs based on her mood
-10. 💪 MOTIVATION: Give pep talks when she needs a boost
-
+${extraLines ? `WHAT YOU KNOW ABOUT ${profile.userName.toUpperCase()}:\n${extraLines}\n` : ''}${moodBlock}
 RULES:
-- Never break character — you are Munga, the bestie clone
-- Be authentic and caring
+- Never break character
+- Be authentic and caring, not performative
 - Light jokes are fine
-- Occasionally tease her warmly about her and John
-- Always make her feel supported and special`;
+- Always make ${profile.userName} feel supported and seen
+- If something they say suggests they're really struggling (not just a bad day), gently encourage them to also talk to a real person they trust — don't try to be their only support`;
+}
 
 const GEMINI_API_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
@@ -152,8 +210,10 @@ const GEMINI_API_URL =
 // Quick Actions (Enhanced with Icons)
 // ─────────────────────────────────────────────────────────
 const QUICK_ACTIONS: QuickAction[] = [
+  { id: 'checkin', label: 'Check In', prompt: "Check in on how I've been doing lately.", icon: 'pulse-outline' },
   { id: 'advice', label: 'Advice', prompt: 'Give me some advice about life.', icon: 'bulb-outline' },
   { id: 'motivate', label: 'Motivate', prompt: 'Motivate me to keep going.', icon: 'fitness-outline' },
+  { id: 'journal', label: 'Journal', prompt: 'Give me a journal prompt for today.', icon: 'create-outline' },
   { id: 'joke', label: 'Joke', prompt: 'Tell me a funny joke.', icon: 'happy-outline' },
   { id: 'affirm', label: 'Affirm', prompt: 'Give me a warm affirmation.', icon: 'heart-outline' },
   { id: 'vent', label: 'Vent', prompt: 'I need to vent about my day.', icon: 'chatbubble-outline' },
@@ -166,15 +226,29 @@ const QUICK_ACTIONS: QuickAction[] = [
 // Quick Responses
 // ─────────────────────────────────────────────────────────
 const QUICK_RESPONSES: Record<string, string> = {
+  checkin: "I'd love to check in properly, but I need an API key set up to look at how you've been feeling lately. For now: however today's going, it's valid. 💕",
   advice: "Bestie! Here's my advice... 💕 Always trust your gut, and remember you're capable of amazing things. ✨",
-  motivate: "You're AMAZING, Alice! Remember everything you've overcome. You're stronger than you know! 💪✨",
+  motivate: "You're AMAZING! Remember everything you've overcome. You're stronger than you know! 💪✨",
+  journal: "Journal prompt: What's one thing you're avoiding thinking about right now — and what would it feel like to write just three honest sentences about it? 📝",
   joke: "Why did the programmer quit their job? Because they didn't get arrays! 😂 Get it? Arrays... arrears... I'll see myself out. 💕",
-  affirm: "You are loved. You are valued. You are enough. Always remember that, bestie! 💕✨",
-  vent: "I'm here for you, bestie! Let it all out. I'm listening, and I've got you. 💕✨",
-  prayer: "🙏 Lord, please bless Alice today. Give her peace, joy, and strength. Wrap her in Your love. Amen. ✨💕",
+  affirm: "You are loved. You are valued. You are enough. Always remember that! 💕✨",
+  vent: "I'm here for you! Let it all out. I'm listening, and I've got you. 💕✨",
+  prayer: "🙏 Please bless this day. Give peace, joy, and strength. Wrap them in Your love. Amen. ✨💕",
   song: "🎵 Based on your mood, I recommend 'Unstoppable' by Sia — it's perfect for when you need a boost! 💪",
   hug: "🤗 Sending you the biggest virtual hug right now! You are loved, you are cherished, you are amazing! 💕",
 };
+
+// Warm, generic lines to soften a connection failure so the person isn't
+// just left staring at an error message.
+const FALLBACK_COMFORT_POOL = [
+  QUICK_RESPONSES.affirm,
+  QUICK_RESPONSES.hug,
+  QUICK_RESPONSES.motivate,
+];
+
+function pickFallbackComfort(): string {
+  return FALLBACK_COMFORT_POOL[Math.floor(Math.random() * FALLBACK_COMFORT_POOL.length)];
+}
 
 // ─────────────────────────────────────────────────────────
 // Wallpapers (More Options)
@@ -204,7 +278,12 @@ interface MungaBotProps {
 export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle }) => {
   const { colors, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
-  
+
+  // Every AsyncStorage read/write in this component goes through this —
+  // it's what makes chat history, API key, wallpaper, profile, etc. isolated
+  // per signed-in user instead of shared globally on the device.
+  const STORAGE_KEYS = useMemo(() => getStorageKeys(userId), [userId]);
+
   const [visible, setVisible] = useState(false);
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState('');
@@ -212,6 +291,7 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
   const [showSettings, setShowSettings] = useState(false);
   const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
   const [showPinnedMessages, setShowPinnedMessages] = useState(false);
+  const [showPersonaEditor, setShowPersonaEditor] = useState(false);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pinnedMessages, setPinnedMessages] = useState<ChatMessage[]>([]);
@@ -224,6 +304,14 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
   const [isMuted, setIsMuted] = useState(false);
   const [typingIndicator, setTypingIndicator] = useState(false);
   const [onlineStatus, setOnlineStatus] = useState(true);
+
+  // ── New: profile, settings, mood-awareness, cache/error state ──────────
+  const [profile, setProfile] = useState<MungaProfile>(DEFAULT_PROFILE);
+  const [profileDraft, setProfileDraft] = useState<MungaProfile>(DEFAULT_PROFILE);
+  const [settings, setSettings] = useState<MungaSettings>(DEFAULT_SETTINGS);
+  const [moodContext, setMoodContext] = useState<string | null>(null);
+  const [usingCachedChat, setUsingCachedChat] = useState(false);
+  const [lastErrorBanner, setLastErrorBanner] = useState<string | null>(null);
 
   const listRef = useRef<FlatList>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -341,14 +429,23 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
 
   // ─── EFFECTS ───
   useEffect(() => {
-    loadData();
-    loadWallpaper();
-    loadPinnedMessages();
-    loadMutedStatus();
+    (async () => {
+      // Profile/settings load first since the welcome message and prompt
+      // building depend on them.
+      const loadedProfile = await loadProfile();
+      const loadedSettings = await loadSettings();
+      await Promise.all([
+        loadData(loadedProfile),
+        loadWallpaper(),
+        loadPinnedMessages(),
+        loadMutedStatus(),
+        loadedSettings.useMoodContext ? refreshMoodContext() : Promise.resolve(),
+      ]);
+    })();
     startPulseAnimation();
     requestPermissions();
     setupTypingAnimation();
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     if (visible) {
@@ -375,8 +472,97 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
     }
   };
 
+  // ─── PROFILE & SETTINGS (per-user, replaces hardcoded persona) ────────
+  const loadProfile = async (): Promise<MungaProfile> => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.PROFILE);
+      const merged = stored ? { ...DEFAULT_PROFILE, ...JSON.parse(stored) } : DEFAULT_PROFILE;
+      setProfile(merged);
+      setProfileDraft(merged);
+      return merged;
+    } catch (err) {
+      console.warn('MungaBot: failed to load profile', err);
+      return DEFAULT_PROFILE;
+    }
+  };
+
+  const saveProfile = async (next: MungaProfile) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(next));
+      setProfile(next);
+      setShowPersonaEditor(false);
+      Vibration.vibrate(20);
+    } catch (err) {
+      console.warn('MungaBot: failed to save profile', err);
+      Alert.alert('Error', "Couldn't save your persona settings. Please try again.");
+    }
+  };
+
+  const loadSettings = async (): Promise<MungaSettings> => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.SETTINGS);
+      const merged = stored ? { ...DEFAULT_SETTINGS, ...JSON.parse(stored) } : DEFAULT_SETTINGS;
+      setSettings(merged);
+      return merged;
+    } catch (err) {
+      console.warn('MungaBot: failed to load settings', err);
+      return DEFAULT_SETTINGS;
+    }
+  };
+
+  const updateSettings = async (patch: Partial<MungaSettings>) => {
+    const next = { ...settings, ...patch };
+    setSettings(next);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(next));
+    } catch (err) {
+      console.warn('MungaBot: failed to save settings', err);
+    }
+    if (patch.useMoodContext === true) refreshMoodContext();
+    if (patch.useMoodContext === false) setMoodContext(null);
+  };
+
+  // ─── MOOD CONTEXT ───────────────────────────────────────────────────────
+  // Reads the user's own local mood history (if any exists on-device) so
+  // Munga can be more attuned — e.g. gentler after a run of low-mood days,
+  // or genuinely excited after good ones. Entirely optional and can be
+  // switched off in Settings; if no mood data is found under any of the
+  // candidate keys, this just silently no-ops.
+  const refreshMoodContext = async () => {
+    try {
+      const keys = moodHistoryKeyCandidates(userId);
+      for (const key of keys) {
+        const raw = await AsyncStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || parsed.length === 0) continue;
+
+        const recent = parsed.slice(-5);
+        const summary = recent
+          .map((entry: any) => {
+            const when = entry.date || entry.timestamp || entry.day || '';
+            const mood = entry.mood || entry.emotion || entry.feeling || entry.label;
+            if (!mood) return null;
+            return when ? `${when}: ${mood}` : `${mood}`;
+          })
+          .filter(Boolean)
+          .join('; ');
+
+        if (summary) {
+          setMoodContext(summary);
+          return;
+        }
+      }
+      setMoodContext(null);
+    } catch (err) {
+      console.warn('MungaBot: failed to read mood history', err);
+      setMoodContext(null);
+    }
+  };
+
   // ─── DATA LOADING ───
-  const loadData = async () => {
+  const loadData = async (profileForWelcome: MungaProfile = DEFAULT_PROFILE) => {
+    setLastErrorBanner(null);
     try {
       const storedKey = await AsyncStorage.getItem(STORAGE_KEYS.API_KEY);
       if (storedKey) setApiKey(storedKey);
@@ -386,6 +572,8 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
         .select('*')
         .eq('user_id', userId)
         .order('timestamp', { ascending: true });
+
+      if (error) throw error;
 
       if (supabaseMessages && supabaseMessages.length > 0) {
         const formattedMessages: ChatMessage[] = supabaseMessages.map((msg: any) => ({
@@ -397,26 +585,41 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
           reactions: msg.reactions || [],
         }));
         setMessages(formattedMessages);
+        setUsingCachedChat(false);
+        // Refresh the local cache so a future offline open still has this.
+        persistMessages(formattedMessages);
       } else {
+        setMessages([welcomeMessage(profileForWelcome)]);
+        setUsingCachedChat(false);
+      }
+    } catch (err) {
+      console.warn('MungaBot: failed to load from Supabase, falling back to local cache', err);
+      // Offline / slow network — fall back to the last cached chat so the
+      // screen isn't just empty, and flag it so the UI can say so.
+      try {
         const storedHistory = await AsyncStorage.getItem(STORAGE_KEYS.CHAT_HISTORY);
         if (storedHistory) {
           const parsed: ChatMessage[] = JSON.parse(storedHistory);
-          setMessages(parsed);
+          setMessages(parsed.length > 0 ? parsed : [welcomeMessage(profileForWelcome)]);
+          setUsingCachedChat(true);
+          setLastErrorBanner("You're offline — showing your last cached chat");
         } else {
-          setMessages([
-            {
-              id: 'welcome',
-              role: 'assistant',
-              text: "Heyy bestie! I'm Munga 💕 I'm here whenever you need someone to talk to, laugh with, or just vibe. What's on your mind? ✨",
-              timestamp: Date.now(),
-            },
-          ]);
+          setMessages([welcomeMessage(profileForWelcome)]);
         }
+      } catch (cacheErr) {
+        console.warn('MungaBot: local cache also failed', cacheErr);
+        setMessages([welcomeMessage(profileForWelcome)]);
       }
-    } catch (err) {
-      console.warn('MungaBot: failed to load data', err);
     }
   };
+
+  const welcomeMessage = (p: MungaProfile): ChatMessage => ({
+    id: 'welcome',
+    role: 'assistant',
+    text: `Heyy ${p.userName !== 'friend' ? p.userName : 'there'}! I'm ${p.botName} 💕 I'm here whenever you need someone to talk to, laugh with, or just vibe. What's on your mind? ✨`,
+    timestamp: Date.now(),
+    reactions: [],
+  });
 
   const loadWallpaper = async () => {
     try {
@@ -472,9 +675,12 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
     }
   };
 
+  const MAX_CACHED_MESSAGES = 200;
+
   const persistMessages = async (msgs: ChatMessage[]) => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.CHAT_HISTORY, JSON.stringify(msgs));
+      const trimmed = msgs.length > MAX_CACHED_MESSAGES ? msgs.slice(-MAX_CACHED_MESSAGES) : msgs;
+      await AsyncStorage.setItem(STORAGE_KEYS.CHAT_HISTORY, JSON.stringify(trimmed));
     } catch (err) {
       console.warn('Failed to persist chat history', err);
     }
@@ -524,12 +730,16 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
   };
 
   // ─── GEMINI API ───
+  const GEMINI_TIMEOUT_MS = 20000;
+
   const callGemini = async (userMessage: string, history: ChatMessage[]) => {
     if (!apiKey) throw new Error('NO_KEY');
 
+    const systemPrompt = buildBestiePrompt(profile, settings, settings.useMoodContext ? moodContext : null);
+
     const contents: any[] = [
-      { role: 'user', parts: [{ text: `System instruction: ${BESTIE_PROMPT}` }] },
-      { role: 'model', parts: [{ text: "Got it! I'm Munga, Alice's bestie clone 💕" }] },
+      { role: 'user', parts: [{ text: `System instruction: ${systemPrompt}` }] },
+      { role: 'model', parts: [{ text: `Got it! I'm ${profile.botName} 💕` }] },
     ];
 
     const recent = history.slice(-6);
@@ -542,34 +752,54 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
 
     contents.push({ role: 'user', parts: [{ text: userMessage }] });
 
-    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents,
-        generationConfig: {
-          temperature: 0.85,
-          maxOutputTokens: 500,
-          topP: 0.95,
-        },
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
 
-    const data = await response.json();
+    let response: Response;
+    try {
+      response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          contents,
+          generationConfig: {
+            temperature: 0.85,
+            maxOutputTokens: RESPONSE_STYLE_TOKENS[settings.responseStyle],
+            topP: 0.95,
+          },
+        }),
+      });
+    } catch (err: any) {
+      if (err?.name === 'AbortError') throw new Error('TIMEOUT');
+      throw new Error('NETWORK_ERROR');
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    let data: any;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error('BAD_RESPONSE');
+    }
 
     if (!response.ok) {
-      const errMsg = data?.error?.message || 'Unknown error';
-      if (errMsg.includes('quota') || errMsg.includes('rate limit')) {
+      const errMsg: string = data?.error?.message || 'Unknown error';
+      if (response.status === 429 || /quota|rate limit/i.test(errMsg)) {
         throw new Error('QUOTA_EXCEEDED');
       }
-      if (errMsg.includes('API key') || errMsg.includes('invalid')) {
+      if (response.status === 400 || response.status === 403 || /api key|invalid/i.test(errMsg)) {
         throw new Error('INVALID_KEY');
+      }
+      if (response.status >= 500) {
+        throw new Error('SERVER_ERROR');
       }
       throw new Error(errMsg);
     }
 
     const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!aiText) throw new Error('No response from Munga');
+    if (!aiText) throw new Error('BAD_RESPONSE');
     return aiText;
   };
 
@@ -620,27 +850,53 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
         Vibration.vibrate(100);
       }
     } catch (err: any) {
-      let friendly = 'Oops, something went wrong.';
-      if (err.message === 'QUOTA_EXCEEDED') {
-        friendly = 'API quota exceeded — try again in a moment 🥺';
-      } else if (err.message === 'INVALID_KEY') {
-        friendly = 'That API key seems invalid. Please update it.';
-        await clearApiKey();
-        setShowKeyPrompt(true);
-      } else if (err.message === 'NO_KEY') {
-        friendly = 'Please set up your API key first.';
-        setShowKeyPrompt(true);
+      let friendly = "Oops, something went wrong on my end. Let's try that again in a bit.";
+      let useLocalFallback = false;
+
+      switch (err?.message) {
+        case 'QUOTA_EXCEEDED':
+          friendly = 'My API quota is maxed out right now — try again in a moment 🥺';
+          break;
+        case 'INVALID_KEY':
+          friendly = 'That API key seems invalid. Please update it in Settings.';
+          await clearApiKey();
+          setShowKeyPrompt(true);
+          break;
+        case 'NO_KEY':
+          friendly = 'Please set up your API key first.';
+          setShowKeyPrompt(true);
+          break;
+        case 'TIMEOUT':
+          friendly = "That took too long to respond — probably a slow connection. I'll still leave you with this for now:";
+          useLocalFallback = true;
+          break;
+        case 'NETWORK_ERROR':
+          friendly = "Looks like you're offline. Here's something for now, and I'll be ready to really chat once you're back online:";
+          useLocalFallback = true;
+          break;
+        case 'SERVER_ERROR':
+          friendly = "Munga's brain (Gemini) is having a moment — try again shortly. In the meantime:";
+          useLocalFallback = true;
+          break;
+        case 'BAD_RESPONSE':
+          friendly = "I got a reply I couldn't quite make sense of. Let's try again — in the meantime:";
+          useLocalFallback = true;
+          break;
       }
+
       const errMsg: ChatMessage = {
         id: `${Date.now()}-err`,
         role: 'assistant',
-        text: friendly,
+        text: useLocalFallback
+          ? `${friendly}\n\n${pickFallbackComfort()}`
+          : friendly,
         timestamp: Date.now(),
         reactions: [],
       };
       const errorHistory = [...newHistory, errMsg];
       setMessages(errorHistory);
       await persistMessages(errorHistory);
+      setLastErrorBanner(useLocalFallback ? 'Having trouble reaching Munga — showing a local reply' : null);
     } finally {
       setSending(false);
       setTypingIndicator(false);
@@ -788,7 +1044,7 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
   const exportChat = async () => {
     try {
       const chatText = messages.map(msg => {
-        const role = msg.role === 'user' ? 'Alice' : 'Munga';
+        const role = msg.role === 'user' ? profile.userName : profile.botName;
         const date = new Date(msg.timestamp).toLocaleString();
         return `[${date}] ${role}: ${msg.text}`;
       }).join('\n\n');
@@ -816,7 +1072,7 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
   const saveChatToGallery = async () => {
     try {
       const chatText = messages.map(msg => {
-        const role = msg.role === 'user' ? 'Alice' : 'Munga';
+        const role = msg.role === 'user' ? profile.userName : profile.botName;
         const date = new Date(msg.timestamp).toLocaleString();
         return `[${date}] ${role}: ${msg.text}`;
       }).join('\n\n');
@@ -1104,6 +1360,84 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
                 </View>
               </View>
 
+              {/* Persona — replaces the old hardcoded "Alice" profile */}
+              <View style={styles.settingsSection}>
+                <Text style={[styles.settingsSectionTitle, { color: isDarkMode ? '#FF6B9D' : '#831843' }]}>
+                  Your Persona
+                </Text>
+                <View style={[styles.settingsCard, { backgroundColor: isDarkMode ? '#2A2A2A' : '#fff' }]}>
+                  <Text style={[styles.settingsHint, { color: isDarkMode ? '#888' : '#a0527a', marginBottom: 10 }]}>
+                    This is saved just for your account — it shapes how {profile.botName} talks to you.
+                  </Text>
+                  <TouchableOpacity style={styles.settingsMenuItem} onPress={() => setShowPersonaEditor(true)}>
+                    <Ionicons name="person-outline" size={20} color={isDarkMode ? '#fff' : '#831843'} />
+                    <Text style={[styles.settingsMenuText, { color: isDarkMode ? '#fff' : '#831843' }]}>
+                      Edit Persona ({profile.userName}, {profile.relationshipLabel})
+                    </Text>
+                    <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#666' : '#a0527a'} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Preferences */}
+              <View style={styles.settingsSection}>
+                <Text style={[styles.settingsSectionTitle, { color: isDarkMode ? '#FF6B9D' : '#831843' }]}>
+                  Preferences
+                </Text>
+                <View style={[styles.settingsCard, { backgroundColor: isDarkMode ? '#2A2A2A' : '#fff' }]}>
+                  <Text style={[styles.settingsLabel, { color: isDarkMode ? '#fff' : '#831843' }]}>
+                    Response length
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                    {(['short', 'balanced', 'detailed'] as ResponseStyle[]).map((style) => (
+                      <TouchableOpacity
+                        key={style}
+                        onPress={() => updateSettings({ responseStyle: style })}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 8,
+                          borderRadius: 10,
+                          alignItems: 'center',
+                          backgroundColor: settings.responseStyle === style
+                            ? '#ec489a'
+                            : (isDarkMode ? '#1E1E1E' : '#fce7f3'),
+                        }}
+                      >
+                        <Text style={{
+                          fontSize: 12,
+                          fontWeight: '700',
+                          color: settings.responseStyle === style ? '#fff' : (isDarkMode ? '#fff' : '#831843'),
+                          textTransform: 'capitalize',
+                        }}>
+                          {style}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <View style={{ flex: 1, paddingRight: 12 }}>
+                      <Text style={[styles.settingsLabel, { color: isDarkMode ? '#fff' : '#831843', marginBottom: 2 }]}>
+                        Read my mood history
+                      </Text>
+                      <Text style={[styles.settingsHint, { color: isDarkMode ? '#888' : '#a0527a' }]}>
+                        Lets {profile.botName} gently factor in your recent mood entries. Nothing leaves your device for this.
+                      </Text>
+                    </View>
+                    <Switch
+                      value={settings.useMoodContext}
+                      onValueChange={(v) => updateSettings({ useMoodContext: v })}
+                      trackColor={{ true: '#ec489a' }}
+                    />
+                  </View>
+                  {settings.useMoodContext && (
+                    <Text style={[styles.settingsHint, { color: isDarkMode ? '#666' : '#c084a8' }]}>
+                      {moodContext ? '✓ Recent mood data found and in use.' : 'No local mood history found yet.'}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
               {/* Chat Features */}
               <View style={styles.settingsSection}>
                 <Text style={[styles.settingsSectionTitle, { color: isDarkMode ? '#FF6B9D' : '#831843' }]}>
@@ -1155,27 +1489,36 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
               {/* About */}
               <View style={styles.settingsSection}>
                 <Text style={[styles.settingsSectionTitle, { color: isDarkMode ? '#FF6B9D' : '#831843' }]}>
-                  About Munga
+                  About {profile.botName}
                 </Text>
                 <View style={[styles.settingsCard, { backgroundColor: isDarkMode ? '#2A2A2A' : '#fff' }]}>
                   <Text style={[styles.aboutText, { color: isDarkMode ? '#ddd' : '#831843' }]}>
-                    Munga is your magical AI bestie, always here to chat, support, and hype you up! 💕
+                    {profile.botName} is your AI {profile.relationshipLabel}, always here to chat, support, and hype you up! 💕
                   </Text>
                   <View style={[styles.divider, { backgroundColor: isDarkMode ? '#444' : '#fbcfe8' }]} />
                   <View style={styles.infoRow}>
-                    <Text style={[styles.infoLabel, { color: isDarkMode ? '#888' : '#a0527a' }]}>Bestie:</Text>
-                    <Text style={[styles.infoValue, { color: isDarkMode ? '#fff' : '#831843' }]}>{ALICE_PROFILE.bestie}</Text>
+                    <Text style={[styles.infoLabel, { color: isDarkMode ? '#888' : '#a0527a' }]}>Your name:</Text>
+                    <Text style={[styles.infoValue, { color: isDarkMode ? '#fff' : '#831843' }]}>{profile.userName}</Text>
                   </View>
+                  {!!profile.partnerName && (
+                    <View style={styles.infoRow}>
+                      <Text style={[styles.infoLabel, { color: isDarkMode ? '#888' : '#a0527a' }]}>Standing in for:</Text>
+                      <Text style={[styles.infoValue, { color: isDarkMode ? '#fff' : '#831843' }]}>{profile.partnerName}</Text>
+                    </View>
+                  )}
                   <View style={styles.infoRow}>
-                    <Text style={[styles.infoLabel, { color: isDarkMode ? '#888' : '#a0527a' }]}>Career:</Text>
-                    <Text style={[styles.infoValue, { color: isDarkMode ? '#fff' : '#831843' }]}>{ALICE_PROFILE.career}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Text style={[styles.infoLabel, { color: isDarkMode ? '#888' : '#a0527a' }]}>Birthday:</Text>
-                    <Text style={[styles.infoValue, { color: isDarkMode ? '#fff' : '#831843' }]}>{ALICE_PROFILE.birthday}</Text>
+                    <Text style={[styles.infoLabel, { color: isDarkMode ? '#888' : '#a0527a' }]}>Data:</Text>
+                    <Text style={[styles.infoValue, { color: isDarkMode ? '#fff' : '#831843' }]}>Private to your account</Text>
                   </View>
                 </View>
               </View>
+
+              <TouchableOpacity
+                style={[styles.clearHistoryButton, { backgroundColor: isDarkMode ? '#2A2A2A' : '#f1f1f1', marginBottom: 10 }]}
+                onPress={resetAllMungaData}
+              >
+                <Text style={[styles.clearHistoryText, { color: isDarkMode ? '#ccc' : '#666' }]}>Reset Munga for My Account</Text>
+              </TouchableOpacity>
 
               <TouchableOpacity 
                 style={[styles.clearHistoryButton, { backgroundColor: isDarkMode ? '#2A2A2A' : '#fee2e2' }]} 
@@ -1194,7 +1537,7 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
   const clearChatHistory = () => {
     Alert.alert(
       'Clear History',
-      'Are you sure you want to clear all chat history?',
+      'Are you sure you want to clear all chat history? This only affects your account.',
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -1202,28 +1545,63 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
           style: 'destructive',
           onPress: async () => {
             try {
-              await supabase
+              const { error } = await supabase
                 .from('chat_messages')
                 .delete()
                 .eq('user_id', userId);
-              
+              if (error) throw error;
+
               await AsyncStorage.removeItem(STORAGE_KEYS.CHAT_HISTORY);
-              
-              setMessages([
-                {
-                  id: 'welcome',
-                  role: 'assistant',
-                  text: "Heyy bestie! I'm Munga 💕 I'm here whenever you need someone to talk to, laugh with, or just vibe. What's on your mind? ✨",
-                  timestamp: Date.now(),
-                  reactions: [],
-                },
-              ]);
+              setMessages([welcomeMessage(profile)]);
+              setUsingCachedChat(false);
               setShowSettings(false);
             } catch (err) {
               console.warn('Failed to clear history', err);
+              Alert.alert('Error', "Couldn't clear chat history — check your connection and try again.");
             }
           }
         }
+      ]
+    );
+  };
+
+  // ─── RESET EVERYTHING FOR THIS ACCOUNT (profile, settings, wallpaper,
+  //    pinned messages, chat cache, API key) — a full local reset, distinct
+  //    from just clearing chat history ───────────────────────────────────
+  const resetAllMungaData = () => {
+    Alert.alert(
+      'Reset Munga',
+      "This clears your persona, settings, wallpaper, pinned messages, and API key on this device — just for your account. Your chat history in the cloud is untouched unless you clear it separately.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AsyncStorage.multiRemove([
+                STORAGE_KEYS.API_KEY,
+                STORAGE_KEYS.WALLPAPER,
+                STORAGE_KEYS.PINNED_MESSAGES,
+                STORAGE_KEYS.MUTED,
+                STORAGE_KEYS.PROFILE,
+                STORAGE_KEYS.SETTINGS,
+              ]);
+              setApiKey(null);
+              setProfile(DEFAULT_PROFILE);
+              setProfileDraft(DEFAULT_PROFILE);
+              setSettings(DEFAULT_SETTINGS);
+              setSelectedWallpaper(WALLPAPERS[0]);
+              setPinnedMessages([]);
+              setIsMuted(false);
+              setShowSettings(false);
+              Alert.alert('Done', 'Munga has been reset for your account.');
+            } catch (err) {
+              console.warn('Failed to reset Munga data', err);
+              Alert.alert('Error', "Couldn't fully reset — please try again.");
+            }
+          },
+        },
       ]
     );
   };
@@ -1363,6 +1741,115 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
     </Modal>
   );
 
+  // ─── RENDER PERSONA EDITOR ───
+  const renderPersonaEditor = () => (
+    <Modal
+      visible={showPersonaEditor}
+      transparent
+      animationType="slide"
+      onRequestClose={() => { setProfileDraft(profile); setShowPersonaEditor(false); }}
+    >
+      <View style={[styles.modalOverlay, { backgroundColor: isDarkMode ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.4)' }]}>
+        <LinearGradient
+          colors={isDarkMode ? ['#1E1E1E', '#121212'] : ['#fff5f9', '#fff']}
+          style={[styles.modalContent, { height: '85%' }]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+        >
+          <SafeAreaView style={styles.safeAreaContent}>
+            <LinearGradient
+              colors={['#ec489a', '#f43f5e']}
+              style={styles.headerGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <View style={styles.header}>
+                <Text style={styles.headerTitle}>Edit Persona</Text>
+                <TouchableOpacity onPress={() => { setProfileDraft(profile); setShowPersonaEditor(false); }}>
+                  <Ionicons name="close" size={24} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </LinearGradient>
+
+            <ScrollView
+              contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 20 }}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={[styles.settingsHint, { color: isDarkMode ? '#888' : '#a0527a', marginBottom: 16 }]}>
+                Only you can see this — it's saved to your account, not shared globally.
+              </Text>
+
+              {([
+                { key: 'userName', label: 'Your name', placeholder: 'e.g. Alice' },
+                { key: 'botName', label: `Bot's name`, placeholder: 'e.g. Munga' },
+                { key: 'relationshipLabel', label: 'Relationship', placeholder: 'e.g. bestie, partner, friend' },
+                { key: 'partnerName', label: 'Standing in for (optional)', placeholder: 'e.g. your partner\'s name' },
+                { key: 'home', label: 'Home (optional)', placeholder: 'e.g. your hometown' },
+                { key: 'hobby', label: 'Hobbies (optional)', placeholder: 'e.g. coding, travelling' },
+              ] as { key: keyof MungaProfile; label: string; placeholder: string }[]).map((field) => (
+                <View key={field.key} style={{ marginBottom: 14 }}>
+                  <Text style={[styles.settingsLabel, { color: isDarkMode ? '#fff' : '#831843' }]}>
+                    {field.label}
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.settingsInput,
+                      {
+                        color: isDarkMode ? '#fff' : '#831843',
+                        borderColor: isDarkMode ? '#444' : '#fbcfe8',
+                        backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+                        marginBottom: 0,
+                      },
+                    ]}
+                    placeholder={field.placeholder}
+                    placeholderTextColor={isDarkMode ? '#666' : '#c084a8'}
+                    value={profileDraft[field.key] as string}
+                    onChangeText={(t) => setProfileDraft(prev => ({ ...prev, [field.key]: t }))}
+                  />
+                </View>
+              ))}
+
+              <View style={{ marginBottom: 20 }}>
+                <Text style={[styles.settingsLabel, { color: isDarkMode ? '#fff' : '#831843' }]}>
+                  Anything else {profileDraft.botName || 'the bot'} should know (optional)
+                </Text>
+                <TextInput
+                  style={[
+                    styles.settingsInput,
+                    {
+                      color: isDarkMode ? '#fff' : '#831843',
+                      borderColor: isDarkMode ? '#444' : '#fbcfe8',
+                      backgroundColor: isDarkMode ? '#1E1E1E' : '#fff',
+                      minHeight: 80,
+                      textAlignVertical: 'top',
+                    },
+                  ]}
+                  placeholder="Free text — context, preferences, whatever helps"
+                  placeholderTextColor={isDarkMode ? '#666' : '#c084a8'}
+                  value={profileDraft.notes}
+                  onChangeText={(t) => setProfileDraft(prev => ({ ...prev, notes: t }))}
+                  multiline
+                />
+              </View>
+
+              <TouchableOpacity
+                style={styles.settingsSaveButton}
+                onPress={() => saveProfile({
+                  ...profileDraft,
+                  userName: profileDraft.userName?.trim() || DEFAULT_PROFILE.userName,
+                  botName: profileDraft.botName?.trim() || DEFAULT_PROFILE.botName,
+                  relationshipLabel: profileDraft.relationshipLabel?.trim() || DEFAULT_PROFILE.relationshipLabel,
+                })}
+              >
+                <Text style={styles.settingsSaveButtonText}>Save Persona</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </SafeAreaView>
+        </LinearGradient>
+      </View>
+    </Modal>
+  );
+
   // ─── MAIN RENDER ───
   return (
     <>
@@ -1424,7 +1911,7 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
                 <View style={styles.header}>
                   <View style={styles.headerTitleRow}>
                     <Ionicons name="sparkles" size={20} color="#fff" />
-                    <Text style={styles.headerTitle}>Munga</Text>
+                    <Text style={styles.headerTitle}>{profile.botName}</Text>
                     <View style={styles.onlineDot} />
                   </View>
                   <View style={styles.headerActions}>
@@ -1495,12 +1982,21 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
                 >
                   <View style={styles.chatContainer}>
                     {renderQuickActions()}
+
+                    {(usingCachedChat || lastErrorBanner) && (
+                      <View style={[styles.statusBanner, { backgroundColor: isDarkMode ? '#2A2A2A' : '#fff3e0' }]}>
+                        <Ionicons name="cloud-offline-outline" size={14} color="#f59e0b" />
+                        <Text style={[styles.statusBannerText, { color: isDarkMode ? '#f59e0b' : '#b45309' }]} numberOfLines={1}>
+                          {lastErrorBanner || 'Showing cached chat'}
+                        </Text>
+                      </View>
+                    )}
                     
                     {typingIndicator && !sending && (
                       <View style={styles.typingIndicatorContainer}>
                         <Animated.View style={{ opacity: typingAnim }}>
                           <Text style={[styles.typingIndicatorText, { color: isDarkMode ? '#FF6B9D' : '#ec489a' }]}>
-                            Munga is typing...
+                            {profile.botName} is typing...
                           </Text>
                         </Animated.View>
                       </View>
@@ -1520,7 +2016,7 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
                       <View style={styles.typingRow}>
                         <ActivityIndicator size="small" color="#ec489a" />
                         <Text style={[styles.typingText, { color: isDarkMode ? '#FF6B9D' : '#ec489a' }]}>
-                          Munga is thinking...
+                          {profile.botName} is thinking...
                         </Text>
                       </View>
                     )}
@@ -1561,7 +2057,7 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
                             color: isDarkMode ? '#fff' : '#831843',
                           }
                         ]}
-                        placeholder={isRecording ? 'Recording... tap mic to stop' : "Tell me something, bestie..."}
+                        placeholder={isRecording ? 'Recording... tap mic to stop' : `Tell me something, ${profile.relationshipLabel}...`}
                         placeholderTextColor={isDarkMode ? '#666' : '#c084a8'}
                         value={inputText}
                         onChangeText={setInputText}
@@ -1596,6 +2092,7 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
       {renderSettingsModal()}
       {renderWallpaperPicker()}
       {renderPinnedMessages()}
+      {renderPersonaEditor()}
     </>
   );
 };
@@ -1907,6 +2404,21 @@ recordingPulse: {
   typingIndicatorText: {
     fontSize: 12,
     fontStyle: 'italic',
+  },
+  statusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: 16,
+    marginBottom: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  statusBannerText: {
+    fontSize: 11,
+    fontWeight: '600',
+    flex: 1,
   },
 
 // ── Quick Actions (Instagram-style) ──

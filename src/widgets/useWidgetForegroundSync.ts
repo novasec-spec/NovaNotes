@@ -1,5 +1,5 @@
 // src/widgets/useWidgetForegroundSync.ts
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import { syncBubblesWidget } from './syncBubblesWidget';
 
@@ -13,15 +13,29 @@ import { syncBubblesWidget } from './syncBubblesWidget';
  * 30-min updatePeriodMillis in app.json.
  */
 export function useWidgetForegroundSync() {
+  const isFirstRun = useRef(true);
+
   useEffect(() => {
     if (Platform.OS !== 'android') return;
 
-    syncBubblesWidget(); // once on mount
+    // Debounce first run
+    const initialSync = setTimeout(() => {
+      syncBubblesWidget();
+    }, 1000);
 
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') syncBubblesWidget();
+      if (state === 'active') {
+        // Debounce rapid foreground events
+        clearTimeout(initialSync);
+        setTimeout(() => {
+          syncBubblesWidget();
+        }, 500);
+      }
     });
 
-    return () => subscription.remove();
+    return () => {
+      clearTimeout(initialSync);
+      subscription.remove();
+    };
   }, []);
 }

@@ -23,6 +23,7 @@ import { TaskListModal } from './components/TaskListModal';
 import { TaskProjectModal } from './components/TaskProjectModal';
 import { TaskTemplateModal } from './components/TaskTemplateModal';
 import { Task, TaskFilterType } from './types/task.types';
+import { useLocalSearchParams } from 'expo-router';
 
 export default function TasksScreen() {
   const { colors } = useTheme();
@@ -37,7 +38,7 @@ export default function TasksScreen() {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [shareModalVisible, setShareModalVisible] = useState(false);
-  
+const { taskId } = useLocalSearchParams();  
   const {
     tasks,
     loading,
@@ -55,6 +56,7 @@ export default function TasksScreen() {
     getProjects,
     createList,
     createProject,
+   shareTask,
     applyTemplate,
   } = useTasks();
 
@@ -200,10 +202,7 @@ const handleShare = async (taskId: string, userIds: string[]) => {
           setShowShareModal(false);
           setSelectedTask(null);
         }}
-        onShare={async (taskId, userIds) => {
-          // Share implementation
-          setShowShareModal(false);
-        }}
+        onShare={shareTask}
         colors={colors}
       />
 

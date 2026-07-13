@@ -10,9 +10,14 @@ const resolveFrom = require("resolve-from");
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (
-    moduleName.startsWith("event-target-shim") &&
-    context.originModulePath.includes("react-native-webrtc")
+    moduleName.startsWith('event-target-shim') &&
+    (
+      context.originModulePath.includes('react-native-webrtc') ||
+      context.originModulePath.includes('livekit-client') ||
+      context.originModulePath.includes('@livekit')
+    )
   ) {
+
     // The nested event-target-shim@6 exports map has no "./index" subpath —
     // only ".", "./es5", "./umd". Strip it so resolution hits "." instead.
     const normalizedModuleName = moduleName === "event-target-shim/index"

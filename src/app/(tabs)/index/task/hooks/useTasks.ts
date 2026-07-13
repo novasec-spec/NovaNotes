@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { Task, TaskFilterType, TaskStats, TaskCreateDTO, TaskList, Project } from '../types/task.types';
 import { TaskService } from '../services/taskService';
 import { NotificationService } from '../services/notificationService';
+import { ShareService } from '../services/shareService';
 
 export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -121,6 +122,33 @@ export function useTasks() {
       throw err;
     }
   }, []);
+
+
+// In useTasks hook
+const shareTask = useCallback(async (taskId: string, userIds: string[], message?: string) => {
+  try {
+    const shareService = ShareService.getInstance();
+    await shareService.shareTask(taskId, userIds, message);
+    
+    // Update local task
+    const tasks = await taskService.getLocalTasks();
+    const task = tasks.find(t => t.id === taskId);
+    if (task) {
+      await taskService.updateTaskLocally(taskId, {
+        sharedWith: [...(task.sharedWith || []), ...userIds]
+      });
+      setTasks(prev => prev.map(t => 
+        t.id === taskId 
+          ? { ...t, sharedWith: [...(t.sharedWith || []), ...userIds] }
+          : t
+      ));
+    }
+  } catch (err) {
+    console.error('Share task error:', err);
+    setError('Failed to share task');
+    throw err;
+  }
+}, []);
 
   const applyTemplate = useCallback(async (templateId: string) => {
     try {
@@ -268,6 +296,7 @@ export function useTasks() {
     getProjects,   // Add this
     createList,
     createProject,
+    shareTask,
     applyTemplate,
   };
 }

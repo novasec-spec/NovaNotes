@@ -15,6 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../config/supabase';
 import { useTheme } from '../../contexts/ThemeContext';
 import { PremiumGuard } from '../../components/PremiumGuard'
+import { useLocalSearchParams } from 'expo-router';
+
 
 const { width: W } = Dimensions.get('window');
 
@@ -192,7 +194,7 @@ const vpStyles = StyleSheet.create({
 // ══════════════════════════════════════════════════════════════════════════════
 export default function MemoriesScreen() {
   const { colors } = useTheme();
-
+const { memoryId } = useLocalSearchParams();
   // ── STATE ──────────────────────────────────────────────────────────────────
   const [memories,          setMemories]         = useState<Memory[]>([]);
   const [selectedMemory,    setSelectedMemory]   = useState<Memory | null>(null);

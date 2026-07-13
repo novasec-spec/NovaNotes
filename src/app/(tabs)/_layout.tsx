@@ -7,10 +7,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppContext } from '../_layout';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../config/supabase';
 import NotificationBanner from './chat/NotificationBanner';
-
+import { NotificationService } from './index/task/services/notificationService';
+import * as Notifications from 'expo-notifications';
 const { width: W } = Dimensions.get('window');
 
 // ✅ 5 CORE TABS ONLY
@@ -20,6 +20,7 @@ const TAB_CONFIG: Record<string, { icon: string; iconActive: string; color: stri
   memories: { icon: 'images-outline', iconActive: 'images', color: '#F97316' },
   vibe: { icon: 'happy-outline', iconActive: 'happy', color: '#22C55E' },
   chat: { icon: 'chatbubbles-outline', iconActive: 'chatbubbles', color: '#F59E0B' },
+  faith: { icon: 'book-outline', iconActive: 'book', color: '#F59E0B' },
 };
 
 // Helper to format the label
@@ -163,7 +164,30 @@ function CustomTabBar({ state, navigation }: any) {
 export default function TabsLayout() {
   const router = useRouter();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  useEffect(() => {
+    // Initialize notifications
+    const initNotifications = async () => {
+      const notificationService = NotificationService.getInstance();
+      await notificationService.initialize();
+    };
 
+    initNotifications();
+
+    // Handle notification responses
+    const subscription = Notifications.addNotificationResponseReceivedListener(
+      response => {
+        const data = response.notification.request.content.data;
+        if (data.taskId) {
+          // Navigate to the task
+          console.log('Open task:', data.taskId);
+        }
+      }
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setCurrentUserId(data.session?.user?.id ?? null);
@@ -205,7 +229,8 @@ useEffect(() => {
         <Tabs.Screen name="memories" options={{ title: 'Memories' }} />
         <Tabs.Screen name="vibe" options={{ title: 'Vibe' }} />
         <Tabs.Screen name="chat" options={{ title: 'Chat' }} />
-      </Tabs>
+        <Tabs.Screen name="faith" options={{ title: 'Faith' }} />  
+    </Tabs>
     </View>
   );
 }

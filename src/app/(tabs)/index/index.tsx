@@ -262,13 +262,13 @@ function BadgeUnlockModal({
 
 export default function HomeScreen() {
 syncBubblesWidget();
-  const { sendGreetingOnAppLoad, sendGreeting, greetingSent } = useDailyGreeting();
   const { processScheduledChecks, getTodayMood, handleMoodFromNotification } = useMoodNotifications();
   const router = useRouter();
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
   const { sendSystem } = useNotification();
   const unreadCount = useNotificationBadge();
+//   const { greetingSent, lastGreeting, sendGreeting } = useDailyGreeting();
 
   // ✅ CHANGE: name now comes from auth context, with a graceful fallback.
   // ⚠️ Adjust `user?.name` to whatever field your AuthContext actually exposes
@@ -386,7 +386,7 @@ const displayName =
     let isMounted = true;
 
     const hour = new Date().getHours();
-    if (hour < 12) setGreeting('Good morning 🌅');
+    if (hour < 12) setGreeting('Good morning 🌞');
     else if (hour < 17) setGreeting('Good afternoon ☀️');
     else setGreeting('Good evening 🌙');
 
@@ -394,8 +394,7 @@ const displayName =
       didInit.current = true;
 
       (async () => {
-        await sendGreetingOnAppLoad();
-        await processScheduledChecks();
+         await processScheduledChecks();
         const todaysMood = await getTodayMood();
         if (todaysMood?.fromNotification) {
           console.log('💭 Mood was logged from notification');

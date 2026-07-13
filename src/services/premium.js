@@ -1,13 +1,12 @@
 import { apiClient } from './api'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-// Cache premium status for 5 minutes
 const CACHE_KEY = '@premium_status'
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
 export const premiumService = {
   async subscribe(plan, phoneNumber) {
-    const response = await apiClient.post('/premium/pay', {
+    const response = await apiClient.post('/premium-pay', {
       plan,
       phoneNumber,
     })
@@ -27,8 +26,8 @@ export const premiumService = {
         }
       }
 
-      // Fetch fresh
-      const status = await apiClient.get('/premium/check')
+      // Fetch fresh from Edge Function
+      const status = await apiClient.get('/premium-check')
       
       // Cache the result
       await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
@@ -51,9 +50,8 @@ export const premiumService = {
   },
 
   async restorePurchase() {
-    const status = await apiClient.post('/premium/restore')
+    const status = await apiClient.post('/premium-restore')
     
-    // Update cache
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
       status,
       timestamp: Date.now()
@@ -62,7 +60,6 @@ export const premiumService = {
     return status
   },
 
-  // Clear cache when user logs out
   async clearCache() {
     await AsyncStorage.removeItem(CACHE_KEY)
   }

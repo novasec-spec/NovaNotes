@@ -176,6 +176,11 @@ export default function ChatScreen() {
     router.push('/chat/settings');
   };
 
+
+  const navigateToCalls = () => {
+    router.push('/CallHistoryScreen');
+  };
+
   // ─── Render Loading ──────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -257,6 +262,13 @@ export default function ChatScreen() {
             activeOpacity={0.7}
           >
             <Icon name="add-circle-outline" size={22} color={colors.text} />
+          </TouchableOpacity>
+           <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: isDarkMode ? '#1A1A2E' : '#F5F3F7' }]}
+            onPress={navigateToCalls}
+            activeOpacity={0.7}
+          >
+            <Icon name="call-outline" size={22} color={colors.text} />
           </TouchableOpacity>
 
           {/* ─── Settings Button ─── */}

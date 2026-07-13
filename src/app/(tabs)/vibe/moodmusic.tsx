@@ -19,6 +19,10 @@ import {
 } from 'expo-audio';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+// In your music player screen or component
+import MusicPlayer from '../../../components/MusicPlayer';
+import { setupNotificationActionHandler } from '../../../services/NotificationActionHandler';
+
 
 // ── Design Tokens (Dark Mode Ready) ──────────────────────────────────────────
 const COLORS = {
@@ -999,7 +1003,7 @@ export default function MoodMusicScreen() {
       };
 
       await persistLibrary([newTrack, ...library]);
-      Alert.alert('Added', `"${newTrack.title}" is now in your library.`);
+   // Alert.alert('Added', `"${newTrack.title}" is now in your library.`);
     } catch (error) {
       console.error('importTrack error:', error);
       Alert.alert('Import failed', getErrorMessage(error));
@@ -1051,7 +1055,7 @@ export default function MoodMusicScreen() {
       };
 
       await persistLibrary([newTrack, ...library]);
-      Alert.alert('Downloaded', `"${catalogTrack.title}" is saved and ready to play offline.`);
+//  Alert.alert('Downloaded', `"${catalogTrack.title}" is saved and ready to play offline.`);
     } catch (error) {
       console.error('downloadCatalogTrack error:', error);
       Alert.alert('Download failed', getErrorMessage(error));
@@ -1099,6 +1103,13 @@ export default function MoodMusicScreen() {
   });
 
   const currentMoodConfig = todayMood ? getMoodConfig(todayMood.mood) : null;
+
+// In your root component (App.tsx or _layout.tsx)
+useEffect(() => {
+  setupNotificationActionHandler();
+}, []);
+
+// Render the music player
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
@@ -1241,7 +1252,15 @@ export default function MoodMusicScreen() {
               <Text style={[styles.spotifyBadgeTxt, { color: PURPLE }]}>Plays offline</Text>
             </View>
           </View>
-
+// Render the music player
+<MusicPlayer track={{
+  id: '1',
+  title: 'Perfect',
+  artist: 'Ed Sheeran',
+  album: '÷ (Divide)',
+  artwork: 'https://example.com/artwork.jpg',
+  uri: 'https://cdn.pixabay.com/audio/2022/08/02/audio_884fe92c21.mp3',
+}} />
           <View style={styles.libraryActionsRow}>
             <TouchableOpacity style={styles.libraryActionBtn} onPress={importTrack} disabled={importing}>
               {importing ? (

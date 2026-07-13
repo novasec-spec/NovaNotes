@@ -36,6 +36,17 @@ import {
   getNotificationSummary,
   filterNotifications,
 } from '../../../utils/notification/notificationHelpers';
+// Same resolver the push-notification tap handler uses (NotificationService.ts),
+// so an in-app tap on a notification card and a tap on the OS notification
+// for the *same* notification always land on the same screen — but here we
+// only auto-navigate on a *confident* match (explicit screen/route in the
+// payload, or a real id like taskId/noteId/chatId). Anything else falls
+// back to the action sheet below, same as this screen always did.
+import { resolveNotificationRoute } from '../../../services/notification/NotificationNavigator';
+// Generic AsyncStorage cache layer shared with CallHistoryScreen — lets
+// this screen show last-known notifications instantly on mount instead of
+// a blank list/spinner, then silently refreshes from the network.
+import { readCache, writeCache } from '../../../utils/screenCache';
 
 const { width: W } = Dimensions.get('window');
 
@@ -58,6 +69,10 @@ const deduplicateNotifications = (notifications: AppNotification[]): AppNotifica
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 };
+
+// ─── CACHE KEY ──────────────────────────────────────────
+
+const notificationsCacheKey = (userId: string) => `notifications:${userId}`;
 
 export default function NotificationScreen() {
   const insets = useSafeAreaInsets();
@@ -90,6 +105,10 @@ export default function NotificationScreen() {
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [notificationCount, setNotificationCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
+  // True when the list on screen came from cache and the most recent
+  // network refresh failed — lets us show a subtle "showing saved
+  // results" hint instead of silently pretending everything is current.
+  const [showingStaleCache, setShowingStaleCache] = useState(false);
 
   // Animation values
   const searchAnim = useRef(new Animated.Value(0)).current;
@@ -117,18 +136,60 @@ export default function NotificationScreen() {
   const loadNotifications = useCallback(async () => {
     if (!user?.id) return;
 
+    // If we already have something on screen (from cache or a previous
+    // load), don't blank it out with the full spinner while we silently
+    // refresh — only show the spinner for a genuine first load.
+    const hasExistingData = notifications.length > 0;
+
     try {
-      setLoading(true);
+      if (!hasExistingData) setLoading(true);
       const data = await getAll(user.id);
       const deduped = deduplicateAndSet(data);
       applyFilters(deduped, selectedFilter, searchQuery);
+      setShowingStaleCache(false);
+      await writeCache(notificationsCacheKey(user.id), deduped);
     } catch (error) {
       console.error('Error loading notifications:', error);
-      Alert.alert('Error', 'Failed to load notifications');
+      if (hasExistingData) {
+        // We have something to show (cache or prior state) — don't
+        // interrupt with a blocking alert, just flag it as possibly stale.
+        setShowingStaleCache(true);
+      } else {
+        Alert.alert('Error', 'Failed to load notifications');
+      }
     } finally {
       setLoading(false);
     }
-  }, [user?.id, getAll, selectedFilter, searchQuery, deduplicateAndSet]);
+  }, [user?.id, getAll, selectedFilter, searchQuery, deduplicateAndSet, notifications.length]);
+
+  // ─── CACHE-FIRST HYDRATION (instant perceived load) ─
+  // Runs once per user on mount: shows the last-known list immediately
+  // (no spinner, no blank screen) while loadNotifications() above still
+  // runs right after to get the freshest data from the network.
+  const hydratedForUserRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.id || hydratedForUserRef.current === user.id) return;
+    hydratedForUserRef.current = user.id;
+
+    (async () => {
+      const cached = await readCache<AppNotification[]>(notificationsCacheKey(user.id));
+      if (cached?.data?.length) {
+        const deduped = deduplicateAndSet(cached.data);
+        applyFilters(deduped, selectedFilter, searchQuery);
+        setLoading(false);
+      }
+    })();
+  }, [user?.id, deduplicateAndSet, applyFilters, selectedFilter, searchQuery]);
+
+  // ─── KEEP CACHE IN SYNC WITH EVERY STATE CHANGE ─────
+  // Realtime inserts, mark-as-read, deletes, bulk actions — all of these
+  // funnel through setNotifications, so persisting here (rather than at
+  // each call site) keeps the cache correct everywhere for free.
+  useEffect(() => {
+    if (!user?.id) return;
+    writeCache(notificationsCacheKey(user.id), notifications).catch(() => {});
+  }, [notifications, user?.id]);
 
   // ─── APPLY FILTERS ──────────────────────────────────
 
@@ -178,21 +239,25 @@ export default function NotificationScreen() {
 
     const sub = subscribe(user.id, (payload) => {
       console.log('📡 New notification:', payload.new);
-      
-      // Check if notification already exists
-      const exists = notifications.some(n => n.id === payload.new.id);
-      if (!exists) {
-        setNotifications(prev => {
-          const updated = [payload.new, ...prev];
-          return deduplicateNotifications(updated);
-        });
-        applyFilters([...notifications, payload.new], selectedFilter, searchQuery);
-        refreshBadge();
-      }
+
+      // Functional update avoids the stale-closure bug the previous version
+      // had (reading `notifications` from the outer closure for both the
+      // existence check and the re-filter, which could race with other
+      // updates and double-count or silently drop the new item).
+      setNotifications(prev => {
+        const alreadyExists = prev.some(n => n.id === payload.new.id);
+        if (alreadyExists) return prev;
+
+        const updated = deduplicateNotifications([payload.new, ...prev]);
+        applyFilters(updated, selectedFilter, searchQuery);
+        return updated;
+      });
+
+      refreshBadge();
     });
 
     return () => unsubscribe(user.id);
-  }, [user?.id, subscribe, unsubscribe, selectedFilter, searchQuery, notifications]);
+  }, [user?.id, subscribe, unsubscribe, selectedFilter, searchQuery, applyFilters, refreshBadge]);
 
   // ─── ANIMATIONS ─────────────────────────────────────
 
@@ -282,15 +347,22 @@ export default function NotificationScreen() {
       refreshBadge();
     }
 
-    // Navigate based on data
-    const screen = notification.data?.screen;
-    const params = notification.data?.params || {};
+    // Navigate using the same resolver the OS push-tap handler uses — but
+    // only when it found a *confident* destination (isSpecific: true).
+    // Most of your notification types (daily, morning, love_actions,
+    // system, mood, etc.) don't carry an explicit `screen`/id, so this
+    // will correctly fall through to the action sheet for them, exactly
+    // like before. resolveNotificationRoute never throws.
+    const route = resolveNotificationRoute(notification.type, notification.data || {});
 
-    if (screen) {
-      router.push({
-        pathname: `/${screen}`,
-        params: params,
-      } as any);
+    if (route.isSpecific) {
+      try {
+        router.push({ pathname: route.pathname as any, params: route.params as any });
+      } catch (error) {
+        console.warn('⚠️ Failed to navigate from notification tap, showing action sheet instead:', error);
+        setSelectedNotification(notification);
+        setActionSheetVisible(true);
+      }
     } else {
       setSelectedNotification(notification);
       setActionSheetVisible(true);
@@ -595,6 +667,15 @@ export default function NotificationScreen() {
           </View>
         </Animated.View>
 
+        {showingStaleCache && (
+          <View style={[styles.staleBanner, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+            <Ionicons name="cloud-offline-outline" size={14} color={colors.muted} />
+            <Text style={[styles.staleBannerText, { color: colors.muted }]}>
+              Couldn't refresh — showing saved results
+            </Text>
+          </View>
+        )}
+
         {/* Search Bar */}
         <Animated.View style={[
           styles.searchContainer,
@@ -879,6 +960,18 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     padding: 4,
+  },
+  staleBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+  },
+  staleBannerText: {
+    fontSize: 11,
+    fontWeight: '500',
   },
   selectionHeader: {
     borderBottomWidth: 2,

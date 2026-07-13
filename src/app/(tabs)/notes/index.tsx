@@ -40,8 +40,11 @@ import { timeAgo, searchNotes } from './utils/helpers';
 import { Note } from './types';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../contexts/NotificationContext';
+import { useLocalSearchParams } from 'expo-router';
+
 
 export default function NotesScreen() {
+const { noteId } = useLocalSearchParams();
   const { colors, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
   const { sendNotification } = useNotification();

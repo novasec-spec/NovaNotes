@@ -34,7 +34,7 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "jsEngine": "jsc",
+      "jsEngine": "hermes",
       "googleServicesFile": "./google-services.json",
       "package": "com.novasec.notes",
       "edgeToEdgeEnabled": true,
@@ -61,6 +61,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/withQuickCaptureTile",
       "expo-router",
       [
         "expo-notifications",

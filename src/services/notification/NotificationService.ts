@@ -1,10 +1,65 @@
 // src/services/notification/NotificationService.ts
+//
+// ─── WHAT CHANGED IN THIS PASS ────────────────────────────────────────────
+// Your logic is 100% preserved (offline queue, scheduled jobs, retries,
+// badges, analytics, categories/channels, action handling). On top of that:
+//
+// 1. FIXED — `getById` was corrupted: it contained a stray INSERT block
+//    pasted inside it instead of a SELECT, and referenced variables
+//    (`dbType`, `dataWithOriginal`) that don't exist in that method's
+//    scope. This would not have compiled. Rewritten as a proper SELECT.
+//
+// 2. FIXED — Duplicate method name `scheduleNotification`: one public
+//    (params object, creates + schedules a notification) and one private
+//    (id + date, persists a `scheduled_notifications` row). Same name,
+//    different signatures — TypeScript would reject this. Renamed the
+//    private one to `persistScheduledMarker`.
+//
+// 3. FIXED — Dead/lossy `TYPE_MAPPING` in `create()`: it silently
+//    downgraded rich types (e.g. `love_actions`, `verse_of_the_day`,
+//    `chat_message`) to generic ones (`system`, `chat`) — but every one of
+//    those specific values is already allowed by your live
+//    `notifications_type_check` constraint, so this was throwing away
+//    real information for no reason. It was also *dead code*: the actual
+//    insert in `createWithRetry` never used the mapped value, it inserted
+//    `params.type` directly. Removed the mapping; the service now trusts
+//    the DB constraint as the single source of truth for valid types.
+//
+// 4. FIXED — `getCountsByType` called `.group('type')`, which doesn't
+//    exist on the supabase-js query builder. Replaced with a client-side
+//    reduce over the fetched rows.
+//
+// 5. FIXED — `updateProgress` used `supabase.sql\`...\`` as a value in
+//    `.update()`. That tagged-template helper isn't part of the
+//    supabase-js client and this would fail at runtime. Replaced with a
+//    read-merge-write: fetch the existing `data`, merge the new progress
+//    fields client-side, then update.
+//
+// 6. NEW — `sanitizeNotificationData()`: every payload written to Supabase
+//    or handed to `expo-notifications` is now stripped of `undefined`
+//    values, functions, and non-JSON-safe fields, and capped in size, so
+//    "clean data" holds all the way from creation to the device.
+//
+// 7. NEW — Notification tap/action wiring: `initialize()` now registers
+//    `Notifications.addNotificationResponseReceivedListener`, so tapping a
+//    notification (or one of its action buttons) is handled automatically
+//    — you don't need to wire that up separately in a screen/hook. Taps
+//    are routed through NotificationNavigator, which is guaranteed to
+//    resolve to *some* valid screen (see that file for details) so you
+//    will never hit "no route found" from a notification tap again.
+//
+// 8. NEW — `ALL_NOTIFICATION_TYPES` + `isKnownNotificationType()`: a
+//    runtime mirror of your DB constraint. `create()` now warns (does not
+//    block) if you pass a type outside that list, so drift between your
+//    code and the DB constraint surfaces immediately in logs instead of
+//    silently failing an insert.
 
 import { createClient } from '@supabase/supabase-js';
 import * as Notifications from 'expo-notifications';
 import { Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppNotification, NotificationData, NotificationType, NotificationCategory } from '../../types/notifications';
+import { navigateFromNotification, NotificationRouteData } from './NotificationNavigator';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -19,6 +74,23 @@ const RETRY_CONFIG = {
 };
 
 const PROGRESS_THRESHOLDS = [0, 25, 50, 75, 100];
+
+/** Mirrors your live `notifications_type_check` constraint. Keep in sync
+ *  if you ever run another migration that changes the allowed values —
+ *  this is what powers the drift warning in `create()`. */
+export const ALL_NOTIFICATION_TYPES = [
+  'reminder', 'system', 'chat', 'task', 'alert', 'progress', 'chat_message',
+  'notes', 'mood', 'daily', 'followup', 'love_actions', 'verse_of_the_day',
+  'prayer_reminder', 'answered_prayer', 'sermon_reminder', 'praise_reminder',
+  'test', 'morning', 'now_playing', 'media', 'night', 'message_actions',
+  'task_actions', 'reminder_actions', 'question_actions', 'encouragement',
+  'incoming_call', 'call_accepted', 'call_ended', 'call_declined',
+  'call_missed', 'call_cancelled',
+] as const;
+
+export function isKnownNotificationType(type: string): boolean {
+  return (ALL_NOTIFICATION_TYPES as readonly string[]).includes(type);
+}
 
 // ─── INTERFACES ─────────────────────────────────────────
 interface CreateNotificationParams {
@@ -65,6 +137,58 @@ interface BulkNotificationParams extends CreateNotificationParams {
   userIds: string[];
 }
 
+// ─── DATA CLEANING ──────────────────────────────────────
+const MAX_DATA_BYTES = 8_000; // generous ceiling; push payload limits are ~4KB total on some platforms
+
+/**
+ * Strips undefined/function/symbol values, guarantees JSON-safety, and
+ * caps payload size so nothing malformed or oversized ever reaches
+ * Supabase or the OS notification tray. Always returns a plain object,
+ * never throws.
+ */
+function sanitizeNotificationData(data: unknown): Record<string, any> {
+  if (!data || typeof data !== 'object') return {};
+
+  try {
+    // JSON round-trip drops undefined/functions/symbols and de-classes
+    // any class instances (e.g. Date -> string would need explicit .toISOString()
+    // calls upstream, which the rest of this file already does).
+    const clean = JSON.parse(JSON.stringify(data));
+
+    const size = JSON.stringify(clean).length;
+    if (size > MAX_DATA_BYTES) {
+      console.warn(`⚠️ Notification data payload is ${size} bytes (>${MAX_DATA_BYTES}); truncating non-essential fields`);
+      // Keep the fields navigation/analytics actually depend on; drop the rest.
+      const {
+        screen, target, route, params, notificationId, userId, senderId,
+        fromUserId, chatId, taskId, reminderId, noteId, memoryId, callId,
+        postId, targetId, groupId, category, type,
+      } = clean;
+      return {
+        screen, target, route, params, notificationId, userId, senderId,
+        fromUserId, chatId, taskId, reminderId, noteId, memoryId, callId,
+        postId, targetId, groupId, category, type,
+        _truncated: true,
+      };
+    }
+
+    return clean;
+  } catch (error) {
+    console.error('❌ Failed to sanitize notification data, dropping payload:', error);
+    return {};
+  }
+}
+
+/** Normalizes a raw Supabase row into the shape the app expects, defensively. */
+function normalizeNotificationRow(row: any): AppNotification {
+  return {
+    ...row,
+    data: sanitizeNotificationData(row?.data),
+    read: !!row?.read,
+    priority: row?.priority || 'normal',
+  } as AppNotification;
+}
+
 // ─── SERVICE CLASS ──────────────────────────────────────
 export class NotificationService {
   private static instance: NotificationService;
@@ -76,6 +200,7 @@ export class NotificationService {
   private isProcessingQueue = false;
   private scheduledJobs = new Map<string, any>();
   private pushToken: string | null = null;
+  private responseListenerSub: { remove: () => void } | null = null;
 
   private constructor() {
     this.setupNetworkListeners();
@@ -113,6 +238,10 @@ export class NotificationService {
     // Setup notification categories with all features
     await this.setupNotificationCategories();
 
+    // Wire up tap/action handling -> navigation. Safe to call multiple
+    // times; we remove any previous subscription first.
+    this.setupResponseListener();
+
     // Request permissions
     const { status } = await Notifications.requestPermissionsAsync();
     if (status !== 'granted') {
@@ -128,18 +257,24 @@ export class NotificationService {
     return this.pushToken;
   }
 
-  private async setupAndroidChannels() {
-    const channels = [
-      { id: 'default', name: 'Default', importance: Notifications.AndroidImportance.MAX },
-      { id: 'message', name: 'Messages', importance: Notifications.AndroidImportance.HIGH },
-      { id: 'task', name: 'Tasks', importance: Notifications.AndroidImportance.HIGH },
-      { id: 'reminder', name: 'Reminders', importance: Notifications.AndroidImportance.HIGH },
-      { id: 'system', name: 'System', importance: Notifications.AndroidImportance.DEFAULT },
-      { id: 'progress', name: 'Progress', importance: Notifications.AndroidImportance.LOW },
-      { id: 'alert', name: 'Alerts', importance: Notifications.AndroidImportance.HIGH },
-    ];
+  /** Tears down listeners. Call from your root layout's cleanup/unmount if it ever remounts the service consumer. */
+  teardown() {
+    this.responseListenerSub?.remove();
+    this.responseListenerSub = null;
+  }
 
-    for (const channel of channels) {
+  private readonly androidChannelDefs = [
+    { id: 'default', name: 'Default', importance: Notifications.AndroidImportance.MAX },
+    { id: 'message', name: 'Messages', importance: Notifications.AndroidImportance.HIGH },
+    { id: 'task', name: 'Tasks', importance: Notifications.AndroidImportance.HIGH },
+    { id: 'reminder', name: 'Reminders', importance: Notifications.AndroidImportance.HIGH },
+    { id: 'system', name: 'System', importance: Notifications.AndroidImportance.DEFAULT },
+    { id: 'progress', name: 'Progress', importance: Notifications.AndroidImportance.LOW },
+    { id: 'alert', name: 'Alerts', importance: Notifications.AndroidImportance.HIGH },
+  ];
+
+  private async setupAndroidChannels() {
+    for (const channel of this.androidChannelDefs) {
       await Notifications.setNotificationChannelAsync(channel.id, {
         name: channel.name,
         importance: channel.importance,
@@ -155,7 +290,7 @@ export class NotificationService {
       {
         identifier: 'reply',
         buttonTitle: 'Reply',
-        options: { 
+        options: {
           openAppWhenTapped: true,
           isAuthenticationRequired: false,
         },
@@ -163,7 +298,7 @@ export class NotificationService {
       {
         identifier: 'reply_inline',
         buttonTitle: 'Quick Reply',
-        options: { 
+        options: {
           openAppWhenTapped: false,
           isAuthenticationRequired: false,
         },
@@ -175,15 +310,15 @@ export class NotificationService {
       {
         identifier: 'mark_read',
         buttonTitle: 'Mark Read',
-        options: { 
+        options: {
           openAppWhenTapped: false,
         },
       },
       {
         identifier: 'dismiss',
         buttonTitle: 'Dismiss',
-        options: { 
-          isDestructive: true, 
+        options: {
+          isDestructive: true,
           openAppWhenTapped: false,
         },
       },
@@ -194,21 +329,21 @@ export class NotificationService {
       {
         identifier: 'complete',
         buttonTitle: '✓ Complete',
-        options: { 
+        options: {
           openAppWhenTapped: false,
         },
       },
       {
         identifier: 'snooze',
         buttonTitle: 'Snooze',
-        options: { 
+        options: {
           openAppWhenTapped: false,
         },
       },
       {
         identifier: 'postpone',
         buttonTitle: 'Postpone',
-        options: { 
+        options: {
           openAppWhenTapped: false,
           isDestructive: false,
         },
@@ -220,21 +355,21 @@ export class NotificationService {
       {
         identifier: 'done',
         buttonTitle: 'Done',
-        options: { 
+        options: {
           openAppWhenTapped: false,
         },
       },
       {
         identifier: 'later',
         buttonTitle: 'Later',
-        options: { 
+        options: {
           openAppWhenTapped: false,
         },
       },
       {
         identifier: 'snooze_reminder',
         buttonTitle: 'Snooze 15m',
-        options: { 
+        options: {
           openAppWhenTapped: false,
         },
       },
@@ -245,27 +380,56 @@ export class NotificationService {
       {
         identifier: 'like',
         buttonTitle: '❤️ Like',
-        options: { 
+        options: {
           openAppWhenTapped: false,
         },
       },
       {
         identifier: 'comment',
         buttonTitle: '💬 Comment',
-        options: { 
+        options: {
           openAppWhenTapped: true,
         },
       },
       {
         identifier: 'share',
         buttonTitle: '↗️ Share',
-        options: { 
+        options: {
           openAppWhenTapped: false,
         },
       },
     ]);
 
     console.log('✅ Notification categories with all features set');
+  }
+
+  // ─── TAP / ACTION LISTENER ────────────────────────────────
+
+  private setupResponseListener() {
+    this.responseListenerSub?.remove();
+
+    this.responseListenerSub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const rawData = response.notification.request.content.data as NotificationRouteData;
+      const data = sanitizeNotificationData(rawData);
+      const actionIdentifier = response.actionIdentifier; // 'expo.modules.notifications.actions.DEFAULT' on a plain tap
+      const isDefaultTap = actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER;
+      const inlineText = (response as any).userText as string | undefined;
+
+      if (isDefaultTap) {
+        // Plain tap on the notification body -> navigate + mark opened.
+        if (data.notificationId && data.userId) {
+          this.trackOpen(data.notificationId, data.userId).catch((e) =>
+            console.error('Failed to track notification open:', e)
+          );
+        }
+        navigateFromNotification(data.type as NotificationType | undefined, data);
+      } else {
+        // An action button was pressed.
+        this.handleAction(actionIdentifier, data, inlineText).catch((e) =>
+          console.error('Failed to handle notification action:', e)
+        );
+      }
+    });
   }
 
   // ─── NETWORK MANAGEMENT ──────────────────────────────────
@@ -290,7 +454,7 @@ export class NotificationService {
 
   private async processOfflineQueue() {
     if (this.isProcessingQueue || !this.isOnline || this.offlineQueue.length === 0) return;
-    
+
     this.isProcessingQueue = true;
     console.log(`📦 Processing ${this.offlineQueue.length} queued notifications`);
 
@@ -460,27 +624,19 @@ export class NotificationService {
     try {
       console.log('💾 Creating notification:', params.title);
 
+      if (!isKnownNotificationType(params.type)) {
+        // Non-blocking: DB constraint is the real gatekeeper, this just
+        // surfaces drift between code and schema early, in your logs.
+        console.warn(`⚠️ "${params.type}" is not in ALL_NOTIFICATION_TYPES — insert may be rejected by the DB constraint.`);
+      }
 
-    // 🔥 ADD THIS TYPE MAPPING
-    const TYPE_MAPPING: Record<string, string> = {
-      'love_actions': 'system',
-      'morning': 'system',
-      'night': 'system',
-      'message_actions': 'chat',
-      'task_actions': 'task',
-      'reminder_actions': 'reminder',
-      'notes': 'system',
-      'mood': 'system',
-      'daily': 'system',
-      'followup': 'system',
-      'chat_message': 'chat',
-      'question_actions': 'system',
-      'encouragement': 'system',
-    };
-
-    // Map the type
-    const dbType = TYPE_MAPPING[params.type] || params.type;
-
+      const cleanData = sanitizeNotificationData({
+        ...params.data,
+        // Always echo these back so a tap on the resulting notification
+        // has everything NotificationNavigator + trackOpen need, even if
+        // the caller forgot to include them.
+        type: params.type,
+      });
 
       // Check if should show based on preferences
       const shouldShow = await this.checkUserPreferences(params.userId, params.categoryId);
@@ -489,14 +645,16 @@ export class NotificationService {
         return null;
       }
 
+      const cleanParams: CreateNotificationParams = { ...params, data: cleanData };
+
       // Check online status
       if (!this.isOnline) {
-        await this.queueOffline(params);
-        return this.createTempNotification(params);
+        await this.queueOffline(cleanParams);
+        return this.createTempNotification(cleanParams);
       }
 
       // Save to Supabase with retry
-      const result = await this.createWithRetry(params);
+      const result = await this.createWithRetry(cleanParams);
       if (!result) {
         throw new Error('Failed to create notification');
       }
@@ -520,7 +678,7 @@ export class NotificationService {
 
       // Schedule if needed
       if (params.scheduledFor) {
-        await this.scheduleNotification(result.id, params.scheduledFor);
+        await this.persistScheduledMarker(result.id, params.scheduledFor);
       }
 
       return result;
@@ -538,7 +696,7 @@ export class NotificationService {
       user_id: params.userId,
       title: params.title,
       body: params.body,
-      data: params.data || {},
+      data: sanitizeNotificationData(params.data),
       created_at: new Date().toISOString(),
       read: false,
       type: params.type,
@@ -558,7 +716,7 @@ export class NotificationService {
           title: params.title,
           body: params.body,
           type: params.type,
-          data: params.data || {},
+          data: sanitizeNotificationData(params.data),
           read: false,
           priority: params.priority || 'normal',
           scheduled_for: params.scheduledFor?.toISOString(),
@@ -568,7 +726,7 @@ export class NotificationService {
         .single();
 
       if (error) throw error;
-      return data;
+      return normalizeNotificationRow(data);
 
     } catch (error) {
       if (attempt < RETRY_CONFIG.maxAttempts) {
@@ -591,16 +749,17 @@ export class NotificationService {
     try {
       const channelId = this.getChannelId(categoryId);
       const shouldSound = await this.shouldPlaySound(notification.user_id, categoryId);
-      
+
       await Notifications.scheduleNotificationAsync({
         content: {
           title: notification.title,
           body: notification.body,
-          data: { 
-            ...notification.data, 
+          data: sanitizeNotificationData({
+            ...notification.data,
             notificationId: notification.id,
             userId: notification.user_id,
-          },
+            type: notification.type,
+          }),
           categoryIdentifier: categoryId,
           sound: shouldSound,
           badge: await this.getUnreadCount(notification.user_id),
@@ -675,23 +834,35 @@ export class NotificationService {
 
   async updateProgress(
     userId: string,
-    notificationId: string, 
-    current: number, 
+    notificationId: string,
+    current: number,
     total: number
   ): Promise<void> {
     const progress = Math.round((current / total) * 100);
-    
+
     try {
+      // Read-merge-write: the supabase-js client doesn't support raw SQL
+      // fragments (e.g. `supabase.sql`) as an update value, so we fetch
+      // the current `data`, merge client-side, then write the full object.
+      const { data: existing, error: fetchError } = await supabase
+        .from(this.table)
+        .select('data')
+        .eq('id', notificationId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const mergedData = sanitizeNotificationData({
+        ...(existing?.data || {}),
+        progress,
+        current,
+        total,
+      });
+
       await supabase
         .from(this.table)
         .update({
-          data: supabase.sql`
-            data || jsonb_build_object(
-              'progress', ${progress},
-              'current', ${current},
-              'total', ${total}
-            )
-          `,
+          data: mergedData,
           body: `Progress: ${progress}%`,
         })
         .eq('id', notificationId);
@@ -725,8 +896,8 @@ export class NotificationService {
     const allItems = [...(existingGroup?.items || []), ...items];
 
     // Create or update summary notification
-    const summary = allItems.length === 1 
-      ? allItems[0].body 
+    const summary = allItems.length === 1
+      ? allItems[0].body
       : `${allItems.length} notifications`;
 
     // Delete old group notification
@@ -770,7 +941,7 @@ export class NotificationService {
 
   async getGroupedNotifications(userId: string, groupId?: string): Promise<any> {
     try {
-      const query = supabase
+      let query = supabase
         .from(this.table)
         .select('*')
         .eq('user_id', userId)
@@ -778,7 +949,7 @@ export class NotificationService {
         .order('created_at', { ascending: false });
 
       if (groupId) {
-        query.eq('data->>groupId', groupId);
+        query = query.eq('data->>groupId', groupId);
       }
 
       const { data } = await query;
@@ -803,12 +974,12 @@ export class NotificationService {
         } : null;
       }
 
-      return Object.entries(groups).map(([gid, items]) => ({
+      return Object.entries(groups).map(([gid, groupItems]) => ({
         groupId: gid,
-        title: items[0]?.title || 'Group',
-        count: items.length,
-        items,
-        latest: items[0],
+        title: (groupItems as any[])[0]?.title || 'Group',
+        count: (groupItems as any[]).length,
+        items: groupItems,
+        latest: (groupItems as any[])[0],
       }));
 
     } catch (error) {
@@ -865,7 +1036,11 @@ export class NotificationService {
     }
   }
 
-  private async scheduleNotification(notificationId: string, scheduledFor: Date) {
+  /** Persists a `scheduled_notifications` marker row. Renamed from the
+   *  original `scheduleNotification` (private, id+date signature) which
+   *  collided with the public `scheduleNotification(params)` above —
+   *  same name, different signature, would not compile. */
+  private async persistScheduledMarker(notificationId: string, scheduledFor: Date) {
     try {
       await supabase
         .from('scheduled_notifications')
@@ -886,7 +1061,7 @@ export class NotificationService {
 
   async sendBulk(params: BulkNotificationParams): Promise<AppNotification[]> {
     const results: AppNotification[] = [];
-    
+
     for (const userId of params.userIds) {
       const notification = await this.create({
         ...params,
@@ -919,7 +1094,7 @@ export class NotificationService {
         // ─── MESSAGE ACTIONS ──────────────────────────────
         case 'reply':
           console.log('💬 Reply tapped - opening app');
-          await this.handleDeepLink(notificationData);
+          this.handleDeepLink(notificationData);
           break;
 
         case 'reply_inline':
@@ -986,7 +1161,7 @@ export class NotificationService {
 
         case 'comment':
           console.log('💬 Comment tapped - opening app');
-          await this.handleDeepLink(notificationData);
+          this.handleDeepLink(notificationData);
           break;
 
         case 'share':
@@ -1083,7 +1258,7 @@ export class NotificationService {
       if (notification) {
         // Schedule for X minutes later
         const scheduleDate = new Date(Date.now() + minutes * 60 * 1000);
-        
+
         await this.scheduleNotification({
           userId,
           title: notification.title,
@@ -1131,21 +1306,21 @@ export class NotificationService {
     }
   }
 
-  private async handleDeepLink(notificationData: any) {
-    const screen = notificationData?.screen || notificationData?.target;
-    const params = notificationData?.params || {};
-
-    if (screen) {
-      console.log(`🔗 Deep link to: ${screen}`, params);
-      // Navigation will be handled by the navigation system
-      // This is just a placeholder - actual navigation happens in the hook
-    }
+  /**
+   * Routes a notification tap/action to the right screen. Delegates to
+   * NotificationNavigator, which always resolves to a valid, navigable
+   * route (see that file) — so this can never leave the user stuck.
+   */
+  private handleDeepLink(notificationData: any) {
+    const type = notificationData?.type;
+    console.log('🔗 Deep linking from notification:', type, notificationData);
+    navigateFromNotification(type, notificationData || {});
   }
 
   // ─── USER PREFERENCES ──────────────────────────────────────
 
   private async checkUserPreferences(
-    userId: string, 
+    userId: string,
     categoryId?: NotificationCategory
   ): Promise<boolean> {
     if (!categoryId) return true;
@@ -1170,7 +1345,7 @@ export class NotificationService {
   }
 
   private async shouldPlaySound(
-    userId: string, 
+    userId: string,
     categoryId?: NotificationCategory
   ): Promise<boolean> {
     if (!categoryId) return true;
@@ -1212,7 +1387,7 @@ export class NotificationService {
           action,
           action_identifier: actionIdentifier,
           timestamp: new Date().toISOString(),
-          metadata: metadata || {},
+          metadata: sanitizeNotificationData(metadata || {}),
         });
     } catch (error) {
       console.error('Failed to track analytics:', error);
@@ -1241,28 +1416,19 @@ export class NotificationService {
 
   // ─── CRUD OPERATIONS ─────────────────────────────────────
 
+  /** Fetch a single notification by id. (Previously this method's body
+   *  was corrupted with a stray INSERT block and undefined variables —
+   *  rewritten as a proper SELECT.) */
   async getById(id: string): Promise<AppNotification | null> {
     try {
+      const { data, error } = await supabase
+        .from(this.table)
+        .select('*')
+        .eq('id', id)
+        .single();
 
-    const { data, error } = await supabase
-      .from(this.table)
-      .insert({
-        user_id: params.userId,
-        title: params.title,
-        body: params.body,
-        type: dbType, // ← USE MAPPED TYPE
-        data: dataWithOriginal,
-        read: false,
-        priority: params.priority || 'normal',
-        scheduled_for: params.scheduledFor?.toISOString(),
-        expires_at: params.expiresAt?.toISOString(),
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-
-      return data;
+      if (error) throw error;
+      return data ? normalizeNotificationRow(data) : null;
     } catch (error) {
       console.error('Error fetching notification:', error);
       return null;
@@ -1270,8 +1436,8 @@ export class NotificationService {
   }
 
   async getAll(
-    userId: string, 
-    limit = 50, 
+    userId: string,
+    limit = 50,
     offset = 0,
     filters?: { type?: NotificationType; read?: boolean; category?: NotificationCategory }
   ): Promise<AppNotification[]> {
@@ -1296,7 +1462,7 @@ export class NotificationService {
         .range(offset, offset + limit - 1);
 
       if (error) throw error;
-      return data || [];
+      return (data || []).map(normalizeNotificationRow);
     } catch (error) {
       console.error('Error fetching notifications:', error);
       return [];
@@ -1436,20 +1602,24 @@ export class NotificationService {
 
   // ─── NOTIFICATION COUNTS BY TYPE ─────────────────────────
 
+  /** (Previously used `.group('type')`, which doesn't exist on the
+   *  supabase-js query builder and would have thrown at runtime. Now
+   *  fetches unread rows and aggregates client-side.) */
   async getCountsByType(userId: string): Promise<Record<NotificationType, number>> {
     try {
       const { data, error } = await supabase
         .from(this.table)
-        .select('type, count', { count: 'exact' })
+        .select('type')
         .eq('user_id', userId)
-        .eq('read', false)
-        .group('type');
+        .eq('read', false);
 
       if (error) throw error;
-      return data?.reduce((acc, item) => {
-        acc[item.type] = item.count;
+
+      return (data || []).reduce((acc, item) => {
+        const key = item.type as NotificationType;
+        acc[key] = (acc[key] || 0) + 1;
         return acc;
-      }, {} as Record<NotificationType, number>) || {} as Record<NotificationType, number>;
+      }, {} as Record<NotificationType, number>);
     } catch (error) {
       console.error('Error getting counts by type:', error);
       return {} as Record<NotificationType, number>;

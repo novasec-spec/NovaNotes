@@ -46,7 +46,7 @@ export function useDeepLinkNavigation() {
   // Navigate to chat
   const navigateToChat = (userId: string, message?: string) => {
     router.push({
-      pathname: '/chat',
+      pathname: '/chat/chatroom',
       params: { userId, message },
     } as any);
   };
@@ -62,7 +62,7 @@ export function useDeepLinkNavigation() {
   // Navigate to profile
   const navigateToProfile = (userId: string) => {
     router.push({
-      pathname: '/profile',
+      pathname: '/chat/chatroom',
       params: { userId },
     } as any);
   };
@@ -86,14 +86,14 @@ export function useDeepLinkNavigation() {
   // Navigate to notifications
   const navigateToNotifications = (filter?: string) => {
     router.push({
-      pathname: '/notifications',
+      pathname: '/index/notification',
       params: { filter },
     } as any);
   };
 
   // Navigate to settings
   const navigateToSettings = () => {
-    router.push('/settings');
+    router.push('/chat/settings');
   };
 
   return {

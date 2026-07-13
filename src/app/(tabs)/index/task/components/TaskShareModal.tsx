@@ -1,4 +1,3 @@
-// src/components/TaskShareModal.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -9,25 +8,27 @@ import {
   TouchableOpacity,
   FlatList,
   TextInput,
-  Platform,
   ActivityIndicator,
+  Platform,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { supabase } from '../../../../../config/supabase';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Task } from '../types/task.types';
+import { ShareService } from '../services/shareService';
 
 interface User {
   id: string;
-  username: string;
+ username: string;
   email: string;
   avatar_url?: string;
+  selected?: boolean;
 }
 
 interface TaskShareModalProps {
   visible: boolean;
   task: Task | null;
   onClose: () => void;
-  onShare: (taskId: string, userIds: string[]) => void;
+  onShare: (taskId: string, userIds: string[], message?: string) => Promise<void>;
   colors: any;
 }
 
@@ -36,57 +37,49 @@ export function TaskShareModal({ visible, task, onClose, onShare, colors }: Task
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
+  const [sharing, setSharing] = useState(false);
+  
+  const shareService = ShareService.getInstance();
 
   useEffect(() => {
     if (visible) {
       loadUsers();
-      getCurrentUser();
-    } else {
+      // Reset selections
       setSelectedUsers([]);
-      setSearchQuery('');
+      setMessage('');
     }
   }, [visible]);
-
-  const getCurrentUser = async () => {
-    try {
-      const userData = await AsyncStorage.getItem('chat_user');
-      if (userData) {
-        const user = JSON.parse(userData);
-        setCurrentUserId(user.id);
-      }
-    } catch (error) {
-      console.error('Error getting current user:', error);
-    }
-  };
 
   const loadUsers = async () => {
     setLoading(true);
     try {
-      // ✅ Fetch real users from Supabase
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, username, email, avatar_url')
-        .order('username', { ascending: true });
-
-      if (error) throw error;
-
-      // Filter out current user
-      const filteredUsers = data?.filter(u => u.id !== currentUserId) || [];
-      setUsers(filteredUsers);
+      const availableUsers = await shareService.getAvailableUsers();
+      setUsers(availableUsers);
     } catch (error) {
-      console.error('Error loading users:', error);
-      // Fallback to mock users if needed
-      setUsers([]);
+      console.error('Load users error:', error);
+      Alert.alert('Error', 'Failed to load users');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleShare = () => {
-    if (task && selectedUsers.length > 0) {
-      onShare(task.id, selectedUsers);
-      onClose();
+  const handleShare = async () => {
+    if (!task || selectedUsers.length === 0) return;
+
+    setSharing(true);
+    try {
+      await onShare(task.id, selectedUsers, message || undefined);
+      Alert.alert(
+        'Success',
+        `Task shared with ${selectedUsers.length} user${selectedUsers.length > 1 ? 's' : ''}`,
+        [{ text: 'OK', onPress: onClose }]
+      );
+    } catch (error) {
+      console.error('Share error:', error);
+      Alert.alert('Error', 'Failed to share task. Please try again.');
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -98,15 +91,21 @@ export function TaskShareModal({ visible, task, onClose, onShare, colors }: Task
     );
   };
 
+  const toggleSelectAll = () => {
+    if (selectedUsers.length === filteredUsers.length) {
+      setSelectedUsers([]);
+    } else {
+      setSelectedUsers(filteredUsers.map(u => u.id));
+    }
+  };
+
   const filteredUsers = users.filter(user =>
-    user.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email?.toLowerCase().includes(searchQuery.toLowerCase())
+    user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const renderUser = ({ item }: { item: User }) => {
     const isSelected = selectedUsers.includes(item.id);
-    const initial = item.username?.charAt(0).toUpperCase() || '?';
-    
     return (
       <TouchableOpacity
         style={[
@@ -117,22 +116,20 @@ export function TaskShareModal({ visible, task, onClose, onShare, colors }: Task
           }
         ]}
         onPress={() => toggleUser(item.id)}
+        activeOpacity={0.7}
       >
-        {item.avatar_url ? (
-          <Image 
-            source={{ uri: item.avatar_url }} 
-            style={[styles.avatar, { borderRadius: 20 }]} 
-          />
-        ) : (
-          <View style={[styles.avatar, { backgroundColor: colors.primary + '30' }]}>
+        <View style={[styles.avatar, { backgroundColor: colors.primary + '30' }]}>
+          {item.avatar_url ? (
+            <Image source={{ uri: item.avatar_url }} style={styles.avatarImage} />
+          ) : (
             <Text style={[styles.avatarText, { color: colors.primary }]}>
-              {initial}
+              {item.username.charAt(0).toUpperCase()}
             </Text>
-          </View>
-        )}
+          )}
+        </View>
         <View style={styles.userInfo}>
           <Text style={[styles.userName, { color: colors.text }]}>
-            {item.username || 'Unknown User'}
+            {item.username}
           </Text>
           <Text style={[styles.userEmail, { color: colors.muted }]}>
             {item.email}
@@ -155,16 +152,19 @@ export function TaskShareModal({ visible, task, onClose, onShare, colors }: Task
             <Text style={[styles.modalTitle, { color: colors.text }]}>
               Share Task
             </Text>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity onPress={onClose} disabled={sharing}>
               <Icon name="close" size={24} color={colors.text} />
             </TouchableOpacity>
           </View>
 
           {task && (
             <View style={[styles.taskPreview, { backgroundColor: colors.card }]}>
-              <Text style={[styles.taskPreviewTitle, { color: colors.text }]}>
-                {task.title}
-              </Text>
+              <View style={styles.taskPreviewHeader}>
+                <Icon name="document-text-outline" size={20} color={colors.primary} />
+                <Text style={[styles.taskPreviewTitle, { color: colors.text }]}>
+                  {task.title}
+                </Text>
+              </View>
               {task.description && (
                 <Text style={[styles.taskPreviewDesc, { color: colors.muted }]}>
                   {task.description}
@@ -182,12 +182,26 @@ export function TaskShareModal({ visible, task, onClose, onShare, colors }: Task
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Icon name="close-circle" size={20} color={colors.muted} />
+              </TouchableOpacity>
+            )}
           </View>
 
-          <View style={styles.selectedCount}>
-            <Text style={[styles.countText, { color: colors.muted }]}>
-              {selectedUsers.length} user{selectedUsers.length !== 1 ? 's' : ''} selected
-            </Text>
+          <View style={styles.controlsRow}>
+            <View style={styles.selectedCount}>
+              <Text style={[styles.countText, { color: colors.muted }]}>
+                {selectedUsers.length} user{selectedUsers.length !== 1 ? 's' : ''} selected
+              </Text>
+            </View>
+            {filteredUsers.length > 0 && (
+              <TouchableOpacity onPress={toggleSelectAll} style={styles.selectAllBtn}>
+                <Text style={[styles.selectAllText, { color: colors.primary }]}>
+                  {selectedUsers.length === filteredUsers.length ? 'Deselect All' : 'Select All'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {loading ? (
@@ -197,16 +211,6 @@ export function TaskShareModal({ visible, task, onClose, onShare, colors }: Task
                 Loading users...
               </Text>
             </View>
-          ) : users.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Icon name="people-outline" size={50} color={colors.muted} />
-              <Text style={[styles.emptyText, { color: colors.text }]}>
-                No users found
-              </Text>
-              <Text style={[styles.emptySubtext, { color: colors.muted }]}>
-                Invite someone to share tasks with!
-              </Text>
-            </View>
           ) : (
             <FlatList
               data={filteredUsers}
@@ -214,24 +218,56 @@ export function TaskShareModal({ visible, task, onClose, onShare, colors }: Task
               renderItem={renderUser}
               contentContainerStyle={styles.userList}
               showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Icon name="people-outline" size={48} color={colors.muted} />
+                  <Text style={[styles.emptyText, { color: colors.muted }]}>
+                    No users found
+                  </Text>
+                </View>
+              }
             />
           )}
+
+          {/* Message Input */}
+          <View style={styles.messageContainer}>
+            <TextInput
+              style={[styles.messageInput, { 
+                backgroundColor: colors.card,
+                color: colors.text,
+                borderColor: colors.border,
+              }]}
+              placeholder="Add a message (optional)"
+              placeholderTextColor={colors.muted}
+              value={message}
+              onChangeText={setMessage}
+              multiline
+              numberOfLines={2}
+              editable={!sharing}
+            />
+          </View>
 
           <TouchableOpacity
             style={[
               styles.shareBtn,
               { 
                 backgroundColor: colors.primary,
-                opacity: selectedUsers.length > 0 ? 1 : 0.5,
+                opacity: selectedUsers.length > 0 && !sharing ? 1 : 0.5,
               }
             ]}
             onPress={handleShare}
-            disabled={selectedUsers.length === 0 || loading}
+            disabled={selectedUsers.length === 0 || sharing}
           >
-            <Icon name="share-social" size={20} color="#fff" />
-            <Text style={styles.shareBtnText}>
-              Share with {selectedUsers.length} user{selectedUsers.length !== 1 ? 's' : ''}
-            </Text>
+            {sharing ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Icon name="share-social" size={20} color="#fff" />
+                <Text style={styles.shareBtnText}>
+                  Share with {selectedUsers.length} user{selectedUsers.length !== 1 ? 's' : ''}
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -269,13 +305,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
   },
+  taskPreviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   taskPreviewTitle: {
     fontSize: 14,
     fontWeight: '600',
+    flex: 1,
   },
   taskPreviewDesc: {
     fontSize: 12,
     marginTop: 4,
+    marginLeft: 28,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -290,14 +333,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingVertical: 8,
   },
-  selectedCount: {
+  controlsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
+  },
+  selectedCount: {
+    flex: 1,
   },
   countText: {
     fontSize: 13,
   },
+  selectAllBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  selectAllText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
   userList: {
-    paddingBottom: 16,
+    paddingBottom: 8,
   },
   userItem: {
     flexDirection: 'row',
@@ -315,6 +372,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
   avatarText: {
     fontSize: 16,
     fontWeight: '700',
@@ -329,6 +391,37 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 12,
   },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 14,
+    marginTop: 12,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 14,
+    marginTop: 12,
+  },
+  messageContainer: {
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  messageInput: {
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    borderWidth: 1,
+    minHeight: 50,
+    textAlignVertical: 'top',
+  },
   shareBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -341,26 +434,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-  },
-  loadingContainer: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-  },
-  emptyContainer: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginTop: 12,
-  },
-  emptySubtext: {
-    fontSize: 13,
-    marginTop: 4,
   },
 });
