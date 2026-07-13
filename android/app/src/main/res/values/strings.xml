@@ -1,0 +1,9 @@
+<resources>
+  <string name="app_name">NovaNote</string>
+  <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
+  <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
+  <string name="expo_system_ui_user_interface_style" translatable="false">automatic</string>
+  <string name="expo_runtime_version">1.0.0</string>
+  <string name="widget_bubbles_description" translatable="false">Daily quote, mood, streak &amp; love note</string>
+  <string name="qs_intent_tile_label">Quick Note</string>
+</resources>
