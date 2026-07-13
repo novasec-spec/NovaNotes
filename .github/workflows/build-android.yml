@@ -12,10 +12,9 @@ jobs:
       GRADLE_OPTS: >-
         -Xmx6g
         -XX:MaxMetaspaceSize=2g
-       SENTRY_AUTH_TOKEN:
-       ${{ secrets.SENTRY_AUTH_TOKEN }}
-    
- steps:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+
+    steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
@@ -41,7 +40,7 @@ jobs:
         run: npx expo prebuild --platform android --no-install
         env:
           EXPO_NO_TELEMETRY: 1
-     
+
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
