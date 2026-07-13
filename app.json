@@ -67,7 +67,6 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "./plugins/withQuickSettingsTile",
       "expo-router",
       [
         "expo-notifications",

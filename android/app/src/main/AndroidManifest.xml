@@ -37,37 +37,6 @@
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATE_URL" android:value="https://u.expo.dev/2199333a-0782-4612-9b1a-3fb29cfae0d2"/>
     <service android:name="com.reactnativeandroidwidget.RNWidgetCollectionService" android:permission="android.permission.BIND_REMOTEVIEWS"/>
-    <service android:name="com.reactnativeandroidquicksettingstiles.QSIntentService" android:icon="@drawable/ic_quick_note" android:label="@string/qs_intent_tile_label" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE" android:exported="true">
-      <intent-filter>
-        <action android:name="android.service.quicksettings.action.QS_TILE"/>
-      </intent-filter>
-    </service>
-    <service android:name=".MainApplication$ReactNativeHost$ReactNativeActivity"/>
-    <service android:name=".MainApplication$ReactNativeHost$ReactNativeActivity"/>
-    <service android:name=".MainApplication$ReactNativeHost"/>
-        <service
-            android:name=".QuickNoteTileService"
-            android:label="Take Note"
-            android:icon="@drawable/ic_note_tile_icon"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-        </service>
-    <service android:name=".QuickNoteTileService" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE" android:exported="true" android:label="Take Note" android:icon="@drawable/ic_note_tile">
-      <intent-filter>
-        <action android:name="android.service.quicksettings.action.QS_TILE"/>
-      </intent-filter>
-      <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true"/>
-    </service>
-    <service android:name="com.doublesymmetry.trackplayer.service.MusicService" android:exported="true" android:foregroundServiceType="mediaPlayback">
-      <intent-filter>
-        <action android:name="android.media.browse.MediaBrowserService"/>
-        <action android:name="com.doublesymmetry.trackplayer.TRACK_PLAYER_SERVICE"/>
-      </intent-filter>
-    </service>
-    <service android:name=".MainApplication$ReactNativeHost$ReactNativeActivity"/>
     <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>

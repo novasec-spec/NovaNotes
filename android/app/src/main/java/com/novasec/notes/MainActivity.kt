@@ -12,21 +12,6 @@ import com.facebook.react.defaults.DefaultReactActivityDelegate
 import expo.modules.ReactActivityDelegateWrapper
 
 class MainActivity : ReactActivity() {
-  // quick-settings-tile-hooks
-  override fun onStart() {
-    super.onStart()
-    try {
-      com.reactnativeandroidquicksettingstiles.AndroidQuickSettingsTilesModule.startSession(intent)
-    } catch (e: Exception) {}
-  }
-
-  override fun onNewIntent(intent: android.content.Intent) {
-    super.onNewIntent(intent)
-    try {
-      com.reactnativeandroidquicksettingstiles.AndroidQuickSettingsTilesModule.onNewIntent(intent)
-    } catch (e: Exception) {}
-  }
-
   override fun onCreate(savedInstanceState: Bundle?) {
     // Set the theme to AppTheme BEFORE onCreate to support
     // coloring the background, status bar, and navigation bar.
