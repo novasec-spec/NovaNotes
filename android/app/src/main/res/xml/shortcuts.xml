@@ -1,8 +1,6 @@
-<!-- android/app/src/main/res/xml/shortcuts.xml -->
 <?xml version="1.0" encoding="utf-8"?>
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     
-    <!-- Shortcut 1: Take New Note -->
     <shortcut
         android:shortcutId="take_note"
         android:enabled="true"
@@ -20,7 +18,6 @@
         <categories android:name="android.shortcut.conversation" />
     </shortcut>
 
-    <!-- Shortcut 2: Start Recording -->
     <shortcut
         android:shortcutId="start_recording"
         android:enabled="true"
@@ -35,7 +32,6 @@
             android:data="novanote://notes" />
     </shortcut>
 
-    <!-- Shortcut 3: Share App -->
     <shortcut
         android:shortcutId="share_app"
         android:enabled="true"
