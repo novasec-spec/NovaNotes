@@ -157,6 +157,20 @@ useEffect(() => {
 
     return () => subscription.remove();
   }, []);
+useEffect(() => {
+    // Handle quick tile click when app is closed/killed
+    Linking.getInitialURL().then((url) => {
+      if (url && url.includes('quick-note')) {
+        openNewNoteModal();
+      }
+    });                                                                                 
+    // Handle quick tile click when app is already open
+    const subscription = Linking.addEventListener('url', (event) => {                         if (event.url.includes('quick-note')) {                                                   openNewNoteModal();
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   return (
     <ThemeProvider>

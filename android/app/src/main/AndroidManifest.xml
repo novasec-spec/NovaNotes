@@ -1,10 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
-  
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-  <uses-permission android:name="android.permission.B.BLUETOOTH"/>
+  <uses-permission android:name="android.permission.BLUETOOTH"/>
   <uses-permission android:name="android.permission.CAMERA"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
   <uses-permission android:name="android.permission.INTERNET"/>
   <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
   <uses-permission android:name="android.permission.NOTIFICATIONS"/>
@@ -20,7 +21,6 @@
   <uses-permission android:name="android.permission.VIBRATE"/>
   <uses-permission android:name="android.permission.WAKE_LOCK"/>
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-  
   <queries>
     <intent>
       <action android:name="android.intent.action.VIEW"/>
@@ -28,79 +28,46 @@
       <data android:scheme="https"/>
     </intent>
   </queries>
-  
-  <application 
-    android:name=".MainApplication" 
-    android:label="@string/app_name" 
-    android:icon="@mipmap/ic_launcher" 
-    android:roundIcon="@mipmap/ic_launcher_round" 
-    android:allowBackup="true">
-    
-    <!-- Firebase / Expo meta-data -->
+  <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="true" android:theme="@style/AppTheme" android:supportsRtl="true" android:enableOnBackInvokedCallback="true" android:requestLegacyExternalStorage="true" android:fullBackupContent="@xml/secure_store_backup_rules" android:dataExtractionRules="@xml/secure_store_data_extraction_rules">
     <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/notification_icon_color"/>
     <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/notification_icon"/>
     <meta-data android:name="expo.modules.notifications.default_notification_color" android:resource="@color/notification_icon_color"/>
     <meta-data android:name="expo.modules.notifications.default_notification_icon" android:resource="@drawable/notification_icon"/>
     <meta-data android:name="expo.modules.updates.ENABLED" android:value="true"/>
     <meta-data android:name="expo.modules.updates.EXPO_RUNTIME_VERSION" android:value="@string/expo_runtime_version"/>
-    <meta-data android:name="expo.modules.updates.EXPO="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
+    <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATE_URL" android:value="https://u.expo.dev/2199333a-0782-4612-9b1a-3fb29cfae0d2"/>
-    
-    <!-- Widget service -->
     <service android:name="com.reactnativeandroidwidget.RNWidgetCollectionService" android:permission="android.permission.BIND_REMOTEVIEWS"/>
-    
-    <!-- Quick Settings Tile service -->
-    <service 
-      android:name=".QuickNoteTileService" 
-      android:permission="android.permission.BIND_QUICK_SETTINGS_TILE" 
-      android:exported="true" 
-      android:label="Take Note" 
-      android:icon="@drawable/ic_note_tile">
+    <service android:name=".QuickNoteTileService" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE" android:exported="true" android:label="Take Note" android:icon="@drawable/ic_note_tile">
       <intent-filter>
         <action android:name="android.service.quicksettings.action.QS_TILE"/>
       </intent-filter>
       <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true"/>
     </service>
-    
-    <!-- MAIN ACTIVITY — ONLY ONE, MERGED FROM BOTH -->
-    <activity 
-      android:name=".MainActivity" 
-      android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" 
-      android:launchMode="singleTask" 
-      android:windowSoftInputMode="adjustResize"
-      android:exported="true">
-      
+    <service android:name=".MediaPlaybackService" android:enabled="true" android:exported="false" android:foregroundServiceType="mediaPlayback"/>
+    <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>
         <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
-      
-      <!-- Deep linking — ALL schemes merged -->
       <intent-filter>
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="novanote"/>
-        <data android:scheme="novanote" android:host="notes"/>
-        <data android:scheme="novanote" android:host="chat"/>
+        <data android:scheme="yourapp" android:host="note"/>
+        <data android:scheme="yourapp" android:host="recording"/>
+        <data android:scheme="yourapp" android:host="share"/>
       </intent-filter>
-      
-      <!-- App shortcuts -->
       <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts"/>
     </activity>
-    
-    <!-- Widget receiver -->
-    <receiver 
-      android:name=".widget.Bubbles" 
-      android:exported="false" 
-      android:label="Bubbles — Quote &amp; Mood">
+    <receiver android:name=".widget.Bubbles" android:exported="false" android:label="Bubbles — Quote &amp; Mood">
       <intent-filter>
         <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
         <action android:name="com.novasec.notes.WIDGET_CLICK"/>
       </intent-filter>
       <meta-data android:name="android.appwidget.provider" android:resource="@xml/widgetprovider_bubbles"/>
     </receiver>
-    
   </application>
 </manifest>
