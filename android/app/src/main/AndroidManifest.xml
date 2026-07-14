@@ -43,24 +43,6 @@
       </intent-filter>
       <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true"/>
     </service>
-    <service android:name=".QuickNoteTileService" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE" android:exported="true" android:label="Take Note" android:icon="@drawable/ic_note_tile">
-      <intent-filter>
-        <action android:name="android.service.quicksettings.action.QS_TILE"/>
-      </intent-filter>
-      <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true"/>
-    </service>
-    <service android:name=".QuickNoteTileService" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE" android:exported="true" android:label="Take Note" android:icon="@drawable/ic_note_tile">
-      <intent-filter>
-        <action android:name="android.service.quicksettings.action.QS_TILE"/>
-      </intent-filter>
-      <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true"/>
-    </service>
-    <service android:name=".QuickNoteTileService" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE" android:exported="true" android:label="Take Note" android:icon="@drawable/ic_note_tile">
-      <intent-filter>
-        <action android:name="android.service.quicksettings.action.QS_TILE"/>
-      </intent-filter>
-      <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true"/>
-    </service>
     <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>
