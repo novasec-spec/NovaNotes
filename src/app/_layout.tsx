@@ -1,6 +1,5 @@
 // app/_layout.tsx - FIXED
 import { initializeCallingRuntime } from '../lib/callAvailability';
-initializeCallingRuntime();	
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, InteractionManager } from 'react-native';
 import { Stack } from 'expo-router';
@@ -37,6 +36,13 @@ export function ensureLiveKitGlobals() {
   } catch (e) {
     console.log('ℹ️ LiveKit not available in Expo Go');
   }
+}
+
+
+try {
+  initializeCallingRuntime();
+} catch (e) {
+  console.log('initializeCallingRuntime failed:', e);
 }
 
 // ✅ FIX: Only initialize Sentry in production
