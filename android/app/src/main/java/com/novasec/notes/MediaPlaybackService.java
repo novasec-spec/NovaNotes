@@ -18,6 +18,7 @@ import androidx.media.app.NotificationCompat.MediaStyle;
 import androidx.media.session.MediaButtonReceiver;
 import android.app.Service;
 import android.util.Log;
+import android.graphics.BitmapFactory;
 
 public class MediaPlaybackService extends Service {
     private static final String CHANNEL_ID = "music_playback_channel";
@@ -107,7 +108,7 @@ public class MediaPlaybackService extends Service {
             .setContentText("Artist Name")
             .setSubText("Album Name")
             .setSmallIcon(R.drawable.ic_music_note) // Your music icon
-            .setLargeIcon(/* album art bitmap */)
+            .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.drawable.ic_music_note))
             .setContentIntent(contentIntent)
             .setOngoing(isPlaying)
             .setOnlyAlertOnce(true)
