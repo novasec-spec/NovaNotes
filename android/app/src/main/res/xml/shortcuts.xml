@@ -1,0 +1,52 @@
+<!-- android/app/src/main/res/xml/shortcuts.xml -->
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- Shortcut 1: Take New Note -->
+    <shortcut
+        android:shortcutId="take_note"
+        android:enabled="true"
+        android:icon="@drawable/ic_note_shortcut"
+        android:shortcutShortLabel="@string/shortcut_note_short"
+        android:shortcutLongLabel="@string/shortcut_note_long"
+        android:shortcutDisabledMessage="@string/shortcut_note_disabled">
+        
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.novasec.notes"
+            android:targetClass="com.novasec.notes.MainActivity"
+            android:data="novanote://notes" />
+        
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+
+    <!-- Shortcut 2: Start Recording -->
+    <shortcut
+        android:shortcutId="start_recording"
+        android:enabled="true"
+        android:icon="@drawable/ic_mic_shortcut"
+        android:shortcutShortLabel="@string/shortcut_record_short"
+        android:shortcutLongLabel="@string/shortcut_record_long">
+        
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.novasec.notes"
+            android:targetClass="com.novasec.notes.MainActivity"
+            android:data="novanote://notes" />
+    </shortcut>
+
+    <!-- Shortcut 3: Share App -->
+    <shortcut
+        android:shortcutId="share_app"
+        android:enabled="true"
+        android:icon="@drawable/ic_share_shortcut"
+        android:shortcutShortLabel="@string/shortcut_share_short">
+        
+        <intent
+            android:action="android.intent.action.SEND"
+            android:targetPackage="com.novasec.notes"
+            android:targetClass="com.novasec.notes.MainActivity"
+            android:data="novanote://chat/settings" />
+    </shortcut>
+
+</shortcuts>

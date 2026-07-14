@@ -5,4 +5,10 @@
   <string name="expo_system_ui_user_interface_style" translatable="false">automatic</string>
   <string name="expo_runtime_version">1.0.0</string>
   <string name="widget_bubbles_description" translatable="false">Daily quote, mood, streak &amp; love note</string>
+  <string name="shortcut_note_short">New Note</string>
+  <string name="shortcut_note_long">Take New Note</string>
+  <string name="shortcut_note_disabled">New Note is unavailable</string>
+  <string name="shortcut_record_short">Record</string>
+  <string name="shortcut_record_long">Start Recording</string>
+  <string name="shortcut_share_short">Share App</string>
 </resources>

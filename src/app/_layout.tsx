@@ -18,6 +18,7 @@ import { useIncomingCallListener } from '../hooks/useIncomingCallListener';
 import { NotificationHandler } from '../services/NotificationHandler';
 import CallService from '../services/CallService'; // default import — no curly braces
 import { markNavigationReady } from '../utils/navigation';
+import * as Linking from 'expo-linking';
 
 const WHITE = '#FFFFFF';
 
@@ -126,7 +127,39 @@ useEffect(() => {
     }
   }, [user?.id]);
 
+useEffect(() => {
+    // Check if app was opened via shortcut
+    const handleDeepLink = (url) => {
+      if (!url) return;
 
+      const { path, queryParams } = Linking.parse(url);
+
+      switch (path) {
+        case 'notes':
+          openNewNoteScreen();
+          break;
+        case 'notes':
+          startRecording();
+          break;
+        case 'chat/settings':
+          shareApp();
+          break;
+      }
+    };
+
+    // App was closed, then opened via shortcut
+    Linking.getInitialURL().then(handleDeepLink);
+
+    // App was already running
+    const subscription = Linking.addEventListener('url', (event) => {
+      handleDeepLink(event.url);
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  return <novanote />;
+}
 
   return (
     <ThemeProvider>
