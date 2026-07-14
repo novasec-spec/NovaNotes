@@ -158,9 +158,6 @@ useEffect(() => {
     return () => subscription.remove();
   }, []);
 
-  return <novanote />;
-}
-
   return (
     <ThemeProvider>
       <NotificationProvider>
