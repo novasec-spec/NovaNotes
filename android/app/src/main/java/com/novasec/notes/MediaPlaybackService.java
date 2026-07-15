@@ -19,6 +19,8 @@ import androidx.media.session.MediaButtonReceiver;
 import android.app.Service;
 import android.util.Log;
 import android.graphics.BitmapFactory;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 public class MediaPlaybackService extends Service {
     private static final String CHANNEL_ID = "music_playback_channel";
