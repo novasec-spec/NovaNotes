@@ -22,6 +22,10 @@ import android.graphics.BitmapFactory;
 
 public class MediaPlaybackService extends Service {
     private static final String CHANNEL_ID = "music_playback_channel";
+    private String currentTitle = "Song Title";
+    private String currentArtist = "Artist Name";
+    private String currentAlbum = "Album Name";
+
     private static final int NOTIFICATION_ID = 1;
     
     public static final String ACTION_PLAY = "com.novasec.notes.ACTION_PLAY";
@@ -160,16 +164,35 @@ public class MediaPlaybackService extends Service {
     }
     
     private void sendEventToJS(String event) {
-        // Use React Native's DeviceEventManagerModule or a bridge
-        // This requires a ReactContext - simplified here
+    // Get the ReactInstanceManager and emit the event
+    ReactApplicationContext reactContext = 
+        ((MainApplication) getApplication()).getReactNativeHost()
+            .getReactInstanceManager()
+            .getCurrentReactContext();
+    
+    if (reactContext != null) {
+        reactContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+            .emit("MediaControlEvent", event);
     }
+    }
+
     
     @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
+public int onStartCommand(Intent intent, int flags, int startId) {
+    if (intent != null && "UPDATE_METADATA".equals(intent.getAction())) {
+        currentTitle = intent.getStringExtra("title");
+        currentArtist = intent.getStringExtra("artist");
+        currentAlbum = intent.getStringExtra("album");
+        // Rebuild notification with new metadata
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        manager.notify(NOTIFICATION_ID, buildNotification());
+    } else {
         startForeground(NOTIFICATION_ID, buildNotification());
-        return START_STICKY;
     }
-    
+    return START_STICKY;
+    }
+
     @Override
     public IBinder onBind(Intent intent) {
         return null;

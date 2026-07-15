@@ -394,6 +394,10 @@ export function BubbleContent({
     );
   }
 
+  if (msg.call_id) {
+    return <CallBubbleContent msg={msg} isOwn={isOwn} colors={colors} />;
+  }
+
   const textColor = isOwn ? WHITE : colors.text;
 
   return (
@@ -489,6 +493,38 @@ export function BubbleContent({
         )
       )}
     </>
+  );
+}
+
+// ── Call bubble content ───────────────────────────────────────────────────
+// Rendered instead of the normal text/media content whenever a message is
+// a call log (msg.call_id set — written by CallService.logCallToChat).
+// sender_id on these messages is always the caller, so `isOwn` here means
+// "I made this call" and !isOwn means "I received this call" — that's all
+// that's needed to pick the right label for each side of the same row.
+function CallBubbleContent({ msg, isOwn, colors }: { msg: ChatMessage; isOwn: boolean; colors: any }) {
+  const isVideo = msg.call_type === 'video';
+  const status = msg.call_status ?? 'completed';
+  const missed = status === 'missed' || status === 'cancelled' || status === 'declined';
+
+  const label = (() => {
+    if (status === 'completed') return fmtDur(msg.call_duration ?? 0);
+    if (status === 'declined') return isOwn ? 'Call declined' : 'You declined';
+    // 'missed' and 'cancelled' both read as a missed call to whoever
+    // didn't place it, and as "no answer" to whoever did.
+    return isOwn ? 'No answer' : 'Missed call';
+  })();
+
+  const iconColor = isOwn ? WHITE : (missed ? '#EF4444' : PINK);
+  const textColor = isOwn ? WHITE : (missed ? '#EF4444' : colors.text);
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 }}>
+      <Icon name={isVideo ? 'videocam' : 'call'} size={18} color={iconColor} />
+      <Text style={{ fontSize: 14, fontWeight: '600', color: textColor }}>
+        {isVideo ? 'Video call' : 'Voice call'} · {label}
+      </Text>
+    </View>
   );
 }
 

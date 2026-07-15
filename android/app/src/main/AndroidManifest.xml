@@ -37,7 +37,7 @@
     <meta-data android:name="expo.modules.updates.EXPO_RUNTIME_VERSION" android:value="@string/expo_runtime_version"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
-    <meta-data android:name="expo.modules.updates.EXPO_UPDATE_URL" android:value="https://u.expo.dev/2199333a-0782-4612-9b1a-3fb29cfae0d2"/>
+    <meta-data android:name="expo.modules.updates.EXPO_UPDATE_URL" android:value="https://u.expo.dev/c39ab55b-00b0-4e0c-ba80-9df316f2a3b7"/>
     <service android:name="com.reactnativeandroidwidget.RNWidgetCollectionService" android:permission="android.permission.BIND_REMOTEVIEWS"/>
     <service android:name=".QuickNoteTileService" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE" android:exported="true" android:label="Take Note" android:icon="@drawable/ic_note_tile">
       <intent-filter>

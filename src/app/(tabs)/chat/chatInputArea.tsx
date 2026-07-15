@@ -88,7 +88,7 @@ export function RecordingBar({ colors, bottomPadding, recDuration, onStop }: {
   );
 }
 
-// ── Main text input bar: attach button, text field, send/mic button ──────
+// ── Main text input bar: gallery button, mic button, text field, send ────
 export function MessageInputBar({
   colors, isDarkMode, bottomPadding, inputText, sending,
   onChangeText, onAttachPress, onSend, onStartRecording,
@@ -100,21 +100,31 @@ export function MessageInputBar({
   onSend: () => void;
   onStartRecording: () => void;
 }) {
+  const hasText = !!inputText.trim();
+
   return (
-    <View style={[s.inputBar, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: bottomPadding }]}>
-      {/* Attach button */}
+    <View style={[s.inputBar, { backgroundColor: colors.card, paddingBottom: bottomPadding }]}>
+      {/* Gallery / attach button */}
       <TouchableOpacity
         onPress={onAttachPress}
         style={s.inputIconBtn}
         activeOpacity={0.7}
       >
-        <Icon name="add-circle" size={30} color={PINK} />
+        <Icon name="image-outline" size={24} color={PINK} />
+      </TouchableOpacity>
+
+      {/* Voice note button */}
+      <TouchableOpacity
+        onPress={onStartRecording}
+        style={s.inputIconBtn}
+        activeOpacity={0.7}
+      >
+        <Icon name="mic-outline" size={24} color={PINK} />
       </TouchableOpacity>
 
       {/* Input pill */}
       <View style={[s.inputPill, {
-        backgroundColor: isDarkMode ? '#2A1A2E' : '#F8F0F5',
-        borderColor: colors.border,
+        backgroundColor: isDarkMode ? '#1E1424' : '#F8F0F5',
       }]}>
         <TextInput
           style={[s.input, { color: colors.text }]}
@@ -132,33 +142,24 @@ export function MessageInputBar({
         )}
       </View>
 
-      {/* Send / Voice button */}
-      {inputText.trim() ? (
-        <TouchableOpacity
-          onPress={onSend}
-          disabled={sending}
-          style={s.sendBtn}
-          activeOpacity={0.7}
+      {/* Send button — always visible, glowing when there's something to send */}
+      <TouchableOpacity
+        onPress={onSend}
+        disabled={sending || !hasText}
+        style={s.sendBtn}
+        activeOpacity={0.7}
+      >
+        <LinearGradient
+          colors={hasText ? GRADIENT : ['#4A3B4F', '#4A3B4F']}
+          style={s.sendGrad}
         >
-          <LinearGradient colors={GRADIENT} style={s.sendGrad}>
-            {sending ? (
-              <ActivityIndicator size={18} color={WHITE} />
-            ) : (
-              <Icon name="send" size={20} color={WHITE} />
-            )}
-          </LinearGradient>
-        </TouchableOpacity>
-      ) : (
-        <TouchableOpacity
-          onPressIn={onStartRecording}
-          style={s.sendBtn}
-          activeOpacity={0.7}
-        >
-          <LinearGradient colors={['#22C55E', '#16A34A']} style={s.sendGrad}>
-            <Icon name="mic" size={20} color={WHITE} />
-          </LinearGradient>
-        </TouchableOpacity>
-      )}
+          {sending ? (
+            <ActivityIndicator size={18} color={WHITE} />
+          ) : (
+            <Icon name="send" size={19} color={WHITE} />
+          )}
+        </LinearGradient>
+      </TouchableOpacity>
     </View>
   );
 }

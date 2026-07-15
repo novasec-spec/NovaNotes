@@ -48,6 +48,12 @@ export interface ChatMessage extends Message {
   isStarred?: boolean;
   deletedFor?: string[];
   seenAt?: string;
+  // Set only on call-log messages (written by CallService.logCallToChat
+  // whenever a call ends, is declined, or is cancelled/missed).
+  call_id?: string;
+  call_type?: 'audio' | 'video';
+  call_status?: 'completed' | 'missed' | 'declined' | 'cancelled';
+  call_duration?: number;
 }
 
 // ── Reducer ───────────────────────────────────────────────────────────────

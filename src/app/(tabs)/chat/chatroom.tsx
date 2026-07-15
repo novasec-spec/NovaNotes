@@ -21,12 +21,10 @@ import { sendChatNotification, registerPushToken } from './notification';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ChatSettings from './ChatSettings';
 import { useLocalSearchParams } from 'expo-router';
-
-
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
   
-import {
-  ChatMessage, User, msgReducer, uploadToStorage,
-  TYPING_TIMEOUT_MS, NEAR_BOTTOM_THRESHOLD, MESSAGES_PER_PAGE, EDIT_WINDOW_MS, TAB_BAR_HEIGHT,
+import { ChatMessage, User, msgReducer, uploadToStorage, TYPING_TIMEOUT_MS, 
+  NEAR_BOTTOM_THRESHOLD, MESSAGES_PER_PAGE, EDIT_WINDOW_MS, TAB_BAR_HEIGHT, 
   genId, fmtTime, haptic,
 } from './chatShared';
 import { s } from './chatStyles';
@@ -92,7 +90,7 @@ export default function ChatRoom({ user, otherUser, onBack }: Props) {
   const [showScrollFab, setShowScrollFab] = useState(false);
   const [usingCache, setUsingCache] = useState(false);
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
-
+const tabBarHeight = useBottomTabBarHeight();
   // ── Refs ──────────────────────────────────────────────────────────────────
   const listRef = useRef<FlatList>(null);
   const typingChannel = useRef<any>(null);
@@ -1217,7 +1215,10 @@ const handleInput = useCallback((text: string) => {
                 onStop={stopRecording}
               />
             ) : (
-              <MessageInputBar
+
+
+
+<MessageInputBar
                 colors={colors}
                 isDarkMode={isDarkMode}
                 bottomPadding={bottomPadding}
@@ -1227,11 +1228,14 @@ const handleInput = useCallback((text: string) => {
                 onAttachPress={() => setShowAttach(true)}
                 onSend={() => sendMessage(inputText, undefined, replyTo)}
                 onStartRecording={startRecording}
+               tabBarHeight={tabBarHeight} // Pass this
                     value={inputText}             
                />
             )}
           </KeyboardAvoidingView>
         )}
+
+
 
         {showScrollFab && !showSearch && msgs.length > 0 && (
           <ScrollFab onPress={scrollToBottom} />

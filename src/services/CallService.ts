@@ -129,10 +129,91 @@ class CallServiceImpl {
       await this.getUserId();
       const { error } = await supabase.functions.invoke('calls-update-status', { body: { callId, action } });
       if (error) throw error;
+
+      // Fire-and-forget: log this call into the shared chat thread as a
+      // message. Never awaited by the caller and never allowed to fail the
+      // actual decline/cancel/end action — a logging hiccup shouldn't block
+      // someone hanging up.
+      this.logCallResultBestEffort(callId, action);
+
       return true;
     } catch (error) {
       console.error(`❌ ${action} call error:`, error);
       return false;
+    }
+  }
+
+  // ── Call → chat message logging ─────────────────────────────────────────
+  // Whenever a call ends (however it ends), drop a message into the same
+  // chat thread the two users already share, the same way a normal text
+  // message would appear — so calls show up inline in the conversation
+  // instead of only in a separate Call History screen.
+  private async logCallResultBestEffort(callId: string, action: 'decline' | 'cancel' | 'end') {
+    try {
+      // Re-fetch rather than trust local state: `calls-update-status` computes
+      // ended_at/duration server-side, and this is the only reliable way to
+      // get the authoritative final duration for an 'end' action.
+      const call = await this.getCallStatus(callId);
+      if (!call) return;
+
+      const finalStatus: 'completed' | 'missed' | 'declined' | 'cancelled' =
+        action === 'decline' ? 'declined'
+        : action === 'cancel' ? 'cancelled'
+        : (call.duration ?? 0) > 0 ? 'completed' : 'missed';
+
+      await this.logCallToChat(call, finalStatus);
+    } catch (error) {
+      console.error('❌ logCallResultBestEffort error:', error);
+    }
+  }
+
+  private async logCallToChat(call: Call, finalStatus: 'completed' | 'missed' | 'declined' | 'cancelled') {
+    try {
+      const { data: chat, error: chatError } = await supabase
+        .from('chats')
+        .select('id')
+        .or(`and(user1_id.eq.${call.caller_id},user2_id.eq.${call.callee_id}),and(user1_id.eq.${call.callee_id},user2_id.eq.${call.caller_id})`)
+        .maybeSingle();
+
+      if (chatError) throw chatError;
+      // No existing chat thread between these two — nothing to log into.
+      // (Calls started from Call History against someone you've never
+      // messaged fall into this bucket; the call still shows in Call
+      // History as normal, it just won't also appear in a chat.)
+      if (!chat) return;
+
+      // sender_id is always the caller — this makes the existing "isOwn"
+      // bubble-alignment logic in the chat UI work for call rows with zero
+      // extra code: the caller sees it on their own (right) side, the
+      // callee sees it as an incoming (left) bubble, exactly like any
+      // other message.
+      const { error: msgError } = await supabase
+        .from('messages')
+        .upsert(
+          {
+            chat_id: chat.id,
+            sender_id: call.caller_id,
+            text: '',
+            call_id: call.id,
+            call_type: call.type,
+            call_status: finalStatus,
+            call_duration: call.duration ?? 0,
+            created_at: call.ended_at || new Date().toISOString(),
+          },
+          { onConflict: 'call_id', ignoreDuplicates: true }
+        );
+
+      if (msgError) throw msgError;
+
+      await supabase
+        .from('chats')
+        .update({
+          last_message: call.type === 'video' ? '📹 Video call' : '📞 Voice call',
+          last_message_time: call.ended_at || new Date().toISOString(),
+        })
+        .eq('id', chat.id);
+    } catch (error) {
+      console.error('❌ logCallToChat error:', error);
     }
   }
 

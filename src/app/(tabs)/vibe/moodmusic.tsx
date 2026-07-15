@@ -5,6 +5,7 @@ import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   Alert, Linking, TextInput, Modal, ActivityIndicator,
   Animated, Platform, FlatList, Dimensions, StatusBar,
+  NativeModules, NativeEventEmitter,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -19,8 +20,10 @@ import {
 } from 'expo-audio';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-// In your music player screen or component
 
+// ── Native Media Playback Module ─────────────────────────────────────────────
+const { MediaPlaybackModule } = NativeModules;
+const mediaEventEmitter = new NativeEventEmitter(MediaPlaybackModule);
 
 // ── Design Tokens (Dark Mode Ready) ──────────────────────────────────────────
 const COLORS = {
@@ -526,9 +529,6 @@ function getErrorMessage(error: unknown): string {
   return 'Something went wrong';
 }
 
-// ── Theme Context ─────────────────────────────────────────────────────────────
-// Simplified for this component - we'll use a hook pattern
-
 // ── In-App Player Engine ──────────────────────────────────────────────────────
 function useMusicPlayerEngine(library: LibraryTrack[]) {
   const player = useAudioPlayer(null);
@@ -539,10 +539,91 @@ function useMusicPlayerEngine(library: LibraryTrack[]) {
   const [shuffle, setShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('off');
   const [isLoadingTrack, setIsLoadingTrack] = useState(false);
+  const isNativeServiceStarted = useRef(false);
 
   const currentTrack = currentIndex >= 0 ? queue[currentIndex] : null;
   const hasFinishedRef = useRef(false);
 
+  // ── Native Media Service Management ──────────────────────────────────────
+  const startNativeService = useCallback(async (track: LibraryTrack) => {
+    if (Platform.OS !== 'android') return;
+    
+    try {
+      if (!isNativeServiceStarted.current) {
+        await MediaPlaybackModule.startService();
+        isNativeServiceStarted.current = true;
+      }
+      
+      // Update notification metadata
+      await MediaPlaybackModule.updateMetadata(
+        track.title,
+        track.artist,
+        track.genre || 'Music'
+      );
+    } catch (error) {
+      console.error('Native service error:', error);
+    }
+  }, []);
+
+  const stopNativeService = useCallback(async () => {
+    if (Platform.OS !== 'android') return;
+    
+    try {
+      if (isNativeServiceStarted.current) {
+        await MediaPlaybackModule.stopService();
+        isNativeServiceStarted.current = false;
+      }
+    } catch (error) {
+      console.error('Stop native service error:', error);
+    }
+  }, []);
+
+  const sendNativeCommand = useCallback(async (action: string) => {
+    if (Platform.OS !== 'android') return;
+    
+    try {
+      await MediaPlaybackModule.sendCommand(action);
+    } catch (error) {
+      console.error('Send native command error:', error);
+    }
+  }, []);
+
+  // ── Handle native media events ──────────────────────────────────────────
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const subscription = mediaEventEmitter.addListener(
+      'MediaControlEvent',
+      async (event: string) => {
+        console.log('Native media event:', event);
+        
+        switch (event) {
+          case 'NEXT_TRACK':
+            playNext();
+            break;
+          case 'PREVIOUS_TRACK':
+            playPrev();
+            break;
+          case 'PLAY':
+            if (!status?.playing) {
+              player.play();
+            }
+            break;
+          case 'PAUSE':
+            if (status?.playing) {
+              player.pause();
+            }
+            break;
+        }
+      }
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [player, status?.playing, playNext, playPrev]);
+
+  // ── Audio mode setup ────────────────────────────────────────────────────
   useEffect(() => {
     setAudioModeAsync({
       playsInSilentMode: true,
@@ -551,13 +632,20 @@ function useMusicPlayerEngine(library: LibraryTrack[]) {
     }).catch(() => {});
   }, []);
 
+  // ── Track loading ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!currentTrack) return;
+    if (!currentTrack) {
+      stopNativeService();
+      return;
+    }
+    
     setIsLoadingTrack(true);
     hasFinishedRef.current = false;
+    
     try {
       player.replace(currentTrack.localUri);
       player.play();
+      startNativeService(currentTrack);
     } catch (e) {
       console.error('player.replace error:', e);
     } finally {
@@ -565,6 +653,7 @@ function useMusicPlayerEngine(library: LibraryTrack[]) {
     }
   }, [currentTrack?.id]);
 
+  // ── Playback completion handler ─────────────────────────────────────────
   useEffect(() => {
     if (!status?.didJustFinish || hasFinishedRef.current) return;
     hasFinishedRef.current = true;
@@ -575,8 +664,28 @@ function useMusicPlayerEngine(library: LibraryTrack[]) {
       return;
     }
     playNext();
-  }, [status?.didJustFinish]);
+  }, [status?.didJustFinish, repeatMode]);
 
+  // ── Playback state sync with native ────────────────────────────────────
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !currentTrack) return;
+    
+    const syncNativeState = async () => {
+      try {
+        if (status?.playing) {
+          await sendNativeCommand('com.yourpackage.ACTION_PLAY');
+        } else {
+          await sendNativeCommand('com.yourpackage.ACTION_PAUSE');
+        }
+      } catch (error) {
+        console.error('Sync native state error:', error);
+      }
+    };
+    
+    syncNativeState();
+  }, [status?.playing, currentTrack, sendNativeCommand]);
+
+  // ── Player functions ────────────────────────────────────────────────────
   const playTrackAt = useCallback((list: LibraryTrack[], index: number) => {
     setQueue(list);
     setCurrentIndex(index);
@@ -589,12 +698,15 @@ function useMusicPlayerEngine(library: LibraryTrack[]) {
 
   const togglePlayPause = useCallback(() => {
     if (!currentTrack) return;
+    
     if (status?.playing) {
       player.pause();
+      sendNativeCommand('com.yourpackage.ACTION_PAUSE');
     } else {
       player.play();
+      sendNativeCommand('com.yourpackage.ACTION_PLAY');
     }
-  }, [currentTrack, status?.playing]);
+  }, [currentTrack, status?.playing, player, sendNativeCommand]);
 
   const playNext = useCallback(() => {
     if (queue.length === 0) return;
@@ -608,12 +720,13 @@ function useMusicPlayerEngine(library: LibraryTrack[]) {
           nextIndex = 0;
         } else {
           player.pause();
+          sendNativeCommand('com.yourpackage.ACTION_PAUSE');
           return;
         }
       }
     }
     setCurrentIndex(nextIndex);
-  }, [queue, currentIndex, shuffle, repeatMode]);
+  }, [queue, currentIndex, shuffle, repeatMode, player, sendNativeCommand]);
 
   const playPrev = useCallback(() => {
     if (queue.length === 0) return;
@@ -624,18 +737,19 @@ function useMusicPlayerEngine(library: LibraryTrack[]) {
     let prevIndex = currentIndex - 1;
     if (prevIndex < 0) prevIndex = repeatMode === 'all' ? queue.length - 1 : 0;
     setCurrentIndex(prevIndex);
-  }, [queue, currentIndex, status?.currentTime, repeatMode]);
+  }, [queue, currentIndex, status?.currentTime, repeatMode, player]);
 
   const seekTo = useCallback((seconds: number) => {
     player.seekTo(seconds);
-  }, []);
+  }, [player]);
 
-  const stop = useCallback(() => {
+  const stop = useCallback(async () => {
     player.pause();
     player.seekTo(0);
     setCurrentIndex(-1);
     setQueue([]);
-  }, []);
+    await stopNativeService();
+  }, [player, stopNativeService]);
 
   return {
     currentTrack,
@@ -656,6 +770,9 @@ function useMusicPlayerEngine(library: LibraryTrack[]) {
     playPrev,
     seekTo,
     stop,
+    startNativeService,
+    stopNativeService,
+    sendNativeCommand,
   };
 }
 
@@ -1001,7 +1118,6 @@ export default function MoodMusicScreen() {
       };
 
       await persistLibrary([newTrack, ...library]);
-   // Alert.alert('Added', `"${newTrack.title}" is now in your library.`);
     } catch (error) {
       console.error('importTrack error:', error);
       Alert.alert('Import failed', getErrorMessage(error));
@@ -1053,7 +1169,6 @@ export default function MoodMusicScreen() {
       };
 
       await persistLibrary([newTrack, ...library]);
-//  Alert.alert('Downloaded', `"${catalogTrack.title}" is saved and ready to play offline.`);
     } catch (error) {
       console.error('downloadCatalogTrack error:', error);
       Alert.alert('Download failed', getErrorMessage(error));
@@ -1101,9 +1216,6 @@ export default function MoodMusicScreen() {
   });
 
   const currentMoodConfig = todayMood ? getMoodConfig(todayMood.mood) : null;
-
-
-// Render the music player
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
@@ -1700,7 +1812,7 @@ const styles = StyleSheet.create({
     gap: 10,
     backgroundColor: '#1E1E1E',
     borderRadius: 18,
-   paddingBottom: 100,
+    paddingBottom: 100,
     paddingVertical: 10,
     paddingHorizontal: 12,
     shadowColor: '#000',
