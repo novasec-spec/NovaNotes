@@ -19,8 +19,6 @@ import androidx.media.session.MediaButtonReceiver;
 import android.app.Service;
 import android.util.Log;
 import android.graphics.BitmapFactory;
-import com.facebook.react.bridge.ReactApplicationContext;
-import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 public class MediaPlaybackService extends Service {
     private static final String CHANNEL_ID = "music_playback_channel";
@@ -165,19 +163,10 @@ public class MediaPlaybackService extends Service {
         mediaSession.setPlaybackState(stateBuilder.build());
     }
     
-    private void sendEventToJS(String event) {
-    // Get the ReactInstanceManager and emit the event
-    ReactApplicationContext reactContext = 
-        ((MainApplication) getApplication()).getReactNativeHost()
-            .getReactInstanceManager()
-            .getCurrentReactContext();
-    
-    if (reactContext != null) {
-        reactContext
-            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
-            .emit("MediaControlEvent", event);
-    }
-    }
+
+   private void sendEventToJS(String event) {
+      MediaPlaybackModule.emitEvent("MediaControlEvent", event);
+     }
 
     
     @Override

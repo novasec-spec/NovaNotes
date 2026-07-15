@@ -8,11 +8,12 @@ import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 public class MediaPlaybackModule extends ReactContextBaseJavaModule {
-    private final ReactApplicationContext reactContext;
+    // Static reference so the Service can reach us without needing ReactContext
+    private static MediaPlaybackModule instance;
 
     public MediaPlaybackModule(ReactApplicationContext context) {
         super(context);
-        this.reactContext = context;
+        instance = this;
     }
 
     @NonNull
@@ -21,43 +22,47 @@ public class MediaPlaybackModule extends ReactContextBaseJavaModule {
         return "MediaPlaybackModule";
     }
 
-    // Called from JS to start the service
+    // Called by the Service — no React imports needed in Service
+    public static void emitEvent(String eventName, String data) {
+        if (instance != null) {
+            instance.sendEvent(eventName, data);
+        }
+    }
+
+    private void sendEvent(String eventName, String data) {
+        ReactApplicationContext ctx = getReactApplicationContext();
+        if (ctx != null && ctx.hasActiveReactInstance()) {
+            ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+              .emit(eventName, data);
+        }
+    }
+
     @ReactMethod
     public void startService() {
-        Intent intent = new Intent(reactContext, MediaPlaybackService.class);
-        reactContext.startForegroundService(intent);
+        Intent intent = new Intent(getReactApplicationContext(), MediaPlaybackService.class);
+        getReactApplicationContext().startForegroundService(intent);
     }
 
-    // Called from JS to stop the service
     @ReactMethod
     public void stopService() {
-        Intent intent = new Intent(reactContext, MediaPlaybackService.class);
-        reactContext.stopService(intent);
+        Intent intent = new Intent(getReactApplicationContext(), MediaPlaybackService.class);
+        getReactApplicationContext().stopService(intent);
     }
 
-    // Called from JS to update notification metadata
     @ReactMethod
     public void updateMetadata(String title, String artist, String album) {
-        // You can extend this to pass data to the service via Intent extras
-        Intent intent = new Intent(reactContext, MediaPlaybackService.class);
+        Intent intent = new Intent(getReactApplicationContext(), MediaPlaybackService.class);
         intent.setAction("UPDATE_METADATA");
         intent.putExtra("title", title);
         intent.putExtra("artist", artist);
         intent.putExtra("album", album);
-        reactContext.startService(intent);
+        getReactApplicationContext().startService(intent);
     }
 
-    // Called from JS to send play/pause commands
     @ReactMethod
     public void sendCommand(String action) {
         Intent intent = new Intent(action);
-        reactContext.sendBroadcast(intent);
-    }
-
-    // Helper to emit events to JavaScript
-    public void sendEventToJS(String eventName, String data) {
-        reactContext
-            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
-            .emit(eventName, data);
+        getReactApplicationContext().sendBroadcast(intent);
     }
 }
+
