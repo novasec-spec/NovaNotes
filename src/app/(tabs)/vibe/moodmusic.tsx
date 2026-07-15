@@ -673,9 +673,9 @@ function useMusicPlayerEngine(library: LibraryTrack[]) {
     const syncNativeState = async () => {
       try {
         if (status?.playing) {
-          await sendNativeCommand('com.yourpackage.ACTION_PLAY');
+          await sendNativeCommand('com.novasec.notes.ACTION_PLAY');
         } else {
-          await sendNativeCommand('com.yourpackage.ACTION_PAUSE');
+          await sendNativeCommand('com.novasec.notes.ACTION_PAUSE');
         }
       } catch (error) {
         console.error('Sync native state error:', error);
@@ -701,10 +701,10 @@ function useMusicPlayerEngine(library: LibraryTrack[]) {
     
     if (status?.playing) {
       player.pause();
-      sendNativeCommand('com.yourpackage.ACTION_PAUSE');
+      sendNativeCommand('com.novasec.notes.ACTION_PAUSE');
     } else {
       player.play();
-      sendNativeCommand('com.yourpackage.ACTION_PLAY');
+      sendNativeCommand('com.novasec.notes.ACTION_PLAY');
     }
   }, [currentTrack, status?.playing, player, sendNativeCommand]);
 
@@ -720,7 +720,7 @@ function useMusicPlayerEngine(library: LibraryTrack[]) {
           nextIndex = 0;
         } else {
           player.pause();
-          sendNativeCommand('com.yourpackage.ACTION_PAUSE');
+          sendNativeCommand('com.novasec.notes.ACTION_PAUSE');
           return;
         }
       }
