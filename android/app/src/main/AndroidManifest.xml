@@ -56,9 +56,9 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="novanote"/>
-        <data android:scheme="yourapp" android:host="note"/>
-        <data android:scheme="yourapp" android:host="recording"/>
-        <data android:scheme="yourapp" android:host="share"/>
+        <data android:scheme="novanote" android:host="note"/>
+        <data android:scheme="novanote" android:host="recording"/>
+        <data android:scheme="novanote" android:host="share"/>
       </intent-filter>
       <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts"/>
     </activity>

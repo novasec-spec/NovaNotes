@@ -193,7 +193,7 @@ export function BubblesWidget(props: Props) {
         {taskCount > 0 && (
           <FlexWidget
             clickAction="OPEN_URI"
-            clickActionData={{ uri: 'novanote://tasks' }}
+            clickActionData={{ uri: 'novanote://index/task' }}
             style={{
               flex: 0.7,
               flexDirection: 'row',
