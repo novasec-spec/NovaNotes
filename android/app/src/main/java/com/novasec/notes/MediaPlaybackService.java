@@ -88,7 +88,7 @@ public class MediaPlaybackService extends Service {
         filter.addAction(ACTION_PAUSE);
         filter.addAction(ACTION_NEXT);
         filter.addAction(ACTION_PREVIOUS);
-        registerReceiver(mediaReceiver, filter);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { registerReceiver(mediaReceiver, filter, Context.RECEIVER_NOT_EXPORTED); } else { registerReceiver(mediaReceiver, filter); }
     }
     
     private Notification buildNotification() {
