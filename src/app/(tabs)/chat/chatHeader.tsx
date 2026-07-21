@@ -25,7 +25,7 @@ import { GRADIENT, WHITE, SUCCESS, User, fmtTime, haptic } from './chatShared';
 import { showChatAlert } from './chatAlertModal';
 import { s } from './chatStyles';
 import { useRouter } from 'expo-router';
-import  CallService  from '../../..//services/CallService';
+import  CallService  from '../../../services/CallService';
 
 interface Props {
   otherUser: User;
