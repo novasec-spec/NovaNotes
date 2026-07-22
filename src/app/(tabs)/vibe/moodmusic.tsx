@@ -1202,7 +1202,7 @@ const styles = StyleSheet.create({
   progressTrack: { height: 28, justifyContent: 'center' },
   progressFill:  { height: 4, borderRadius: 2, position: 'absolute', left: 0 },
   progressThumb: { width: 12, height: 12, borderRadius: 6, position: 'absolute', marginLeft: -6 },
-  miniPlayer: { position: 'absolute', left: 12, right: 12, bottom: 12, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1E1E1E', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8, borderWidth: 1, borderColor: '#2A2A2A' },
+  miniPlayer: { paddingBottom: 100, position: 'absolute', left: 12, right: 12, bottom: 12, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1E1E1E', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8, borderWidth: 1, borderColor: '#2A2A2A' },
   miniArt:    { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   miniInfo:   { flex: 1 },
   miniTitle:  { fontSize: 13, fontWeight: '700', color: '#FFF' },
