@@ -258,7 +258,7 @@ export default function ChatScreen() {
           {/* ─── New Chat Button ─── */}
           <TouchableOpacity
             style={[styles.iconButton, { backgroundColor: isDarkMode ? '#1A1A2E' : '#F5F3F7' }]}
-            onPress={() => router.push('/chat/chatlist')}
+            onPress={() => router.push('/chat')}
             activeOpacity={0.7}
           >
             <Icon name="add-circle-outline" size={22} color={colors.text} />
