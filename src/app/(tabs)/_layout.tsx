@@ -202,10 +202,9 @@ useEffect(() => {
     };
   }, []);
 
-
   return (
     <View style={{ flex: 1 }}>
-      {/* NotificationBanner lives here — ONE mount for the whole app, above
+     {/* NotificationBanner lives here — ONE mount for the whole app, above
           every tab. It uses the real Supabase session user id (never a
           placeholder) and appears on top of whatever screen is active.
           Do NOT also mount it in chat/_layout.tsx — that second instance was
