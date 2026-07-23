@@ -3,7 +3,7 @@
 ## Problem Summary
 
 Your NovaNotes app experiences crashes on user devices when:
-1. Users create accounts and login
+31. Users create accounts and login
 2. Notifications/calls are received (chat, calling system, notification system)
 3. Routes triggered by these events don't exist or are invalid
 4. The "route not found" screen appears and persists even after navigation attempts
