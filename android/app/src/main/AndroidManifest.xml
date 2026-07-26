@@ -45,7 +45,7 @@
       </intent-filter>
       <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true"/>
     </service>
-    <service android:name=".MediaPlaybackService" android:enabled="true" android:exported="false" android:foregroundServiceType="mediaPlayback"/>
+    <service android:name=".MusicPlaybackService" android:enabled="true" android:exported="false" android:foregroundServiceType="mediaPlayback"/>
     <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>

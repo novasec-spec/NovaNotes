@@ -84,7 +84,7 @@ const QUICK_TILES = [
   { id: 'playlist', icon: 'musical-notes-outline', label: 'Our Playlist', color: '#22C55E', route: '/vibe/moodmusic' },
   { id: 'vault', icon: 'lock-closed-outline', label: 'Vault', color: '#3B82F6', route: '/vault' },
   { id: 'alerts', icon: 'notifications-outline', label: 'Alerts', color: '#F59E0B', route: '/notification' },
-  { id: 'playground', icon: 'flask-outline', label: 'Notify Test', color: '#EC4899', route: '/notificationSettings' },
+  { id: 'playground', icon: 'flask-outline', label: 'Notify Pref', color: '#EC4899', route: '/notificationSettings' },
   { id: 'playground2', icon: 'flask-outline', label: 'Notify Test', color: '#EC4899', route: '/notification-playground' },
   { id: 'task', icon: 'clipboard-outline', label: 'New Task', color: '#FF6B9D', route: 'task' },
 ];

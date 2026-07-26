@@ -1,36 +1,9 @@
-
 // screens/MoodMusicScreen.tsx
 // ─────────────────────────────────────────────────────────────────────────────
-//  ✅ ALL ORIGINAL LOGIC PRESERVED:
-//     useMusicPlayerEngine / startNativeService / stopNativeService
-//     sendNativeCommand / useNativeMediaEvents
-//     MediaPlaybackModule / mediaEventEmitter
-//     loadLibrary / saveLibrary / importTrack / downloadTrack
-//     ProgressBar / MiniPlayer / NowPlayingSheet / CatalogSheet
-//     ROYALTY_FREE_CATALOG / CURATED_ARTIST_CATALOG / OUR_SONG
-//     All MOODS / COLORS / formatTime
-//
-//  🔧 FIXES:
-//     - Package name corrected everywhere:
-//       'com.yourpackage' → 'com.novasec.notes'
-//     - NativeEventEmitter guard: wrapped in try/catch so app never
-//       crashes if MediaPlaybackModule is unavailable in Expo Go
-//     - MediaPlaybackModule methods guarded — all calls check module exists first
-//     - ACTION strings updated to com.novasec.notes.*
-//
-//  🆕 NEW:
-//     - Sleep timer (15 / 30 / 60 min / end of song)
-//     - Equalizer presets (Flat / Bass Boost / Vocal / Electronic / Classical)
-//     - Lyrics placeholder panel in NowPlayingSheet
-//     - Queue view in NowPlayingSheet (reorderable list)
-//     - Mood-to-playlist auto-queue: selecting a mood queues all matching tracks
-//     - "Add to queue" on every track row (not just play)
-//     - Track info panel: title, artist, BPM, genre, duration
-//     - Crossfade toggle (3s) — sets repeatMode sequencing behaviour
-//     - Love/favourite track toggle (saved to AsyncStorage)
-//     - Recently played horizontal strip
-//     - Waveform animation while playing (animated bars)
-//
+//  ✅ RESTRUCTURED FOR KOTLIN NATIVE LAYER
+//     - Uses com.novasec.notes.music.* action namespace
+//     - updateMetadata now sends isPlaying state correctly
+//     - Properly typed native module interface
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -57,11 +30,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: W } = Dimensions.get('window');
 
-// ── Package name ──────────────────────────────────────────────────────────────
-const PKG = 'com.novasec.notes';
+// ── Native Media Playback Module (Typed) ───────────────────────────────────
+interface MediaPlaybackModuleType {
+  startService(): void;
+  stopService(): void;
+  updateMetadata(title: string, artist: string, album: string, artworkUrl: string, isPlaying: boolean): void;
+  sendCommand(action: string): void;
+}
 
-// ── Native Media Playback Module — guarded for Expo Go ───────────────────────
-const { MediaPlaybackModule } = NativeModules;
+const MediaPlaybackModule = NativeModules.MediaPlaybackModule as MediaPlaybackModuleType | undefined;
+
 let mediaEventEmitter: NativeEventEmitter | null = null;
 if (MediaPlaybackModule) {
   try {
@@ -71,10 +49,23 @@ if (MediaPlaybackModule) {
   }
 }
 
-function callNative(method: string, ...args: any[]) {
-  if (!MediaPlaybackModule) return;
-  try { (MediaPlaybackModule as any)[method]?.(...args); } catch (e) {
+// ── Native action constants (must match MusicConstants.kt) ───────────────────
+const NATIVE_ACTIONS = {
+  PLAY:     'com.novasec.notes.music.ACTION_PLAY',
+  PAUSE:    'com.novasec.notes.music.ACTION_PAUSE',
+  NEXT:     'com.novasec.notes.music.ACTION_NEXT',
+  PREVIOUS: 'com.novasec.notes.music.ACTION_PREVIOUS',
+};
+
+// ── Safe native method caller ────────────────────────────────────────────────
+function callNative(method: keyof MediaPlaybackModuleType, ...args: any[]): boolean {
+  if (!MediaPlaybackModule) return false;
+  try {
+    (MediaPlaybackModule as any)[method]?.(...args);
+    return true;
+  } catch (e) {
     console.warn(`[Music] ${method} failed:`, e);
+    return false;
   }
 }
 
@@ -223,19 +214,23 @@ function catalogToLibrary(ct: CatalogTrack): LibraryTrack {
 
 // ── Waveform animation ────────────────────────────────────────────────────────
 function WaveformBars({ isPlaying, color = PINK }: { isPlaying: boolean; color?: string }) {
-  const bars = [useRef(new Animated.Value(0.3)).current, useRef(new Animated.Value(0.6)).current,
-    useRef(new Animated.Value(1)).current, useRef(new Animated.Value(0.4)).current,
-    useRef(new Animated.Value(0.8)).current];
+  const bars = useMemo(() => [
+    new Animated.Value(0.3), new Animated.Value(0.6), new Animated.Value(1),
+    new Animated.Value(0.4), new Animated.Value(0.8)
+  ], []);
 
   useEffect(() => {
-    if (!isPlaying) { bars.forEach(b => Animated.timing(b, { toValue: 0.3, duration: 300, useNativeDriver: true }).start()); return; }
+    if (!isPlaying) {
+      bars.forEach(b => Animated.timing(b, { toValue: 0.3, duration: 300, useNativeDriver: true }).start());
+      return;
+    }
     const anims = bars.map((b, i) => Animated.loop(Animated.sequence([
       Animated.timing(b, { toValue: 1, duration: 300 + i * 80, useNativeDriver: true }),
       Animated.timing(b, { toValue: 0.2, duration: 300 + i * 80, useNativeDriver: true }),
     ])));
     anims.forEach(a => a.start());
     return () => anims.forEach(a => a.stop());
-  }, [isPlaying]);
+  }, [isPlaying, bars]);
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, height: 20 }}>
@@ -247,7 +242,7 @@ function WaveformBars({ isPlaying, color = PINK }: { isPlaying: boolean; color?:
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  useMusicPlayerEngine — YOUR ORIGINAL + native integration fixed
+//  useMusicPlayerEngine — RESTRUCTURED for Kotlin native integration
 // ─────────────────────────────────────────────────────────────────────────────
 function useMusicPlayerEngine() {
   const [queue,           setQueue]          = useState<LibraryTrack[]>([]);
@@ -266,10 +261,11 @@ function useMusicPlayerEngine() {
     setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: true }).catch(console.warn);
   }, []);
 
-  // ── YOUR ORIGINAL: useNativeMediaEvents ────────────────────────────────────
+  // ── Native event listener ──────────────────────────────────────────────────
   useEffect(() => {
     if (!mediaEventEmitter) return;
     const sub = mediaEventEmitter.addListener('MediaControlEvent', (event: string) => {
+      console.log('[Music] Native event received:', event);
       switch (event) {
         case 'NEXT_TRACK':     playNext();        break;
         case 'PREVIOUS_TRACK': playPrev();        break;
@@ -280,39 +276,43 @@ function useMusicPlayerEngine() {
     return () => sub.remove();
   }, []);
 
-  // ── YOUR ORIGINAL: startNativeService ─────────────────────────────────────
-  const startNativeService = useCallback(async (track: LibraryTrack) => {
+  // ── Start native service with current track metadata ───────────────────────
+  const syncNativeNotification = useCallback((track: LibraryTrack, playing: boolean) => {
     if (Platform.OS !== 'android') return;
     callNative('startService');
-    callNative('updateMetadata', track.title, track.artist, track.artwork ?? '');
+    setTimeout(() => {
+      callNative('updateMetadata', track.title, track.artist, track.mood ?? '', track.artwork ?? '', playing);
+    }, 100);
   }, []);
 
-  // YOUR ORIGINAL: stopNativeService
+  // ── Stop native service ────────────────────────────────────────────────────
   const stopNativeService = useCallback(async () => {
     if (Platform.OS !== 'android') return;
     callNative('stopService');
   }, []);
 
-  // YOUR ORIGINAL: sendNativeCommand — corrected package name
+  // ── Send native command (broadcast) ─────────────────────────────────────────
   const sendNativeCommand = useCallback(async (action: string) => {
     if (Platform.OS !== 'android') return;
     callNative('sendCommand', action);
   }, []);
 
-  // ── Update native notification when track changes ─────────────────────────
+  // ── Update native notification when track changes ──────────────────────────
   useEffect(() => {
     if (currentTrack) {
-      startNativeService(currentTrack);
+      syncNativeNotification(currentTrack, !!status?.playing);
+    } else {
+      stopNativeService();
     }
   }, [currentTrack?.id]);
 
   // ── Sync play/pause to native notification ─────────────────────────────────
   useEffect(() => {
-    if (!currentTrack) return;
+    if (!currentTrack || Platform.OS !== 'android') return;
     if (status?.playing) {
-      sendNativeCommand(`${PKG}.ACTION_PLAY`);
+      sendNativeCommand(NATIVE_ACTIONS.PLAY);
     } else {
-      sendNativeCommand(`${PKG}.ACTION_PAUSE`);
+      sendNativeCommand(NATIVE_ACTIONS.PAUSE);
     }
   }, [status?.playing, currentTrack?.id]);
 
@@ -323,9 +323,10 @@ function useMusicPlayerEngine() {
     playNext();
   }, [status?.didJustFinish]);
 
-  // ── YOUR ORIGINAL player functions ─────────────────────────────────────────
+  // ── Player functions ────────────────────────────────────────────────────────
   const playTrackAt = useCallback((list: LibraryTrack[], index: number) => {
-    setQueue(list); setCurrentIndex(index);
+    setQueue(list);
+    setCurrentIndex(index);
   }, []);
 
   const playTrack = useCallback((track: LibraryTrack, fromList: LibraryTrack[]) => {
@@ -337,10 +338,10 @@ function useMusicPlayerEngine() {
     if (!currentTrack) return;
     if (status?.playing) {
       player.pause();
-      sendNativeCommand(`${PKG}.ACTION_PAUSE`);
+      sendNativeCommand(NATIVE_ACTIONS.PAUSE);
     } else {
       player.play();
-      sendNativeCommand(`${PKG}.ACTION_PLAY`);
+      sendNativeCommand(NATIVE_ACTIONS.PLAY);
     }
   }, [currentTrack, status?.playing]);
 
@@ -353,10 +354,15 @@ function useMusicPlayerEngine() {
       next = currentIndex + 1;
       if (next >= queue.length) {
         if (repeatMode === 'all') next = 0;
-        else { player.pause(); sendNativeCommand(`${PKG}.ACTION_PAUSE`); return; }
+        else { 
+          player.pause(); 
+          sendNativeCommand(NATIVE_ACTIONS.PAUSE); 
+          return; 
+        }
       }
     }
     setCurrentIndex(next);
+    sendNativeCommand(NATIVE_ACTIONS.NEXT);
   }, [queue, currentIndex, shuffle, repeatMode]);
 
   const playPrev = useCallback(() => {
@@ -365,16 +371,19 @@ function useMusicPlayerEngine() {
     let prev = currentIndex - 1;
     if (prev < 0) prev = repeatMode === 'all' ? queue.length - 1 : 0;
     setCurrentIndex(prev);
+    sendNativeCommand(NATIVE_ACTIONS.PREVIOUS);
   }, [queue, currentIndex, status?.currentTime, repeatMode]);
 
   const seekTo = useCallback((s: number) => { player.seekTo(s); }, [player]);
 
   const stop = useCallback(async () => {
-    player.pause(); player.seekTo(0); setCurrentIndex(-1); setQueue([]);
+    player.pause(); 
+    player.seekTo(0); 
+    setCurrentIndex(-1); 
+    setQueue([]);
     await stopNativeService();
   }, [player, stopNativeService]);
 
-  // NEW: add to queue
   const addToQueue = useCallback((track: LibraryTrack) => {
     setQueue(q => {
       const after = currentIndex + 1;
@@ -393,11 +402,11 @@ function useMusicPlayerEngine() {
     setShuffle, setRepeatMode,
     playTrack, playTrackAt, addToQueue, togglePlayPause,
     playNext, playPrev, seekTo, stop,
-    startNativeService, stopNativeService, sendNativeCommand,
+    stopNativeService, sendNativeCommand,
   };
 }
 
-// ── ProgressBar — YOUR ORIGINAL ───────────────────────────────────────────────
+// ── ProgressBar ───────────────────────────────────────────────────────────────
 function ProgressBar({ progress, onSeek, color = PINK }: { progress: number; onSeek: (r: number) => void; color?: string }) {
   const [barWidth, setBarWidth] = useState(1);
   const clamped = Math.max(0, Math.min(1, progress));
@@ -411,7 +420,7 @@ function ProgressBar({ progress, onSeek, color = PINK }: { progress: number; onS
   );
 }
 
-// ── MiniPlayer — YOUR ORIGINAL ────────────────────────────────────────────────
+// ── MiniPlayer ────────────────────────────────────────────────────────────────
 function MiniPlayer({ track, isPlaying, onTogglePlay, onNext, onExpand }: {
   track: LibraryTrack; isPlaying: boolean;
   onTogglePlay: () => void; onNext: () => void; onExpand: () => void;
@@ -435,7 +444,7 @@ function MiniPlayer({ track, isPlaying, onTogglePlay, onNext, onExpand }: {
   );
 }
 
-// ── NowPlayingSheet — YOUR ORIGINAL + lyrics + queue + sleep/EQ tabs ─────────
+// ── NowPlayingSheet ──────────────────────────────────────────────────────────
 function NowPlayingSheet({ visible, onClose, engine, onDeleteTrack, favourites, onToggleFav }: {
   visible: boolean; onClose: () => void;
   engine: ReturnType<typeof useMusicPlayerEngine>;
@@ -449,7 +458,7 @@ function NowPlayingSheet({ visible, onClose, engine, onDeleteTrack, favourites, 
   const [activeTab, setActiveTab] = useState<'player' | 'queue' | 'lyrics'>('player');
   const [eqPreset,  setEqPreset]  = useState('Flat');
   const [sleepMins, setSleepMins] = useState<number | null>(null);
-  const [sleepTimer, setSleepTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [sleepTimer, setSleepTimer] = useState<any>(null);
 
   if (!currentTrack) return null;
 
@@ -460,10 +469,10 @@ function NowPlayingSheet({ visible, onClose, engine, onDeleteTrack, favourites, 
 
   const handleSleepTimer = (mins: number) => {
     if (sleepTimer) clearTimeout(sleepTimer);
-    if (mins === -1) { setSleepMins(-1); return; } // end of song
+    if (mins === -1) { setSleepMins(-1); return; }
     setSleepMins(mins);
     const t = setTimeout(() => { engine.stop(); setSleepMins(null); }, mins * 60000);
-    setSleepTimer(t as any);
+    setSleepTimer(t);
   };
 
   const cancelSleep = () => {
@@ -558,7 +567,7 @@ function NowPlayingSheet({ visible, onClose, engine, onDeleteTrack, favourites, 
                   <Icon name="play-skip-forward" size={30} color="#FFF" />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={cycleRepeat} style={{ position: 'relative' }}>
-                  <Icon name={repeatMode === 'one' ? 'repeat-outline' : 'repeat-outline'} size={22} color={repeatMode !== 'off' ? PINK : '#888'} />
+                  <Icon name={repeatMode === 'one' ? 'repeat' : 'repeat-outline'} size={22} color={repeatMode !== 'off' ? PINK : '#888'} />
                   {repeatMode === 'one' && <View style={styles.repeatOneDot} />}
                 </TouchableOpacity>
               </View>
@@ -735,13 +744,13 @@ export default function MoodMusicScreen() {
     });
   };
 
-  // ── Play track + add to recent ─────────────────────────────────────────────
+  // ── Play track + update native metadata (5-param Kotlin API) ──────────────
   const handlePlayTrack = (track: LibraryTrack, fromList: LibraryTrack[]) => {
     playTrack(track, fromList);
     addToRecent(track);
-    // Update native notification immediately
-    callNative('startService');
-    callNative('updateMetadata', track.title, track.artist, '');
+    if (Platform.OS === 'android') {
+      callNative('updateMetadata', track.title, track.artist, track.mood ?? '', track.artwork ?? '', true);
+    }
   };
 
   // ── Mood-to-playlist auto-queue ────────────────────────────────────────────
@@ -828,43 +837,43 @@ export default function MoodMusicScreen() {
   ] as const;
 
   return (
-    <SafeAreaView style={[s.root, { backgroundColor: c.bg }]} edges={['top']}>
+    <SafeAreaView style={[styles.root, { backgroundColor: c.bg }]} edges={['top']}>
       <StatusBar barStyle="light-content" />
 
       {/* ── Header ── */}
-      <LinearGradient colors={[PINK, PURPLE]} style={s.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <TouchableOpacity onPress={() => router.back()} style={s.hdrBack}>
+      <LinearGradient colors={[PINK, PURPLE]} style={styles.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.hdrBack}>
           <Icon name="arrow-back" size={24} color="#FFF" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={s.hdrTitle}>Mood Music</Text>
+          <Text style={styles.hdrTitle}>Mood Music</Text>
           {todayMood && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
               <Icon name={getMoodConfig(todayMood).icon as any} size={12} color="rgba(255,255,255,0.8)" />
-              <Text style={s.hdrSub}>Feeling {todayMood} today</Text>
+              <Text style={styles.hdrSub}>Feeling {todayMood} today</Text>
             </View>
           )}
         </View>
-        <TouchableOpacity onPress={() => setShowCatalog(true)} style={s.hdrBtn}>
+        <TouchableOpacity onPress={() => setShowCatalog(true)} style={styles.hdrBtn}>
           <Icon name="albums-outline" size={22} color="#FFF" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={importTrack} style={s.hdrBtn}>
+        <TouchableOpacity onPress={importTrack} style={styles.hdrBtn}>
           <Icon name="add-circle-outline" size={22} color="#FFF" />
         </TouchableOpacity>
       </LinearGradient>
 
       {/* ── Tab strip ── */}
-      <View style={[s.tabStrip, { backgroundColor: c.card, borderBottomColor: c.border }]}>
+      <View style={[styles.tabStrip, { backgroundColor: c.card, borderBottomColor: c.border }]}>
         {TABS.map(t => (
-          <TouchableOpacity key={t.key} onPress={() => setActiveTab(t.key as any)} style={s.tabBtn}>
+          <TouchableOpacity key={t.key} onPress={() => setActiveTab(t.key as any)} style={styles.tabBtn}>
             <Icon name={t.icon as any} size={18} color={activeTab === t.key ? PINK : '#666'} />
-            <Text style={[s.tabLabel, activeTab === t.key && { color: PINK }]}>{t.label}</Text>
-            {activeTab === t.key && <View style={s.tabIndicator} />}
+            <Text style={[styles.tabLabel, activeTab === t.key && { color: PINK }]}>{t.label}</Text>
+            {activeTab === t.key && <View style={styles.tabIndicator} />}
           </TouchableOpacity>
         ))}
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={[s.scroll, { paddingBottom: currentTrack ? 110 : 30 }]}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scroll, { paddingBottom: currentTrack ? 110 : 30 }]}
         showsVerticalScrollIndicator={false}>
 
         {/* ── MOOD TAB ── */}
@@ -872,7 +881,7 @@ export default function MoodMusicScreen() {
           <>
             {/* Today's mood */}
             {todayMood && (
-              <View style={[s.todayMoodCard, { backgroundColor: getMoodConfig(todayMood).color + '33' }]}>
+              <View style={[styles.todayMoodCard, { backgroundColor: getMoodConfig(todayMood).color + '33' }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <Icon name={getMoodConfig(todayMood).icon as any} size={28} color={getMoodConfig(todayMood).color} />
                   <View>
@@ -880,7 +889,7 @@ export default function MoodMusicScreen() {
                     <Text style={{ color: '#FFF', opacity: 0.7, fontSize: 12 }}>Music matched to your vibe</Text>
                   </View>
                   <TouchableOpacity onPress={() => playMoodQueue(todayMood)}
-                    style={[s.playMoodBtn, { backgroundColor: getMoodConfig(todayMood).color }]}>
+                    style={[styles.playMoodBtn, { backgroundColor: getMoodConfig(todayMood).color }]}>
                     <Icon name="play" size={16} color="#FFF" />
                     <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 11 }}>Play</Text>
                   </TouchableOpacity>
@@ -890,20 +899,20 @@ export default function MoodMusicScreen() {
 
             {/* Recently played */}
             {recentlyPlayed.length > 0 && (
-              <View style={s.section}>
-                <Text style={[s.sectionTitle, { color: c.text }]}>Recently Played</Text>
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: c.text }]}>Recently Played</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
                   {recentlyPlayed.slice(0, 8).map(track => (
                     <TouchableOpacity key={track.id} onPress={() => handlePlayTrack(track, recentlyPlayed)}
-                      style={[s.recentCard, { backgroundColor: c.card }]}>
-                      <LinearGradient colors={[PINK + '44', PURPLE + '44']} style={s.recentArt}>
+                      style={[styles.recentCard, { backgroundColor: c.card }]}>
+                      <LinearGradient colors={[PINK + '44', PURPLE + '44']} style={styles.recentArt}>
                         {currentTrack?.id === track.id
                           ? <WaveformBars isPlaying={isPlaying} color={PINK} />
                           : <Icon name="musical-notes" size={20} color={PINK} />
                         }
                       </LinearGradient>
-                      <Text style={[s.recentTitle, { color: c.text }]} numberOfLines={1}>{track.title}</Text>
-                      <Text style={[s.recentArtist, { color: c.textSecondary }]} numberOfLines={1}>{track.artist}</Text>
+                      <Text style={[styles.recentTitle, { color: c.text }]} numberOfLines={1}>{track.title}</Text>
+                      <Text style={[styles.recentArtist, { color: c.textSecondary }]} numberOfLines={1}>{track.artist}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -911,18 +920,18 @@ export default function MoodMusicScreen() {
             )}
 
             {/* Mood grid */}
-            <View style={s.section}>
-              <Text style={[s.sectionTitle, { color: c.text }]}>Pick a Mood</Text>
-              <View style={s.moodGrid}>
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: c.text }]}>Pick a Mood</Text>
+              <View style={styles.moodGrid}>
                 {MOODS.map(m => {
                   const count = library.filter(t => t.mood === m.label).length;
                   const active = selectedMood === m.label || todayMood === m.label;
                   return (
                     <TouchableOpacity key={m.label} onPress={() => playMoodQueue(m.label)}
-                      style={[s.moodCard, { backgroundColor: active ? m.color : c.card, borderColor: active ? m.color : c.border }]}>
+                      style={[styles.moodCard, { backgroundColor: active ? m.color : c.card, borderColor: active ? m.color : c.border }]}>
                       <Icon name={m.icon as any} size={26} color={active ? '#FFF' : m.color} />
-                      <Text style={[s.moodLabel, { color: active ? '#FFF' : c.text }]}>{m.label}</Text>
-                      <Text style={[s.moodCount, { color: active ? 'rgba(255,255,255,0.7)' : c.textTertiary }]}>
+                      <Text style={[styles.moodLabel, { color: active ? '#FFF' : c.text }]}>{m.label}</Text>
+                      <Text style={[styles.moodCount, { color: active ? 'rgba(255,255,255,0.7)' : c.textTertiary }]}>
                         {count} track{count !== 1 ? 's' : ''}
                       </Text>
                     </TouchableOpacity>
@@ -932,11 +941,11 @@ export default function MoodMusicScreen() {
             </View>
 
             {/* Our special song */}
-            <View style={s.section}>
-              <Text style={[s.sectionTitle, { color: c.text }]}>Our Song 💕</Text>
-              <TouchableOpacity style={[s.ourSongCard, { backgroundColor: c.card }]}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: c.text }]}>Our Song 💕</Text>
+              <TouchableOpacity style={[styles.ourSongCard, { backgroundColor: c.card }]}
                 onPress={() => Linking.openURL(OUR_SONG.uri).catch(() => Alert.alert('Spotify required'))}>
-                <LinearGradient colors={[PINK, PURPLE]} style={s.ourSongArt}>
+                <LinearGradient colors={[PINK, PURPLE]} style={styles.ourSongArt}>
                   <Icon name="rose" size={32} color="#FFF" />
                 </LinearGradient>
                 <View style={{ flex: 1 }}>
@@ -951,103 +960,86 @@ export default function MoodMusicScreen() {
 
         {/* ── LIBRARY TAB ── */}
         {activeTab === 'library' && (
-          <View style={s.section}>
-            {/* Search */}
-            <View style={[s.searchRow, { backgroundColor: c.input }]}>
-              <Icon name="search" size={18} color={c.textSecondary} />
-              <TextInput style={[s.searchInput, { color: c.text }]}
-                placeholder="Search library..." placeholderTextColor={c.textSecondary}
-                value={libSearch} onChangeText={setLibSearch} />
-              {libSearch.length > 0 && (
-                <TouchableOpacity onPress={() => setLibSearch('')}>
-                  <Icon name="close-circle" size={18} color={c.textSecondary} />
-                </TouchableOpacity>
-              )}
+          <>
+            <View style={styles.searchWrap}>
+              <Icon name="search" size={18} color="#666" style={styles.searchIcon} />
+              <TextInput
+                style={[styles.searchInput, { backgroundColor: c.input, color: c.text }]}
+                placeholder="Search your library..."
+                placeholderTextColor={c.textTertiary}
+                value={libSearch}
+                onChangeText={setLibSearch}
+              />
             </View>
 
-            {/* Actions row */}
-            <View style={s.libActions}>
-              <TouchableOpacity style={[s.libBtn, { backgroundColor: PINK }]} onPress={importTrack}>
-                <Icon name="folder-open-outline" size={16} color="#FFF" />
-                <Text style={s.libBtnTxt}>Import</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[s.libBtn, { backgroundColor: PURPLE }]} onPress={() => setShowCatalog(true)}>
-                <Icon name="download-outline" size={16} color="#FFF" />
-                <Text style={s.libBtnTxt}>Browse Catalog</Text>
-              </TouchableOpacity>
-            </View>
-
-            {libLoading
-              ? <ActivityIndicator size="large" color={PINK} style={{ marginTop: 40 }} />
-              : filteredLib.length === 0
-              ? (
-                <View style={s.emptyState}>
-                  <Icon name="musical-notes-outline" size={56} color={c.textTertiary} />
-                  <Text style={[s.emptyTxt, { color: c.textSecondary }]}>
-                    {libSearch ? 'No results' : 'Library is empty\nImport tracks or download from catalog'}
-                  </Text>
-                </View>
-              )
-              : filteredLib.map((track, i) => {
-                  const active = currentTrack?.id === track.id;
-                  const isFav  = favourites.has(track.id);
+            {libLoading ? (
+              <ActivityIndicator size="large" color={PINK} style={{ marginTop: 40 }} />
+            ) : filteredLib.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Icon name="library-outline" size={56} color="#444" />
+                <Text style={[styles.emptyTitle, { color: c.text }]}>
+                  {libSearch ? 'No results' : 'Your library is empty'}
+                </Text>
+                <Text style={[styles.emptySub, { color: c.textSecondary }]}>
+                  {libSearch ? 'Try a different search' : 'Import or download some music'}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.libraryList}>
+                {filteredLib.map(track => {
+                  const isFav = favourites.has(track.id);
+                  const isCurrent = currentTrack?.id === track.id;
                   return (
-                    <TouchableOpacity key={track.id} onPress={() => handlePlayTrack(track, filteredLib)}
-                      style={[s.trackRow, active && s.trackRowActive, { borderBottomColor: c.border }]}>
-                      <View style={[s.trackIcon, { backgroundColor: active ? PINK + '33' : c.input }]}>
-                        {active
-                          ? <WaveformBars isPlaying={isPlaying} color={PINK} />
-                          : <Icon name="musical-note" size={18} color={active ? PINK : c.textSecondary} />
-                        }
-                      </View>
-                      <View style={s.trackInfo}>
-                        <Text style={[s.trackTitle, active && { color: PINK }, { color: active ? PINK : c.text }]} numberOfLines={1}>{track.title}</Text>
-                        <Text style={[s.trackArtist, { color: c.textSecondary }]} numberOfLines={1}>{track.artist}</Text>
-                        {track.genre && (
-                          <View style={s.genreChip}><Text style={s.genreChipTxt}>{track.genre}</Text></View>
-                        )}
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <TouchableOpacity onPress={() => toggleFav(track.id)} style={{ padding: 6 }}>
-                          <Icon name={isFav ? 'heart' : 'heart-outline'} size={16} color={isFav ? DANGER : c.textSecondary} />
+                    <View key={track.id} style={[styles.libraryItem, { backgroundColor: c.card }]}>
+                      <TouchableOpacity style={styles.libraryItemContent}
+                        onPress={() => handlePlayTrack(track, library)}>
+                        <LinearGradient colors={[PINK + '44', PURPLE + '44']} style={styles.libraryArt}>
+                          {isCurrent && isPlaying
+                            ? <WaveformBars isPlaying={isPlaying} color={PINK} />
+                            : <Icon name={isCurrent ? 'pause' : 'musical-note'} size={20} color={isCurrent ? PINK : '#666'} />
+                          }
+                        </LinearGradient>
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <Text style={[styles.libraryTitle, { color: c.text }]} numberOfLines={1}>{track.title}</Text>
+                          <Text style={[styles.libraryArtist, { color: c.textSecondary }]} numberOfLines={1}>{track.artist}</Text>
+                          {track.genre && (
+                            <Text style={[styles.libraryGenre, { color: c.textTertiary }]}>{track.genre}</Text>
+                          )}
+                        </View>
+                        <TouchableOpacity onPress={() => toggleFav(track.id)} style={styles.favBtn}>
+                          <Icon name={isFav ? 'heart' : 'heart-outline'} size={18} color={isFav ? DANGER : '#666'} />
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => addToQueue(track)} style={{ padding: 6 }}>
-                          <MCIcon name="playlist-plus" size={18} color={c.textSecondary} />
+                        <TouchableOpacity onPress={() => addToQueue(track)} style={styles.queueBtn}>
+                          <Icon name="add-circle-outline" size={18} color="#666" />
                         </TouchableOpacity>
-                        <Text style={[s.trackDuration, { color: c.textTertiary }]}>{formatTime(track.duration ?? 0)}</Text>
-                        <TouchableOpacity onPress={() => deleteTrack(track.id)} style={{ padding: 6 }}>
-                          <Icon name="trash-outline" size={16} color={DANGER} />
-                        </TouchableOpacity>
-                      </View>
-                    </TouchableOpacity>
+                      </TouchableOpacity>
+                    </View>
                   );
-                })
-            }
-          </View>
+                })}
+              </View>
+            )}
+          </>
         )}
 
         {/* ── ARTISTS TAB ── */}
         {activeTab === 'artists' && (
-          <View style={s.section}>
-            <Text style={[s.sectionTitle, { color: c.text }]}>Artist Spotlight</Text>
-            <Text style={[{ fontSize: 12, marginBottom: 14 }, { color: c.textSecondary }]}>Tap to open in Spotify</Text>
-            {CURATED_ARTIST_CATALOG.map((track, i) => (
-              <TouchableOpacity key={i} onPress={() => Linking.openURL(track.uri).catch(() => Alert.alert('Spotify required'))}
-                style={[s.trackRow, { borderBottomColor: c.border }]}>
-                <View style={[s.trackIcon, { backgroundColor: '#1DB95444' }]}>
-                  <Icon name="musical-note" size={18} color="#1DB954" />
-                </View>
-                <View style={s.trackInfo}>
-                  <Text style={[s.trackTitle, { color: c.text }]} numberOfLines={1}>{track.title}</Text>
-                  <Text style={[s.trackArtist, { color: c.textSecondary }]} numberOfLines={1}>{track.artist}</Text>
-                </View>
-                <View style={[s.spotifyBadge]}>
-                  <Icon name="musical-notes" size={10} color="#1DB954" />
-                  <Text style={s.spotifyBadgeTxt}>Spotify</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <>
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: c.text }]}>Featured Artists</Text>
+              <View style={styles.artistGrid}>
+                {CURATED_ARTIST_CATALOG.slice(0, 6).map((artist, i) => (
+                  <TouchableOpacity key={i} style={[styles.artistCard, { backgroundColor: c.card }]}
+                    onPress={() => Linking.openURL(artist.uri).catch(() => Alert.alert('Spotify required'))}>
+                    <LinearGradient colors={[PINK + '66', PURPLE + '66']} style={styles.artistArt}>
+                      <Icon name="person" size={32} color="#FFF" />
+                    </LinearGradient>
+                    <Text style={[styles.artistName, { color: c.text }]} numberOfLines={1}>{artist.title}</Text>
+                    <Text style={[styles.artistSub, { color: c.textSecondary }]} numberOfLines={1}>{artist.artist}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </>
         )}
       </ScrollView>
 
@@ -1072,175 +1064,613 @@ export default function MoodMusicScreen() {
         onToggleFav={toggleFav}
       />
 
-      {/* ── Catalog Sheet ── */}
-      <Modal visible={showCatalog} transparent animationType="slide" onRequestClose={() => setShowCatalog(false)}>
-        <View style={styles.catalogOverlay}>
-          <View style={[styles.catalogSheet, { backgroundColor: '#1a1a2e' }]}>
-            <View style={styles.catalogHeaderRow}>
-              <Icon name="albums" size={22} color={PURPLE} />
-              <Text style={styles.catalogTitle}>Free Catalog</Text>
-              <TouchableOpacity onPress={() => setShowCatalog(false)}>
-                <Icon name="close" size={22} color="#FFF" />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.catalogSubtitle}>{ROYALTY_FREE_CATALOG.length} royalty-free tracks — download to play offline</Text>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catalogFilters}>
-              {catalogFilters.map(f => (
-                <TouchableOpacity key={f} onPress={() => setCatalogFilter(f)}
-                  style={[styles.catalogFilterChip, catalogFilter === f && styles.catalogFilterChipActive]}>
-                  <Text style={[styles.catalogFilterText, catalogFilter === f && styles.catalogFilterTextActive]}>{f}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <FlatList
-              data={filteredCatalog}
-              keyExtractor={t => t.id}
-              showsVerticalScrollIndicator={false}
-              renderItem={({ item }) => {
-                const owned = library.some(t => t.id === item.id);
-                const dl    = downloading.has(item.id);
-                return (
-                  <View style={styles.catalogRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.catalogTrackTitle} numberOfLines={1}>{item.title}</Text>
-                      <Text style={styles.catalogTrackArtist} numberOfLines={1}>{item.artist}</Text>
-                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 2 }}>
-                        {item.genre && <View style={styles.catalogGenreTag}><Text style={styles.catalogGenreText}>{item.genre}</Text></View>}
-                        {item.bpm && <Text style={{ fontSize: 9, color: '#666' }}>{item.bpm} BPM</Text>}
-                        <Text style={{ fontSize: 9, color: '#666' }}>{formatTime(item.duration)}</Text>
-                      </View>
-                    </View>
-                    {owned
-                      ? <Icon name="checkmark-circle" size={24} color={SUCCESS} />
-                      : dl
-                      ? <View style={styles.downloadingWrap}><ActivityIndicator size="small" color={PURPLE} /><Text style={styles.downloadingTxt}>...</Text></View>
-                      : <TouchableOpacity style={styles.downloadCatalogBtn} onPress={() => downloadTrack(item)}>
-                          <Icon name="download-outline" size={18} color="#FFF" />
-                        </TouchableOpacity>
-                    }
-                  </View>
-                );
-              }}
-            />
+      {/* ── Catalog Modal ── */}
+      <Modal visible={showCatalog} animationType="slide" onRequestClose={() => setShowCatalog(false)}>
+        <SafeAreaView style={[styles.catalogModal, { backgroundColor: c.bg }]}>
+          <View style={styles.catalogHeader}>
+            <Text style={[styles.catalogTitle, { color: c.text }]}>Music Catalog</Text>
+            <TouchableOpacity onPress={() => setShowCatalog(false)} style={styles.catalogClose}>
+              <Icon name="close" size={24} color="#FFF" />
+            </TouchableOpacity>
           </View>
-        </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catalogFilters}>
+            {catalogFilters.map(f => (
+              <TouchableOpacity key={f} onPress={() => setCatalogFilter(f)}
+                style={[styles.catalogFilterChip, catalogFilter === f && { backgroundColor: PINK }]}>
+                <Text style={[styles.catalogFilterText, catalogFilter === f && { color: '#FFF' }]}>{f}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <FlatList
+            data={filteredCatalog}
+            keyExtractor={t => t.id}
+            contentContainerStyle={styles.catalogList}
+            renderItem={({ item }) => {
+              const inLibrary = library.some(t => t.id === item.id);
+              const isDownloading = downloading.has(item.id);
+              return (
+                <View style={[styles.catalogItem, { backgroundColor: c.card }]}>
+                  <LinearGradient colors={[PINK + '44', PURPLE + '44']} style={styles.catalogArt}>
+                    <Icon name="musical-notes" size={24} color={PINK} />
+                  </LinearGradient>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={[styles.catalogItemTitle, { color: c.text }]} numberOfLines={1}>{item.title}</Text>
+                    <Text style={[styles.catalogItemArtist, { color: c.textSecondary }]} numberOfLines={1}>{item.artist}</Text>
+                    <View style={{ flexDirection: 'row', gap: 12, marginTop: 2 }}>
+                      {item.genre && <Text style={[styles.catalogItemMeta, { color: c.textTertiary }]}>{item.genre}</Text>}
+                      {item.bpm && <Text style={[styles.catalogItemMeta, { color: c.textTertiary }]}>{item.bpm} BPM</Text>}
+                      <Text style={[styles.catalogItemMeta, { color: c.textTertiary }]}>{formatTime(item.duration)}</Text>
+                    </View>
+                  </View>
+                  {inLibrary ? (
+                    <View style={[styles.catalogBadge, { backgroundColor: SUCCESS + '22' }]}>
+                      <Icon name="checkmark-circle" size={16} color={SUCCESS} />
+                      <Text style={[styles.catalogBadgeText, { color: SUCCESS }]}>Added</Text>
+                    </View>
+                  ) : isDownloading ? (
+                    <ActivityIndicator size="small" color={PINK} />
+                  ) : (
+                    <TouchableOpacity style={[styles.catalogDownloadBtn, { backgroundColor: PINK }]}
+                      onPress={() => downloadTrack(item)}>
+                      <Icon name="cloud-download-outline" size={16} color="#FFF" />
+                      <Text style={styles.catalogDownloadText}>Download</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            }}
+          />
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-const s = StyleSheet.create({
-  root:        { flex: 1 },
-  header:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 14, gap: 8 },
-  hdrBack:     { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  hdrTitle:    { fontSize: 20, fontWeight: '800', color: '#FFF' },
-  hdrSub:      { fontSize: 11, color: 'rgba(255,255,255,0.75)' },
-  hdrBtn:      { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
-  tabStrip:    { flexDirection: 'row', borderBottomWidth: 1 },
-  tabBtn:      { flex: 1, alignItems: 'center', paddingVertical: 12, position: 'relative' },
-  tabLabel:    { fontSize: 12, fontWeight: '600', color: '#666', marginTop: 2 },
-  tabIndicator:{ position: 'absolute', bottom: 0, left: '20%', right: '20%', height: 2, backgroundColor: PINK, borderRadius: 1 },
-  scroll:      { padding: 16 },
-  section:     { marginBottom: 24 },
-  sectionTitle:{ fontSize: 16, fontWeight: '700', marginBottom: 12 },
-
-  todayMoodCard: { borderRadius: 20, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: 'transparent' },
-  playMoodBtn:   { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14, marginLeft: 'auto' },
-
-  recentCard:   { width: 110, borderRadius: 16, padding: 10, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6, elevation: 3 },
-  recentArt:    { width: 70, height: 70, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  recentTitle:  { fontSize: 12, fontWeight: '600', textAlign: 'center' },
-  recentArtist: { fontSize: 10, textAlign: 'center', marginTop: 2 },
-
-  moodGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  moodCard:   { width: (W - 52) / 2, borderRadius: 18, padding: 16, borderWidth: 1.5, alignItems: 'center', gap: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
-  moodLabel:  { fontSize: 14, fontWeight: '700' },
-  moodCount:  { fontSize: 11 },
-
-  ourSongCard:{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
-  ourSongArt: { width: 60, height: 60, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-
-  searchRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
-  searchInput: { flex: 1, fontSize: 14 },
-  libActions:  { flexDirection: 'row', gap: 10, marginBottom: 14 },
-  libBtn:      { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 14 },
-  libBtnTxt:   { color: '#FFF', fontWeight: '700', fontSize: 13 },
-
-  trackRow:       { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1 },
-  trackRowActive: { backgroundColor: 'rgba(255,107,157,0.08)', borderRadius: 12, paddingHorizontal: 6 },
-  trackIcon:      { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  trackInfo:      { flex: 1 },
-  trackTitle:     { fontSize: 14, fontWeight: '600' },
-  trackArtist:    { fontSize: 11, marginTop: 1 },
-  trackDuration:  { fontSize: 11 },
-  genreChip:      { backgroundColor: 'rgba(168,85,247,0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start', marginTop: 2 },
-  genreChipTxt:   { color: PURPLE, fontSize: 9, fontWeight: '600' },
-
-  spotifyBadge:    { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#E8F5E9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  spotifyBadgeTxt: { fontSize: 10, fontWeight: '700', color: '#16A34A' },
-
-  emptyState: { alignItems: 'center', paddingVertical: 50, gap: 14 },
-  emptyTxt:   { fontSize: 14, textAlign: 'center', lineHeight: 22 },
-
-  eqChip:    { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: '#2A2A2A', borderWidth: 1, borderColor: '#3A3A3A' },
-  eqChipTxt: { fontSize: 12, color: '#888', fontWeight: '600' },
-  sleepChip:    { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: '#2A2A2A', borderWidth: 1, borderColor: '#3A3A3A' },
-  sleepChipTxt: { fontSize: 12, color: '#888', fontWeight: '600' },
-
-  queueRow:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#2A2A2A' },
-  queueRowActive: { backgroundColor: 'rgba(255,107,157,0.08)', borderRadius: 10, paddingHorizontal: 8 },
-  queueTitle:     { fontSize: 14, fontWeight: '600', color: '#FFF' },
-  queueArtist:    { fontSize: 11, color: '#888', marginTop: 1 },
-  queueDuration:  { fontSize: 11, color: '#666' },
-});
-
-// YOUR ORIGINAL styles (kept for NowPlayingSheet / CatalogSheet compatibility)
+// ── Styles ─────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  progressTrack: { height: 28, justifyContent: 'center' },
-  progressFill:  { height: 4, borderRadius: 2, position: 'absolute', left: 0 },
-  progressThumb: { width: 12, height: 12, borderRadius: 6, position: 'absolute', marginLeft: -6 },
-  miniPlayer: { paddingBottom: 100, position: 'absolute', left: 12, right: 12, bottom: 12, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1E1E1E', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8, borderWidth: 1, borderColor: '#2A2A2A' },
-  miniArt:    { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  miniInfo:   { flex: 1 },
-  miniTitle:  { fontSize: 13, fontWeight: '700', color: '#FFF' },
-  miniArtist: { fontSize: 11, color: '#B0B0B0', marginTop: 1 },
-  miniBtn:    { padding: 6 },
-  nowPlayingOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
-  nowPlayingSheet:   { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, alignItems: 'center' },
-  sheetHandle:       { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 2, alignSelf: 'center', marginBottom: 10 },
-  nowPlayingClose:   { position: 'absolute', top: 16, left: 16, zIndex: 10 },
-  nowPlayingArt:     { width: 160, height: 160, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginTop: 16, marginBottom: 20 },
-  nowPlayingTitle:   { fontSize: 20, fontWeight: '800', color: '#FFF', textAlign: 'center' },
-  nowPlayingArtist:  { fontSize: 15, color: '#B0B0B0', marginTop: 4, marginBottom: 8 },
-  genreTag:          { backgroundColor: 'rgba(255,107,157,0.2)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, marginBottom: 12 },
-  genreTagText:      { color: PINK, fontSize: 12, fontWeight: '600' },
-  nowPlayingProgressWrap: { width: '100%', marginBottom: 10 },
-  timeRow:           { flexDirection: 'row', justifyContent: 'space-between', marginTop: -4 },
-  timeText:          { fontSize: 11, color: '#888' },
-  transportRow:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingHorizontal: 10, marginTop: 14 },
-  playPauseBtn:      { width: 64, height: 64, borderRadius: 32, backgroundColor: PINK, alignItems: 'center', justifyContent: 'center' },
-  repeatOneDot:      { position: 'absolute', top: -2, right: -2, width: 6, height: 6, borderRadius: 3, backgroundColor: PINK },
-  removeFromLibraryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 24 },
-  removeFromLibraryTxt: { fontSize: 13, fontWeight: '600', color: DANGER },
-  catalogOverlay:    { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
-  catalogSheet:      { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, paddingBottom: 30, maxHeight: '80%' },
-  catalogHeaderRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  catalogTitle:      { flex: 1, fontSize: 18, fontWeight: '800', color: '#FFF' },
-  catalogSubtitle:   { fontSize: 12, color: '#B0B0B0', marginBottom: 14 },
-  catalogFilters:    { maxHeight: 44, marginBottom: 12 },
-  catalogFilterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: '#2A2A2A', marginRight: 6 },
-  catalogFilterChipActive: { backgroundColor: PURPLE },
-  catalogFilterText:       { color: '#888', fontSize: 12 },
-  catalogFilterTextActive: { color: '#FFF' },
-  catalogRow:        { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#2A2A2A' },
-  catalogTrackTitle: { fontSize: 14, fontWeight: '600', color: '#FFF' },
-  catalogTrackArtist:{ fontSize: 11, color: '#B0B0B0', marginTop: 1 },
-  catalogGenreTag:   { backgroundColor: 'rgba(168,85,247,0.2)', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, alignSelf: 'flex-start', marginTop: 2 },
-  catalogGenreText:  { color: PURPLE, fontSize: 8, fontWeight: '600' },
-  downloadingWrap:   { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  downloadingTxt:    { fontSize: 11, fontWeight: '700', color: PURPLE },
-  downloadCatalogBtn:{ backgroundColor: PURPLE, width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  root: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight! + 12 : 12,
+    gap: 10,
+  },
+  hdrBack: {
+    padding: 4,
+  },
+  hdrTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  hdrSub: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  hdrBtn: {
+    padding: 6,
+  },
+  tabStrip: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  tabBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    position: 'relative',
+    gap: 4,
+  },
+  tabLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    height: 2,
+    width: 24,
+    backgroundColor: PINK,
+    borderRadius: 1,
+  },
+  scroll: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  todayMoodCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+  },
+  playMoodBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginLeft: 'auto',
+  },
+  recentCard: {
+    width: 100,
+    borderRadius: 12,
+    padding: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  recentArt: {
+    width: 84,
+    height: 84,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  recentTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  recentArtist: {
+    fontSize: 10,
+    textAlign: 'center',
+  },
+  moodGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  moodCard: {
+    width: (W - 48) / 4 - 6,
+    padding: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    gap: 2,
+  },
+  moodLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  moodCount: {
+    fontSize: 9,
+  },
+  ourSongCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  ourSongArt: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#1E1E1E',
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    height: 44,
+    fontSize: 14,
+    paddingVertical: 8,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    gap: 8,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  emptySub: {
+    fontSize: 14,
+  },
+  libraryList: {
+    gap: 10,
+  },
+  libraryItem: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  libraryItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+  },
+  libraryArt: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  libraryTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  libraryArtist: {
+    fontSize: 12,
+  },
+  libraryGenre: {
+    fontSize: 10,
+    marginTop: 2,
+  },
+  favBtn: {
+    padding: 6,
+  },
+  queueBtn: {
+    padding: 6,
+  },
+  artistGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  artistCard: {
+    width: (W - 48) / 2 - 4,
+    padding: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    gap: 4,
+  },
+  artistArt: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  artistName: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  artistSub: {
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  miniPlayer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E1E1E',
+   paddingBottom: 60,
+    padding: 12,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#2A2A2A',
+  },
+  miniArt: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  miniTitle: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  miniArtist: {
+    color: '#888',
+    fontSize: 11,
+  },
+  miniBtn: {
+    padding: 8,
+  },
+  nowPlayingOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  nowPlayingSheet: {
+    height: '85%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 40,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  nowPlayingClose: {
+    alignSelf: 'flex-end',
+    padding: 4,
+  },
+  nowPlayingArt: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  nowPlayingTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  nowPlayingArtist: {
+    fontSize: 14,
+    color: '#AAA',
+    textAlign: 'center',
+  },
+  genreTag: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'center',
+    marginTop: 6,
+  },
+  genreTagText: {
+    color: '#AAA',
+    fontSize: 11,
+  },
+  nowPlayingProgressWrap: {
+    marginBottom: 12,
+  },
+  progressTrack: {
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 2,
+    position: 'relative',
+  },
+  progressFill: {
+    height: 4,
+    borderRadius: 2,
+  },
+  progressThumb: {
+    position: 'absolute',
+    top: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    transform: [{ translateX: -6 }],
+  },
+  timeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  timeText: {
+    color: '#888',
+    fontSize: 11,
+  },
+  transportRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    marginBottom: 20,
+  },
+  playPauseBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: PINK,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  repeatOneDot: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: PINK,
+  },
+  eqChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  eqChipTxt: {
+    fontSize: 11,
+    color: '#888',
+  },
+  sleepChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  sleepChipTxt: {
+    fontSize: 11,
+    color: '#888',
+  },
+  removeFromLibraryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    marginTop: 20,
+  },
+  removeFromLibraryTxt: {
+    color: DANGER,
+    fontSize: 13,
+  },
+  queueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  queueRowActive: {
+    backgroundColor: 'rgba(255,107,157,0.1)',
+    borderRadius: 8,
+  },
+  queueTitle: {
+    color: '#FFF',
+    fontSize: 14,
+  },
+  queueArtist: {
+    color: '#888',
+    fontSize: 12,
+  },
+  queueDuration: {
+    color: '#666',
+    fontSize: 12,
+  },
+  catalogModal: {
+    flex: 1,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight! + 12 : 12,
+  },
+  catalogHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  catalogTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  catalogClose: {
+    padding: 4,
+  },
+  catalogFilters: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  catalogFilterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#2A2A2A',
+    marginRight: 8,
+  },
+  catalogFilterText: {
+    color: '#888',
+    fontSize: 13,
+  },
+  catalogList: {
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+    gap: 10,
+  },
+  catalogItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+  },
+  catalogArt: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  catalogItemTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  catalogItemArtist: {
+    fontSize: 12,
+  },
+  catalogItemMeta: {
+    fontSize: 10,
+  },
+  catalogBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  catalogBadgeText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  catalogDownloadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  catalogDownloadText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
 });

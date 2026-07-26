@@ -78,6 +78,21 @@
       "@react-native-community/datetimepicker",
       "expo-secure-store",
       "expo-web-browser",
+        [
+      "expo-splash-screen",
+      {                                                                               
+        "image": "./assets/images/splash-icon.png",                                            
+        "imageWidth": 200,                                                              
+        "resizeMode": "contain",
+        "backgroundColor": "#111827",                                                  
+         "android": {
+          "animation": {
+           " type": "slide",    
+            "direction": "up"                         
+           }
+        }
+      }
+    ],
       [
         "react-native-android-widget",
         {
