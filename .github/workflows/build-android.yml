@@ -46,6 +46,7 @@ jobs:
         run: npx expo prebuild --platform android --no-install
         env:
           EXPO_NO_TELEMETRY: 1
+          EXPO_UPDATES_CHANNEL: production
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew

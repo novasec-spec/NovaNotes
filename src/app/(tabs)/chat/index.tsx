@@ -1,11 +1,11 @@
-// src/app/chat/index.tsx - PROFESSIONALLY UPDATED
+// src/app/chat/index.tsx - UPDATED for welcome/guest flow
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ActivityIndicator, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  TouchableOpacity,
   Alert,
   StatusBar,
   Animated,
@@ -15,13 +15,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../../contexts/ThemeContext';
 import Icon from 'react-native-vector-icons/Ionicons';
 import MCIcon from 'react-native-vector-icons/MaterialCommunityIcons';
-import AuthScreen from './auth';
 import ChatList from './chatlist';
 import ChatRoom from './chatroom';
 import { User } from './types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { setupNotifications, addNotificationListeners, registerPushToken } from './notification';
 import { supabase } from '../../../config/supabase';
+import { signOut } from './authGuard';
 
 export default function ChatScreen() {
   const { colors, isDarkMode } = useTheme();
@@ -31,7 +31,7 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationCount, setNotificationCount] = useState(0);
-  
+
   // Animation for notification badge
   const badgeScale = useRef(new Animated.Value(1)).current;
 
@@ -39,7 +39,7 @@ export default function ChatScreen() {
     initializeChat();
     setupNotificationListeners();
     loadUnreadCount();
-    
+
     // Subscribe to new messages for real-time badge update
     const subscription = supabase
       .channel('chat_badge')
@@ -82,9 +82,9 @@ export default function ChatScreen() {
     try {
       const userData = await AsyncStorage.getItem('chat_user');
       if (!userData) return;
-      
+
       const user = JSON.parse(userData);
-      
+
       // Get unread messages count
       const { count, error } = await supabase
         .from('messages')
@@ -122,14 +122,20 @@ export default function ChatScreen() {
     try {
       const auth = await AsyncStorage.getItem('is_authenticated');
       const userData = await AsyncStorage.getItem('chat_user');
-      
+
       if (auth === 'true' && userData) {
         const parsedUser = JSON.parse(userData);
         setUser(parsedUser);
         setIsAuthenticated(true);
-        
+
         // Register push token for this user
         await registerPushToken(parsedUser.id);
+      } else {
+        // No session (fresh install, logged out, or browsing as guest).
+        // Chat is an account-only feature, so send them to welcome and
+        // bring them straight back here once they log in / sign up.
+        router.replace('/chat/welcome?redirect=/chat');
+        return;
       }
     } catch (error) {
       console.error('Error checking auth:', error);
@@ -155,13 +161,13 @@ export default function ChatScreen() {
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
-            await AsyncStorage.removeItem('is_authenticated');
-            await AsyncStorage.removeItem('chat_user');
+            await signOut(); // clears is_authenticated, chat_user, guest_mode
             await supabase.auth.signOut();
             setUser(null);
             setIsAuthenticated(false);
             setSelectedUser(null);
             setUnreadCount(0);
+            router.replace('/welcome');
           },
         },
       ]
@@ -175,7 +181,6 @@ export default function ChatScreen() {
   const navigateToSettings = () => {
     router.push('/chat/settings');
   };
-
 
   const navigateToCalls = () => {
     router.push('/CallHistoryScreen');
@@ -193,9 +198,12 @@ export default function ChatScreen() {
     );
   }
 
-  // ─── Render Auth ─────────────────────────────────────────────────────────
+  // ─── Not authenticated ───────────────────────────────────────────────────
+  // checkAuth() already triggered router.replace('/welcome?redirect=/chat').
+  // Render nothing here to avoid a flash of empty/broken UI while that
+  // navigation completes.
   if (!isAuthenticated) {
-    return <AuthScreen />;
+    return null;
   }
 
   // ─── Render Chat Room ────────────────────────────────────────────────────
@@ -213,7 +221,7 @@ export default function ChatScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      
+
       {/* ─── Header ─── */}
       <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <View style={styles.headerLeft}>
@@ -223,8 +231,8 @@ export default function ChatScreen() {
           <View>
             <Text style={[styles.title, { color: colors.text }]}>Chats</Text>
             <Text style={[styles.subtitle, { color: colors.muted }]}>
-              {unreadCount > 0 
-                ? `${unreadCount} unread message${unreadCount > 1 ? 's' : ''}` 
+              {unreadCount > 0
+                ? `${unreadCount} unread message${unreadCount > 1 ? 's' : ''}`
                 : 'All caught up ✨'}
             </Text>
           </View>
@@ -239,10 +247,10 @@ export default function ChatScreen() {
           >
             <Icon name="notifications-outline" size={22} color={colors.text} />
             {notificationCount > 0 && (
-              <Animated.View 
+              <Animated.View
                 style={[
-                  styles.badge, 
-                  { 
+                  styles.badge,
+                  {
                     backgroundColor: '#EF4444',
                     transform: [{ scale: badgeScale }],
                   }

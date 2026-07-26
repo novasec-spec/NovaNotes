@@ -1,0 +1,171 @@
+// app/login.tsx
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Icon from 'react-native-vector-icons/Ionicons';
+
+// ⚠️ Verify these paths match your project structure
+import { supabase } from '../config/supabase';
+import { useTheme } from '../contexts/ThemeContext';
+import { registerPushToken } from '.\(tabs\)/chat/notification';
+import { User } from '.\(tabs\)/chat/types';
+
+import { authStyles as styles } from './authStyles';
+import { clearGuestMode } from './authGuard';
+
+export default function LoginScreen() {
+  const { colors } = useTheme();
+  const { redirect } = useLocalSearchParams<{ redirect?: string }>();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await supabase.auth.signInWithPassword({ email, password });
+      if (response.error) throw response.error;
+
+      if (response.data.user) {
+        const { data: existingUser, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', response.data.user.id)
+          .single();
+
+        if (userError || !existingUser) {
+          throw userError || new Error('Account not found');
+        }
+
+        const user: User = {
+          id: existingUser.id,
+          email: existingUser.email,
+          username: existingUser.username,
+          avatar_url: existingUser.avatar_url,
+          online: true,
+          last_seen: new Date().toISOString(),
+        };
+
+        await AsyncStorage.setItem('chat_user', JSON.stringify(user));
+        await AsyncStorage.setItem('is_authenticated', 'true');
+        await clearGuestMode();
+        await registerPushToken(user.id);
+
+        router.replace((redirect as string) || '/chat');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Icon name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+
+          <Icon name="chatbubbles" size={60} color="#FF6B9D" />
+          <Text style={[styles.title, { color: colors.text }]}>Welcome back</Text>
+          <Text style={[styles.subtitle, { color: colors.muted }]}>Sign in to continue</Text>
+
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.input, color: colors.text, borderColor: colors.border }]}
+            placeholder="Email"
+            placeholderTextColor={colors.muted}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+
+          <View style={[styles.passwordContainer, { backgroundColor: colors.input, borderColor: colors.border }]}>
+            <TextInput
+              style={[styles.passwordInput, { color: colors.text }]}
+              placeholder="Password"
+              placeholderTextColor={colors.muted}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+            />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+              <Icon
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={22}
+                color={colors.muted}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#FF6B9D' }]}
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>{loading ? 'Signing in...' : 'Sign In'}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() =>
+              router.push(
+                redirect
+                  ? `/forgot-password?redirect=${encodeURIComponent(redirect as string)}`
+                  : '/forgot-password'
+              )
+            }
+            style={styles.forgotPasswordLink}
+          >
+            <Text style={[styles.forgotPasswordText, { color: colors.muted }]}>
+              Forgot password?
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.dividerContainer}>
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+            <Text style={[styles.dividerText, { color: colors.muted }]}>OR</Text>
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+          </View>
+
+          <TouchableOpacity
+            onPress={() =>
+              router.push(
+                redirect ? `/signup?redirect=${encodeURIComponent(redirect as string)}` : '/signup'
+              )
+            }
+          >
+            <Text style={[styles.switchText, { color: '#FF6B9D' }]}>
+              Don't have an account? Sign Up
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
