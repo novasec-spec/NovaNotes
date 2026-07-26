@@ -191,7 +191,7 @@ export const registerPushToken = async (userId: string) => {
         last_active: new Date().toISOString(),
         is_active: true,
       }, {
-        onConflict: 'device_id',
+        onConflict: 'user_id',
       });
 
     if (error) {
