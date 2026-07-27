@@ -19,6 +19,7 @@ import { NotificationHandler } from '../services/NotificationHandler';
 import CallService from '../services/CallService'; // default import — no curly braces
 import { markNavigationReady } from '../utils/navigation';
 import * as Linking from 'expo-linking';
+import { ThemedAlertProvider } from 'rn-themed-alert';
 
 const WHITE = '#FFFFFF';
 
@@ -173,6 +174,7 @@ useEffect(() => {
   }, []);
 
   return (
+<ThemedAlertProvider>
     <ThemeProvider>
       <NotificationProvider>
         <View style={{ flex: 1 }}>
@@ -192,7 +194,8 @@ useEffect(() => {
         )}
       </NotificationProvider>
     </ThemeProvider>
-  );
+</ThemedAlertProvider> 
+ );
 }
 
 function RootLayout() {
