@@ -1,10 +1,10 @@
 // src/app/chat/_layout.tsx
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { View } from 'react-native';
 import { isAuthenticated, isGuest } from './authGuard';
 import { useEffect } from 'react';
 export default function ChatLayout() {
-
+const router = useRouter();
 
 useEffect(() => {
   (async () => {

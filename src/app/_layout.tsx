@@ -106,7 +106,7 @@ useEffect(() => {
 useEffect(() => {
   const timer = setTimeout(() => {
     checkForUpdates();
-  }, 10000); // wait 10 seconds after launch
+  }, 10); // wait 10 seconds after launch
 
   return () => clearTimeout(timer);
 }, []);
