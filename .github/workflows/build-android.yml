@@ -77,11 +77,7 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
 
-<<<<<<< HEAD
-      - name: Build release APK (arm64)
-=======
       - name: Build release APK (arm64 only, signed with release key)
->>>>>>> 13d7a6d (--auto)
         working-directory: android
         run: >
           ./gradlew assembleRelease --no-daemon
@@ -92,15 +88,6 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
 
-<<<<<<< HEAD
-      - name: Build release APK (armeabi-v7a)
-        working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
-        env:
-          ORG_GRADLE_PROJECT_reactNativeArchitectures: armeabi-v7a
-
-=======
->>>>>>> 13d7a6d (--auto)
       - name: Upload APK artifact (backup)
         uses: actions/upload-artifact@v4
         with:
@@ -109,16 +96,9 @@ jobs:
 
       - name: Compute next release tag
         id: next_tag
-<<<<<<< HEAD
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const core = require('@actions/core');
-=======
         uses: actions/github-script@v7
         with:
           script: |
->>>>>>> 13d7a6d (--auto)
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             let latestTag = null;
@@ -126,10 +106,6 @@ jobs:
               const latest = await github.rest.repos.getLatestRelease({ owner, repo });
               latestTag = latest.data.tag_name;
             } catch (err) {
-<<<<<<< HEAD
-              // no latest release
-=======
->>>>>>> 13d7a6d (--auto)
               latestTag = null;
             }
             let nextTag = 'v1';
@@ -144,20 +120,12 @@ jobs:
                 parts[2] = String((parseInt(parts[2] || '0', 10) + 1));
                 nextTag = 'v' + parts.join('.');
               } else {
-<<<<<<< HEAD
-                // fallback - append -1
-=======
->>>>>>> 13d7a6d (--auto)
                 nextTag = latestTag + '-1';
               }
             }
             core.setOutput('tag', nextTag);
 
-<<<<<<< HEAD
-      - name: Create GitHub release and upload APKs
-=======
       - name: Create GitHub release and upload APK
->>>>>>> 13d7a6d (--auto)
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ steps.next_tag.outputs.tag }}
