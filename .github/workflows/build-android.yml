@@ -1,9 +1,16 @@
-name: Build Android APK
+name: Build Android APK and Release
 
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-android-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -28,7 +35,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: 'npm'
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            npm-${{ runner.os }}-
 
       - name: Setup JDK 17
         uses: actions/setup-java@v4
@@ -59,14 +74,66 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
 
-      - name: Build release APK (arm64 only, for speed)
+      - name: Build release APK (arm64)
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
         env:
           ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
 
-      - name: Upload APK artifact
+      - name: Build release APK (armeabi-v7a)
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+        env:
+          ORG_GRADLE_PROJECT_reactNativeArchitectures: armeabi-v7a
+
+      - name: Upload APK artifact (backup)
         uses: actions/upload-artifact@v4
         with:
           name: novanotes-release-apk
           path: android/app/build/outputs/apk/release/*.apk
+
+      - name: Compute next release tag
+        id: next_tag
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const core = require('@actions/core');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            let latestTag = null;
+            try {
+              const latest = await github.rest.repos.getLatestRelease({ owner, repo });
+              latestTag = latest.data.tag_name;
+            } catch (err) {
+              // no latest release
+              latestTag = null;
+            }
+            let nextTag = 'v1';
+            if (!latestTag) {
+              nextTag = 'v1';
+            } else {
+              const m = latestTag.match(/^v(\d+)$/);
+              if (m) {
+                nextTag = 'v' + (parseInt(m[1], 10) + 1);
+              } else if (/^v?\d+\.\d+\.\d+/.test(latestTag)) {
+                const parts = latestTag.replace(/^v/, '').split('.');
+                parts[2] = String((parseInt(parts[2] || '0', 10) + 1));
+                nextTag = 'v' + parts.join('.');
+              } else {
+                // fallback - append -1
+                nextTag = latestTag + '-1';
+              }
+            }
+            core.setOutput('tag', nextTag);
+
+      - name: Create GitHub release and upload APKs
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.next_tag.outputs.tag }}
+          name: Release ${{ steps.next_tag.outputs.tag }}
+          files: 'android/app/build/outputs/apk/release/*.apk'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log release info
+        run: echo "Created release ${{ steps.next_tag.outputs.tag }} and uploaded APK(s)."
