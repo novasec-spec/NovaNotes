@@ -77,16 +77,19 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
 
-      - name: Build release APK (arm64 only, signed with release key)
+     - name: Build release APK (arm64 only, signed with release key)
         working-directory: android
-        run: >
-          ./gradlew assembleRelease --no-daemon
-          -Pandroid.injected.signing.store.file=$RUNNER_TEMP/release.keystore
-          -Pandroid.injected.signing.store.password=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          -Pandroid.injected.signing.key.alias=${{ secrets.ANDROID_KEY_ALIAS }}
-          -Pandroid.injected.signing.key.password=${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file="$RUNNER_TEMP/release.keystore" \
+            -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
         env:
           ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
       - name: Upload APK artifact (backup)
         uses: actions/upload-artifact@v4
