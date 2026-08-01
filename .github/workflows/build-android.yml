@@ -133,7 +133,7 @@ jobs:
         with:
           tag: ${{ steps.next_tag.outputs.tag }}
           name: Release ${{ steps.next_tag.outputs.tag }}
-          files: 'android/app/build/outputs/apk/release/*.apk'
+          artifacts: 'android/app/build/outputs/apk/release/*.apk'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
