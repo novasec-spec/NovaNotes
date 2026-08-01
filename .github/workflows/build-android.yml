@@ -77,7 +77,7 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
 
-     - name: Build release APK (arm64 only, signed with release key)
+      - name: Build release APK (arm64 only, signed with release key)
         working-directory: android
         run: |
           ./gradlew assembleRelease --no-daemon \
