@@ -26,7 +26,6 @@ Nova is a modern, feature-rich React Native application designed to be your pers
 
 · Personalized Greeting — Dynamic morning/afternoon/evening welcome
 · Streak Tracking — Daily usage with milestone celebrations (7, 30, 100 days) 🎉
-· Anniversary Counter — Track your journey in years, months, days 💕
 · Daily Love Reason — Rotating reasons why you're loved
 · Mood Tracker — 8 moods with emoji icons and colors
 · Quick Access — 8 action tiles for instant navigation
