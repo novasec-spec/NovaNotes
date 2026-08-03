@@ -7,6 +7,8 @@ import React, {
   useState,
   ReactNode,
 } from 'react';
+import { useRouter } from "expo-router";
+
 import { supabase } from '../config/supabase';
 
 type AuthContextType = {
@@ -21,37 +23,54 @@ type Props = {
 };
 
 export function AuthProvider({ children }: Props) {
+  const router = useRouter();
   const [user, setUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
 
-    const loadUser = async () => {
-      try {
-        const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser();
 
-        if (error) {
-          console.error('Auth getUser error:', error);
-        }
+const loadUser = async () => {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-        if (mounted) {
-          setUser(user ?? null);
-        }
-      } catch (err) {
-        console.error('Failed to load user:', err);
-        if (mounted) {
-          setUser(null);
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+    if (!session) {
+      if (mounted) {
+        setUser(null);
+        setLoading(false);
       }
-    };
+
+      router.replace("/(tabs)/chat/login"); // or your correct login route
+      return;
+    }
+
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error) {
+      console.error("Auth getUser error:", error);
+    }
+
+    if (mounted) {
+      setUser(user ?? null);
+    }
+  } catch (err) {
+    console.error("Failed to load user:", err);
+
+    if (mounted) {
+      setUser(null);
+    }
+  } finally {
+    if (mounted) {
+      setLoading(false);
+    }
+  }
+};
 
     loadUser();
 
