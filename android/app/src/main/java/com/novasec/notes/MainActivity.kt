@@ -11,6 +11,12 @@ import com.facebook.react.defaults.DefaultReactActivityDelegate
 
 import expo.modules.ReactActivityDelegateWrapper
 
+// --- Add these imports ---
+import android.animation.ObjectAnimator
+import android.animation.AnimatorListenerAdapter
+import android.view.View
+import android.view.animation.AnticipateInterpolator
+
 class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     // Set the theme to AppTheme BEFORE onCreate to support
@@ -19,8 +25,29 @@ class MainActivity : ReactActivity() {
     // setTheme(R.style.AppTheme);
     // @generated begin expo-splashscreen - expo prebuild (DO NOT MODIFY) sync-f3ff59a738c56c9a6119210cb55f0b613eb8b6af
     SplashScreenManager.registerOnActivity(this)
-    // @generated end expo-splashscreen
+    // @generated end expo-splash-screen
     super.onCreate(null)
+
+    // --- Slide the splash screen up on exit ---
+    splashScreen.setOnExitAnimationListener { splashScreenView ->
+      val slideUp = ObjectAnimator.ofFloat(
+        splashScreenView,
+        View.TRANSLATION_Y,
+        0f,
+        -splashScreenView.height.toFloat()
+      )
+
+      slideUp.apply {
+        interpolator = AnticipateInterpolator()
+        duration = 350L
+        addListener(object : AnimatorListenerAdapter() {
+          override fun onAnimationEnd(animation: android.animation.Animator) {
+            splashScreenView.remove()
+          }
+        })
+        start()
+      }
+    }
   }
 
   /**

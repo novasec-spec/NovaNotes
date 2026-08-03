@@ -1,17 +1,34 @@
 // screens/MoodMusicScreen.tsx
 // ─────────────────────────────────────────────────────────────────────────────
-//  ✅ SIMPLIFIED VERSION - Background audio using Expo Audio only
-//     - No native Kotlin modules required
-//     - Music continues in background
-//     - Full mood-based music player
+//  ✅ PRODUCTION-GRADE MUSIC PLAYER
+//     - Auto-scan device music
+//     - Background audio with Expo Audio
+//     - Professional media-style UI
+//     - Full playback controls with queue
+//     - Sleep timer, EQ presets, favorites
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Alert, Linking, TextInput, Modal, ActivityIndicator,
-  Animated, Platform, FlatList, Dimensions, StatusBar,
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  TextInput,
+  Modal,
+  ActivityIndicator,
+  Animated,
+  Platform,
+  FlatList,
+  Dimensions,
+  StatusBar,
   AppState,
+  RefreshControl,
+  PermissionsAndroid,
+  Linking,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -26,143 +43,675 @@ import {
 } from 'expo-audio';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as MediaLibrary from 'expo-media-library';
+import * as Notifications from 'expo-notifications';
+import { Audio } from 'expo-av';
 
-const { width: W } = Dimensions.get('window');
+const { width: W, height: H } = Dimensions.get('window');
 
-// ── Design tokens ──────────────────────────────────────────────────────────────
+// ── Design Tokens ──────────────────────────────────────────────────────────────
 const PINK = '#FF6B9D';
 const PURPLE = '#A855F7';
 const SUCCESS = '#22C55E';
 const DANGER = '#EF4444';
 const WARNING = '#F59E0B';
 const BLUE = '#3B82F6';
+const ORANGE = '#F97316';
 
 const COLORS = {
   light: {
-    bg: '#FFF5F7', card: '#FFFFFF', text: '#2D1B25',
-    textSecondary: '#9A7090', textTertiary: '#C4A0B8',
-    border: '#F0E8EA', shadow: 'rgba(0,0,0,0.08)', input: '#F8F0F2',
+    bg: '#F8F4F6', 
+    card: '#FFFFFF', 
+    text: '#1A0A14',
+    textSecondary: '#7A5A6E', 
+    textTertiary: '#B895A8',
+    border: '#F0E8EA', 
+    shadow: 'rgba(0,0,0,0.06)', 
+    input: '#F5EEF0',
+    surface: '#FDF9FB',
   },
   dark: {
-    bg: '#121212', card: '#1E1E1E', text: '#FFFFFF',
-    textSecondary: '#B0B0B0', textTertiary: '#808080',
-    border: '#2A2A2A', shadow: 'rgba(0,0,0,0.4)', input: '#2A2A2A',
+    bg: '#0A0A0F', 
+    card: '#181820', 
+    text: '#FFFFFF',
+    textSecondary: '#A8A8B8', 
+    textTertiary: '#686878',
+    border: '#282835', 
+    shadow: 'rgba(0,0,0,0.5)', 
+    input: '#20202A',
+    surface: '#12121A',
   },
 };
 
-// ── Storage keys ──────────────────────────────────────────────────────────────
-const MOOD_HISTORY_KEY = 'moodHistory';
-const LIBRARY_KEY = 'music_library';
-const FAVOURITES_KEY = 'music_favourites';
-const RECENT_KEY = 'music_recent';
-const LOCAL_MUSIC_DIR = FileSystem.documentDirectory + 'music_library/';
-
-// ── Mood config ────────────────────────────────────────────────────────────────
-const MOODS = [
-  { label: 'Happy', icon: 'sunny', color: '#F59E0B' },
-  { label: 'Loved', icon: 'heart', color: '#FF6B9D' },
-  { label: 'Relaxed', icon: 'leaf', color: '#87CEEB' },
-  { label: 'Thoughtful', icon: 'bulb', color: '#A855F7' },
-  { label: 'Sad', icon: 'rainy', color: '#6495ED' },
-  { label: 'Energetic', icon: 'flash', color: '#FF6347' },
-  { label: 'Romantic', icon: 'rose', color: '#FF1493' },
-  { label: 'Nostalgic', icon: 'time', color: '#CD853F' },
-] as const;
-
-function getMoodConfig(label?: string) { return MOODS.find(m => m.label === label) ?? MOODS[0]; }
-
-// ── Equalizer presets ─────────────────────────────────────────────────────────
-const EQ_PRESETS = [
-  { label: 'Flat', icon: 'remove-outline' },
-  { label: 'Bass Boost', icon: 'pulse-outline' },
-  { label: 'Vocal', icon: 'mic-outline' },
-  { label: 'Electronic', icon: 'radio-outline' },
-  { label: 'Classical', icon: 'musical-notes-outline' },
-] as const;
-
-// ── Sleep timer options ───────────────────────────────────────────────────────
-const SLEEP_OPTIONS = [
-  { label: '15 min', minutes: 15 },
-  { label: '30 min', minutes: 30 },
-  { label: '1 hour', minutes: 60 },
-  { label: 'End of song', minutes: -1 },
-] as const;
+// ── Storage Keys ──────────────────────────────────────────────────────────────
+const STORAGE = {
+  LIBRARY: 'music_library_v2',
+  FAVORITES: 'music_favorites_v2',
+  RECENT: 'music_recent_v2',
+  PLAYLISTS: 'music_playlists_v2',
+  SETTINGS: 'music_settings_v2',
+  CACHE: 'music_cache_v2',
+};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type RepeatMode = 'off' | 'all' | 'one';
+type PlaybackSpeed = 0.5 | 0.75 | 1.0 | 1.25 | 1.5 | 2.0;
 
-interface CatalogTrack {
-  id: string; title: string; artist: string; duration: number;
-  source: string; artwork?: string; genre?: string; mood?: string; bpm?: number; year?: string;
+interface Track {
+  id: string;
+  title: string;
+  artist: string;
+  album?: string;
+  duration: number;
+  uri: string;
+  artwork?: string;
+  genre?: string;
+  year?: string;
+  bpm?: number;
+  isFavorite?: boolean;
+  playCount?: number;
+  lastPlayed?: string;
+  addedAt: string;
+  source: 'device' | 'imported' | 'downloaded' | 'stream';
 }
 
-interface LibraryTrack {
-  id: string; title: string; artist: string; localUri: string;
-  duration?: number; artwork?: string; source: 'imported' | 'downloaded';
-  addedAt: string; genre?: string; mood?: string;
+interface Playlist {
+  id: string;
+  name: string;
+  description?: string;
+  artwork?: string;
+  tracks: string[];
+  created: string;
+  updated: string;
 }
 
-// ── Catalog ─────────────────────────────────────────────────────────────────
-const ROYALTY_FREE_CATALOG: CatalogTrack[] = [
-  { id: 'rf_001', title: 'Chill Lo-Fi Beat', artist: 'Pixabay Music', duration: 164, source: 'https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3', genre: 'Lo-Fi', mood: 'Relaxed', bpm: 78 },
-  { id: 'rf_002', title: 'Rainy Day Lofi', artist: 'Pixabay Music', duration: 188, source: 'https://cdn.pixabay.com/audio/2021/11/25/audio_00fa5b4d97.mp3', genre: 'Lo-Fi', mood: 'Relaxed', bpm: 82 },
-  { id: 'rf_003', title: 'Midnight Study', artist: 'Pixabay Music', duration: 132, source: 'https://cdn.pixabay.com/audio/2022/03/15/audio_c8e70c5101.mp3', genre: 'Lo-Fi', mood: 'Thoughtful', bpm: 76 },
-  { id: 'rf_004', title: 'Soft Morning Light', artist: 'Pixabay Music', duration: 167, source: 'https://cdn.pixabay.com/audio/2022/08/02/audio_884fe92c21.mp3', genre: 'Ambient', mood: 'Relaxed', bpm: 70 },
-  { id: 'rf_005', title: 'Calm Ocean Waves', artist: 'Pixabay Music', duration: 195, source: 'https://cdn.pixabay.com/audio/2022/09/15/audio_3a2d4c5e6f.mp3', genre: 'Ambient', mood: 'Relaxed', bpm: 65 },
-  { id: 'rf_006', title: 'Happy Ukulele', artist: 'Pixabay Music', duration: 142, source: 'https://cdn.pixabay.com/audio/2022/06/10/audio_7b8c9d0e1f.mp3', genre: 'Pop', mood: 'Happy', bpm: 120 },
-  { id: 'rf_007', title: 'Sunny Day Pop', artist: 'Pixabay Music', duration: 158, source: 'https://cdn.pixabay.com/audio/2022/05/05/audio_2a3b4c5d6e.mp3', genre: 'Pop', mood: 'Happy', bpm: 128 },
-  { id: 'rf_008', title: 'Funky Groove', artist: 'Pixabay Music', duration: 176, source: 'https://cdn.pixabay.com/audio/2022/04/01/audio_8f9e0d1c2b.mp3', genre: 'Funk', mood: 'Happy', bpm: 115 },
-  { id: 'rf_009', title: 'Bright Acoustic', artist: 'Pixabay Music', duration: 153, source: 'https://cdn.pixabay.com/audio/2022/03/15/audio_6e5d4c3b2a.mp3', genre: 'Acoustic', mood: 'Happy', bpm: 110 },
-  { id: 'rf_010', title: 'Feel Good Vibes', artist: 'Pixabay Music', duration: 168, source: 'https://cdn.pixabay.com/audio/2022/02/20/audio_1a2b3c4d5e.mp3', genre: 'Pop', mood: 'Happy', bpm: 125 },
-  { id: 'rf_011', title: 'Pump Up Anthem', artist: 'Pixabay Music', duration: 184, source: 'https://cdn.pixabay.com/audio/2022/01/10/audio_9f8e7d6c5b.mp3', genre: 'Electronic', mood: 'Energetic', bpm: 140 },
-  { id: 'rf_012', title: 'Electro Drive', artist: 'Pixabay Music', duration: 192, source: 'https://cdn.pixabay.com/audio/2021/12/05/audio_4a3b2c1d0e.mp3', genre: 'Electronic', mood: 'Energetic', bpm: 135 },
-  { id: 'rf_013', title: 'Rock Anthem', artist: 'Pixabay Music', duration: 205, source: 'https://cdn.pixabay.com/audio/2021/11/15/audio_7c6b5a4d3e.mp3', genre: 'Rock', mood: 'Energetic', bpm: 145 },
-  { id: 'rf_014', title: 'Power Workout', artist: 'Pixabay Music', duration: 178, source: 'https://cdn.pixabay.com/audio/2021/10/20/audio_2e3d4c5b6a.mp3', genre: 'Electronic', mood: 'Energetic', bpm: 150 },
-  { id: 'rf_015', title: 'Piano Lament', artist: 'Pixabay Music', duration: 196, source: 'https://cdn.pixabay.com/audio/2021/09/01/audio_5a4b3c2d1e.mp3', genre: 'Classical', mood: 'Sad', bpm: 60 },
-  { id: 'rf_016', title: 'Strings of Sorrow', artist: 'Pixabay Music', duration: 212, source: 'https://cdn.pixabay.com/audio/2021/08/15/audio_8d7c6b5a4e.mp3', genre: 'Classical', mood: 'Sad', bpm: 55 },
-  { id: 'rf_017', title: 'Night Rain', artist: 'Pixabay Music', duration: 185, source: 'https://cdn.pixabay.com/audio/2021/07/20/audio_1e2d3c4b5a.mp3', genre: 'Ambient', mood: 'Sad', bpm: 68 },
-  { id: 'rf_018', title: 'Love Story', artist: 'Pixabay Music', duration: 156, source: 'https://cdn.pixabay.com/audio/2021/06/10/audio_9a8b7c6d5e.mp3', genre: 'Romantic', mood: 'Romantic', bpm: 80 },
-  { id: 'rf_019', title: 'Heartstrings', artist: 'Pixabay Music', duration: 172, source: 'https://cdn.pixabay.com/audio/2021/05/05/audio_3b4c5d6e7f.mp3', genre: 'Romantic', mood: 'Romantic', bpm: 75 },
-  { id: 'rf_020', title: 'Wedding Bells', artist: 'Pixabay Music', duration: 148, source: 'https://cdn.pixabay.com/audio/2021/04/01/audio_6a7b8c9d0e.mp3', genre: 'Romantic', mood: 'Romantic', bpm: 70 },
-  { id: 'rf_021', title: 'Smooth Jazz', artist: 'Pixabay Music', duration: 203, source: 'https://cdn.pixabay.com/audio/2021/03/15/audio_2c3d4e5f6a.mp3', genre: 'Jazz', mood: 'Relaxed', bpm: 90 },
-  { id: 'rf_022', title: 'Cafe Noir', artist: 'Pixabay Music', duration: 186, source: 'https://cdn.pixabay.com/audio/2021/02/20/audio_7b8c9d0e1f.mp3', genre: 'Jazz', mood: 'Thoughtful', bpm: 85 },
-  { id: 'rf_023', title: 'Bossa Nova Sunset', artist: 'Pixabay Music', duration: 165, source: 'https://cdn.pixabay.com/audio/2021/01/10/audio_4e5f6a7b8c.mp3', genre: 'Bossa Nova', mood: 'Relaxed', bpm: 95 },
-  { id: 'rf_024', title: 'Classical Piano', artist: 'Pixabay Music', duration: 215, source: 'https://cdn.pixabay.com/audio/2020/12/05/audio_9d0e1f2a3b.mp3', genre: 'Classical', mood: 'Thoughtful', bpm: 65 },
-  { id: 'rf_025', title: 'Orchestral Dreams', artist: 'Pixabay Music', duration: 234, source: 'https://cdn.pixabay.com/audio/2020/11/15/audio_5c6d7e8f9a.mp3', genre: 'Classical', mood: 'Romantic', bpm: 60 },
-  { id: 'rf_026', title: 'Acoustic Folk', artist: 'Pixabay Music', duration: 172, source: 'https://cdn.pixabay.com/audio/2020/10/20/audio_1b2c3d4e5f.mp3', genre: 'Folk', mood: 'Happy', bpm: 100 },
-  { id: 'rf_027', title: 'Irish Jig', artist: 'Pixabay Music', duration: 148, source: 'https://cdn.pixabay.com/audio/2020/09/01/audio_6a7b8c9d0e.mp3', genre: 'Folk', mood: 'Happy', bpm: 130 },
-  { id: 'rf_028', title: 'Mediterranean Breeze', artist: 'Pixabay Music', duration: 164, source: 'https://cdn.pixabay.com/audio/2020/08/15/audio_3f4e5d6c7b.mp3', genre: 'World', mood: 'Relaxed', bpm: 110 },
-  { id: 'rf_029', title: 'Deep Space', artist: 'Pixabay Music', duration: 208, source: 'https://cdn.pixabay.com/audio/2020/07/20/audio_8c9d0e1f2a.mp3', genre: 'Electronic', mood: 'Thoughtful', bpm: 72 },
-  { id: 'rf_030', title: 'Neon Dreams', artist: 'Pixabay Music', duration: 186, source: 'https://cdn.pixabay.com/audio/2020/06/10/audio_2b3c4d5e6f.mp3', genre: 'Electronic', mood: 'Energetic', bpm: 128 },
-];
-
-const CURATED_ARTIST_CATALOG = [
-  { title: 'Perfect', artist: 'Ed Sheeran', uri: 'spotify:track:0tgVpDi06FyKpA1z0VMD4v' },
-  { title: 'Shape of You', artist: 'Ed Sheeran', uri: 'spotify:track:7qiZfU4dY1lWllzX7mPBI3' },
-  { title: 'Thinking Out Loud', artist: 'Ed Sheeran', uri: 'spotify:track:34gCuhDGsG4fbRPGo9r1b5' },
-  { title: 'All of Me', artist: 'John Legend', uri: 'spotify:track:3U4isOIWM3VvDubwSI3y7a' },
-  { title: 'Love On Top', artist: 'Beyoncé', uri: 'spotify:track:1z6WtY7X4HQJvzxC4UgkSf' },
-];
-
-const OUR_SONG = { title: 'Perfect', artist: 'Ed Sheeran', uri: 'spotify:track:0tgVpDi06FyKpA1z0VMD4v' };
-
-// ── Helper ────────────────────────────────────────────────────────────────────
-function formatTime(secs: number): string {
-  const s = Math.max(0, Math.floor(secs));
-  return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+interface PlayerState {
+  currentTrack: Track | null;
+  queue: Track[];
+  currentIndex: number;
+  isPlaying: boolean;
+  currentTime: number;
+  duration: number;
+  shuffle: boolean;
+  repeatMode: RepeatMode;
+  speed: PlaybackSpeed;
+  volume: number;
 }
 
-function catalogToLibrary(ct: CatalogTrack): LibraryTrack {
-  return {
-    id: ct.id, title: ct.title, artist: ct.artist,
-    localUri: ct.source, duration: ct.duration,
-    source: 'downloaded', addedAt: new Date().toISOString(),
-    genre: ct.genre, mood: ct.mood,
+// ── Audio Scanner ──────────────────────────────────────────────────────────────
+class AudioScanner {
+  private static instance: AudioScanner;
+  private isScanning = false;
+
+  static getInstance() {
+    if (!AudioScanner.instance) {
+      AudioScanner.instance = new AudioScanner();
+    }
+    return AudioScanner.instance;
+  }
+
+  async scanDeviceMusic(): Promise<Track[]> {
+    if (this.isScanning) return [];
+    this.isScanning = true;
+
+    try {
+      // Request permissions
+      const [mediaPerm, notificationPerm] = await Promise.all([
+        this.requestMediaPermissions(),
+        this.requestNotificationPermissions(),
+      ]);
+
+      if (!mediaPerm) {
+        throw new Error('Media library permission required');
+      }
+
+      // Get all audio assets
+      const media = await MediaLibrary.getAssetsAsync({
+        mediaType: ['audio'],
+        sortBy: ['title'],
+        first: 1000,
+      });
+
+      // Process tracks
+      const tracks: Track[] = [];
+      const batchSize = 50;
+
+      for (let i = 0; i < media.assets.length; i += batchSize) {
+        const batch = media.assets.slice(i, i + batchSize);
+        const batchTracks = await Promise.all(
+          batch.map(async (asset) => {
+            const info = await MediaLibrary.getAssetInfoAsync(asset);
+            return {
+              id: asset.id,
+              title: asset.filename?.replace(/\.[^/.]+$/, '') || 'Unknown Track',
+              artist: this.extractMetadata(info, 'artist') || 'Unknown Artist',
+              album: this.extractMetadata(info, 'album') || '',
+              duration: asset.duration || 0,
+              uri: info.localUri || asset.uri,
+              artwork: asset.albumId ? await this.getAlbumArtwork(asset.albumId) : undefined,
+              genre: this.extractMetadata(info, 'genre') || '',
+              year: this.extractMetadata(info, 'year') || '',
+              addedAt: new Date().toISOString(),
+              source: 'device' as const,
+              playCount: 0,
+            };
+          })
+        );
+        tracks.push(...batchTracks);
+      }
+
+      // Cache results
+      await this.cacheTracks(tracks);
+      return tracks;
+
+    } catch (error) {
+      console.error('[AudioScanner] Scan error:', error);
+      throw error;
+    } finally {
+      this.isScanning = false;
+    }
+  }
+
+  private async requestMediaPermissions(): Promise<boolean> {
+    try {
+      if (Platform.OS === 'android') {
+        const permission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+          {
+            title: 'Music Access',
+            message: 'Allow access to your music library to play your songs',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
+        );
+        return permission === PermissionsAndroid.RESULTS.GRANTED;
+      }
+      
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      return status === 'granted';
+    } catch {
+      return false;
+    }
+  }
+
+  private async requestNotificationPermissions(): Promise<boolean> {
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      return status === 'granted';
+    } catch {
+      return false;
+    }
+  }
+
+  private extractMetadata(info: any, key: string): string | null {
+    try {
+      if (info?.exif?.common?.[key]) return info.exif.common[key];
+      if (info?.exif?.common?.[key]?.[0]) return info.exif.common[key][0];
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async getAlbumArtwork(albumId: string): Promise<string | undefined> {
+    try {
+      const albums = await MediaLibrary.getAlbumsAsync({ includeSmartAlbums: true });
+      const album = albums.find(a => a.id === albumId);
+      if (album?.assetCount && album.assetCount > 0) {
+        const assets = await MediaLibrary.getAssetsAsync({
+          album: album,
+          first: 1,
+        });
+        if (assets.assets.length > 0) {
+          return assets.assets[0].uri;
+        }
+      }
+      return undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async cacheTracks(tracks: Track[]) {
+    try {
+      await AsyncStorage.setItem(STORAGE.CACHE, JSON.stringify({
+        tracks,
+        timestamp: Date.now(),
+      }));
+    } catch (error) {
+      console.error('[AudioScanner] Cache error:', error);
+    }
+  }
+
+  async getCachedTracks(): Promise<Track[] | null> {
+    try {
+      const cached = await AsyncStorage.getItem(STORAGE.CACHE);
+      if (!cached) return null;
+      const data = JSON.parse(cached);
+      // Cache valid for 1 hour
+      if (Date.now() - data.timestamp > 3600000) return null;
+      return data.tracks;
+    } catch {
+      return null;
+    }
+  }
+}
+
+// ── Music Player Engine ──────────────────────────────────────────────────────
+class MusicPlayerEngine {
+  private static instance: MusicPlayerEngine;
+  private player: Audio.Sound | null = null;
+  private state: PlayerState = {
+    currentTrack: null,
+    queue: [],
+    currentIndex: -1,
+    isPlaying: false,
+    currentTime: 0,
+    duration: 0,
+    shuffle: false,
+    repeatMode: 'off',
+    speed: 1.0,
+    volume: 1.0,
   };
+  private listeners: Set<(state: PlayerState) => void> = new Set();
+  private progressInterval: NodeJS.Timeout | null = null;
+  private isInitialized = false;
+
+  static getInstance() {
+    if (!MusicPlayerEngine.instance) {
+      MusicPlayerEngine.instance = new MusicPlayerEngine();
+    }
+    return MusicPlayerEngine.instance;
+  }
+
+  private constructor() {
+    this.initAudioMode();
+  }
+
+  private async initAudioMode() {
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        staysActiveInBackground: true,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+        interruptionModeIOS: 1,
+        interruptionModeAndroid: 1,
+      });
+      this.isInitialized = true;
+    } catch (error) {
+      console.error('[MusicPlayer] Audio mode init error:', error);
+    }
+  }
+
+  async playTrack(track: Track, queue: Track[], index: number) {
+    try {
+      await this.cleanup();
+
+      const sound = new Audio.Sound();
+      await sound.loadAsync(
+        { uri: track.uri },
+        { shouldPlay: true, progressUpdateIntervalMillis: 500 }
+      );
+
+      await sound.setVolumeAsync(this.state.volume);
+      await sound.setRateAsync(this.state.speed, true);
+
+      this.player = sound;
+      this.state.currentTrack = track;
+      this.state.queue = queue;
+      this.state.currentIndex = index;
+      this.state.duration = track.duration || 0;
+      this.state.isPlaying = true;
+
+      this.startProgressTracking();
+      this.notifyListeners();
+
+      // Set up audio interruption handler
+      sound.setOnPlaybackStatusUpdate(this.handlePlaybackStatus.bind(this));
+
+      // Register for background playback
+      this.setupBackgroundMode();
+
+    } catch (error) {
+      console.error('[MusicPlayer] Play error:', error);
+      throw error;
+    }
+  }
+
+  private handlePlaybackStatus(status: any) {
+    if (!status.isLoaded) return;
+
+    this.state.currentTime = status.positionMillis / 1000;
+    this.state.duration = status.durationMillis / 1000;
+    this.state.isPlaying = status.isPlaying;
+
+    // Auto-advance when finished
+    if (status.didJustFinish) {
+      this.handleTrackEnd();
+    }
+
+    this.notifyListeners();
+  }
+
+  private async handleTrackEnd() {
+    if (this.state.repeatMode === 'one') {
+      await this.seekTo(0);
+      await this.play();
+      return;
+    }
+
+    const nextIndex = this.getNextIndex();
+    if (nextIndex === -1) {
+      await this.pause();
+      this.state.currentIndex = -1;
+      this.notifyListeners();
+      return;
+    }
+
+    await this.playTrackAt(nextIndex);
+  }
+
+  private getNextIndex(): number {
+    const { queue, currentIndex, shuffle, repeatMode } = this.state;
+    if (queue.length === 0) return -1;
+
+    if (shuffle) {
+      let next = Math.floor(Math.random() * queue.length);
+      while (next === currentIndex && queue.length > 1) {
+        next = Math.floor(Math.random() * queue.length);
+      }
+      return next;
+    }
+
+    let next = currentIndex + 1;
+    if (next >= queue.length) {
+      if (repeatMode === 'all') {
+        return 0;
+      }
+      return -1;
+    }
+    return next;
+  }
+
+  private async playTrackAt(index: number) {
+    if (index < 0 || index >= this.state.queue.length) return;
+    const track = this.state.queue[index];
+    await this.playTrack(track, this.state.queue, index);
+  }
+
+  private startProgressTracking() {
+    if (this.progressInterval) {
+      clearInterval(this.progressInterval);
+    }
+    this.progressInterval = setInterval(() => {
+      if (this.state.isPlaying) {
+        this.state.currentTime += 1;
+        this.notifyListeners();
+      }
+    }, 1000);
+  }
+
+  private setupBackgroundMode() {
+    // Ensure audio continues in background
+    Audio.setAudioModeAsync({
+      staysActiveInBackground: true,
+      playsInSilentModeIOS: true,
+    }).catch(console.warn);
+  }
+
+  async togglePlayPause() {
+    if (!this.player) return;
+
+    try {
+      if (this.state.isPlaying) {
+        await this.player.pauseAsync();
+        this.state.isPlaying = false;
+      } else {
+        await this.player.playAsync();
+        this.state.isPlaying = true;
+      }
+      this.notifyListeners();
+    } catch (error) {
+      console.error('[MusicPlayer] Toggle play error:', error);
+    }
+  }
+
+  async play() {
+    if (!this.player) return;
+    try {
+      await this.player.playAsync();
+      this.state.isPlaying = true;
+      this.notifyListeners();
+    } catch (error) {
+      console.error('[MusicPlayer] Play error:', error);
+    }
+  }
+
+  async pause() {
+    if (!this.player) return;
+    try {
+      await this.player.pauseAsync();
+      this.state.isPlaying = false;
+      this.notifyListeners();
+    } catch (error) {
+      console.error('[MusicPlayer] Pause error:', error);
+    }
+  }
+
+  async seekTo(position: number) {
+    if (!this.player) return;
+    try {
+      await this.player.setPositionAsync(position * 1000);
+      this.state.currentTime = position;
+      this.notifyListeners();
+    } catch (error) {
+      console.error('[MusicPlayer] Seek error:', error);
+    }
+  }
+
+  async setSpeed(speed: PlaybackSpeed) {
+    if (!this.player) return;
+    try {
+      await this.player.setRateAsync(speed, true);
+      this.state.speed = speed;
+      this.notifyListeners();
+    } catch (error) {
+      console.error('[MusicPlayer] Speed error:', error);
+    }
+  }
+
+  async setVolume(volume: number) {
+    if (!this.player) return;
+    try {
+      await this.player.setVolumeAsync(volume);
+      this.state.volume = volume;
+      this.notifyListeners();
+    } catch (error) {
+      console.error('[MusicPlayer] Volume error:', error);
+    }
+  }
+
+  async skipNext() {
+    const nextIndex = this.getNextIndex();
+    if (nextIndex === -1) return;
+    await this.playTrackAt(nextIndex);
+  }
+
+  async skipPrevious() {
+    if (this.state.currentTime > 3) {
+      await this.seekTo(0);
+      return;
+    }
+
+    const prevIndex = this.state.currentIndex - 1;
+    if (prevIndex >= 0) {
+      await this.playTrackAt(prevIndex);
+    } else if (this.state.repeatMode === 'all') {
+      await this.playTrackAt(this.state.queue.length - 1);
+    }
+  }
+
+  async addToQueue(track: Track) {
+    const { queue, currentIndex } = this.state;
+    const newQueue = [...queue];
+    newQueue.splice(currentIndex + 1, 0, track);
+    this.state.queue = newQueue;
+    this.notifyListeners();
+  }
+
+  async removeFromQueue(index: number) {
+    const { queue, currentIndex } = this.state;
+    if (index === currentIndex) return;
+    const newQueue = queue.filter((_, i) => i !== index);
+    this.state.queue = newQueue;
+    if (currentIndex > index) {
+      this.state.currentIndex = currentIndex - 1;
+    }
+    this.notifyListeners();
+  }
+
+  async clearQueue() {
+    const current = this.state.currentTrack;
+    this.state.queue = current ? [current] : [];
+    this.state.currentIndex = 0;
+    this.notifyListeners();
+  }
+
+  setShuffle(shuffle: boolean) {
+    this.state.shuffle = shuffle;
+    this.notifyListeners();
+  }
+
+  setRepeatMode(mode: RepeatMode) {
+    this.state.repeatMode = mode;
+    this.notifyListeners();
+  }
+
+  private async cleanup() {
+    if (this.progressInterval) {
+      clearInterval(this.progressInterval);
+      this.progressInterval = null;
+    }
+    if (this.player) {
+      await this.player.unloadAsync();
+      this.player = null;
+    }
+  }
+
+  async destroy() {
+    await this.cleanup();
+    this.listeners.clear();
+    this.isInitialized = false;
+  }
+
+  addListener(listener: (state: PlayerState) => void) {
+    this.listeners.add(listener);
+    listener({ ...this.state });
+    return () => this.listeners.delete(listener);
+  }
+
+  private notifyListeners() {
+    const state = { ...this.state };
+    this.listeners.forEach(listener => listener(state));
+  }
+
+  getState(): PlayerState {
+    return { ...this.state };
+  }
 }
 
-// ── Waveform animation ────────────────────────────────────────────────────────
-function WaveformBars({ isPlaying, color = PINK }: { isPlaying: boolean; color?: string }) {
+// ── Memoized Components ──────────────────────────────────────────────────────
+
+// Track Item Component
+const TrackItem = memo(({ 
+  track, 
+  isCurrent, 
+  isPlaying, 
+  isFavorite,
+  onPress, 
+  onFavorite,
+  onQueue,
+  style,
+}: {
+  track: Track;
+  isCurrent: boolean;
+  isPlaying: boolean;
+  isFavorite: boolean;
+  onPress: () => void;
+  onFavorite: () => void;
+  onQueue: () => void;
+  style?: any;
+}) => {
+  const { colors } = useTheme();
+  
+  return (
+    <TouchableOpacity
+      style={[styles.trackItem, { backgroundColor: colors.card }, style]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={styles.trackArtWrapper}>
+        {track.artwork ? (
+          <Image source={{ uri: track.artwork }} style={styles.trackArt} />
+        ) : (
+          <LinearGradient
+            colors={[PINK + '44', PURPLE + '44']}
+            style={styles.trackArt}
+          >
+            {isCurrent && isPlaying ? (
+              <WaveformBars isPlaying={isPlaying} color={PINK} />
+            ) : (
+              <Icon name={isCurrent ? 'pause' : 'musical-note'} size={20} color={isCurrent ? PINK : '#666'} />
+            )}
+          </LinearGradient>
+        )}
+        {isCurrent && isPlaying && (
+          <View style={styles.playingIndicator}>
+            <WaveformBars isPlaying={isPlaying} color="#FFF" />
+          </View>
+        )}
+      </View>
+
+      <View style={styles.trackInfo}>
+        <Text style={[styles.trackTitle, { color: colors.text }]} numberOfLines={1}>
+          {track.title}
+        </Text>
+        <Text style={[styles.trackArtist, { color: colors.textSecondary }]} numberOfLines={1}>
+          {track.artist}
+        </Text>
+        {track.album && (
+          <Text style={[styles.trackAlbum, { color: colors.textTertiary }]} numberOfLines={1}>
+            {track.album}
+          </Text>
+        )}
+      </View>
+
+      <View style={styles.trackActions}>
+        <TouchableOpacity onPress={onFavorite} style={styles.trackActionBtn}>
+          <Icon 
+            name={isFavorite ? 'heart' : 'heart-outline'} 
+            size={18} 
+            color={isFavorite ? DANGER : colors.textTertiary} 
+          />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onQueue} style={styles.trackActionBtn}>
+          <Icon name="add-circle-outline" size={18} color={colors.textTertiary} />
+        </TouchableOpacity>
+        <Text style={[styles.trackDuration, { color: colors.textTertiary }]}>
+          {formatTime(track.duration)}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+TrackItem.displayName = 'TrackItem';
+
+// Waveform Animation Component
+const WaveformBars = memo(({ isPlaying, color = PINK }: { isPlaying: boolean; color?: string }) => {
   const bars = useMemo(() => [
     new Animated.Value(0.3), new Animated.Value(0.6), new Animated.Value(1),
     new Animated.Value(0.4), new Animated.Value(0.8)
@@ -184,358 +733,424 @@ function WaveformBars({ isPlaying, color = PINK }: { isPlaying: boolean; color?:
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, height: 20 }}>
       {bars.map((b, i) => (
-        <Animated.View key={i} style={{ width: 3, height: 20, borderRadius: 2, backgroundColor: color, transform: [{ scaleY: b }] }} />
+        <Animated.View 
+          key={i} 
+          style={{ 
+            width: 3, 
+            height: 20, 
+            borderRadius: 2, 
+            backgroundColor: color, 
+            transform: [{ scaleY: b }] 
+          }} 
+        />
       ))}
     </View>
   );
+});
+
+WaveformBars.displayName = 'WaveformBars';
+
+// ── Theme Hook ──────────────────────────────────────────────────────────────
+function useTheme() {
+  const [isDark, setIsDark] = useState(true);
+  const colors = isDark ? COLORS.dark : COLORS.light;
+  return { colors, isDark, toggleTheme: () => setIsDark(!isDark) };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  useMusicPlayerEngine - Background audio with Expo Audio only
-// ─────────────────────────────────────────────────────────────────────────────
-function useMusicPlayerEngine() {
-  const [queue, setQueue] = useState<LibraryTrack[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(-1);
-  const [shuffle, setShuffle] = useState(false);
-  const [repeatMode, setRepeatMode] = useState<RepeatMode>('off');
-
-  const currentTrack = currentIndex >= 0 && queue.length > 0 ? queue[currentIndex] : null;
-  const player = useAudioPlayer(currentTrack?.localUri ? { uri: currentTrack.localUri } : null);
-  const status = useAudioPlayerStatus(player);
-
-  // ── Setup background audio mode ────────────────────────────────────────────
-  useEffect(() => {
-    setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: true,
-      allowsRecordingIOS: false,
-      playsInSilentLockedModeIOS: true,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-    }).catch(console.warn);
-  }, []);
-
-  // ── Auto advance ────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!status?.didJustFinish) return;
-    if (repeatMode === 'one') { player.seekTo(0); player.play(); return; }
-    playNext();
-  }, [status?.didJustFinish]);
-
-  // ── Keep audio alive in background ─────────────────────────────────────────
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'background' && currentTrack && status?.playing) {
-        // Audio should continue playing automatically
-        console.log('[Music] App in background, audio should continue');
-      }
-    });
-    return () => subscription.remove();
-  }, [currentTrack, status?.playing]);
-
-  // ── Player functions ────────────────────────────────────────────────────────
-  const playTrackAt = useCallback((list: LibraryTrack[], index: number) => {
-    setQueue(list);
-    setCurrentIndex(index);
-  }, []);
-
-  const playTrack = useCallback((track: LibraryTrack, fromList: LibraryTrack[]) => {
-    const idx = fromList.findIndex(t => t.id === track.id);
-    playTrackAt(fromList, idx >= 0 ? idx : 0);
-  }, [playTrackAt]);
-
-  const togglePlayPause = useCallback(() => {
-    if (!currentTrack) return;
-    if (status?.playing) {
-      player.pause();
-    } else {
-      player.play();
-    }
-  }, [currentTrack, status?.playing]);
-
-  const playNext = useCallback(() => {
-    if (queue.length === 0) return;
-    let next: number;
-    if (shuffle) {
-      next = Math.floor(Math.random() * queue.length);
-    } else {
-      next = currentIndex + 1;
-      if (next >= queue.length) {
-        if (repeatMode === 'all') next = 0;
-        else { player.pause(); return; }
-      }
-    }
-    setCurrentIndex(next);
-  }, [queue, currentIndex, shuffle, repeatMode]);
-
-  const playPrev = useCallback(() => {
-    if (queue.length === 0) return;
-    if ((status?.currentTime ?? 0) > 3) { player.seekTo(0); return; }
-    let prev = currentIndex - 1;
-    if (prev < 0) prev = repeatMode === 'all' ? queue.length - 1 : 0;
-    setCurrentIndex(prev);
-  }, [queue, currentIndex, status?.currentTime, repeatMode]);
-
-  const seekTo = useCallback((s: number) => { player.seekTo(s); }, [player]);
-
-  const stop = useCallback(() => {
-    player.pause();
-    player.seekTo(0);
-    setCurrentIndex(-1);
-    setQueue([]);
-  }, [player]);
-
-  const addToQueue = useCallback((track: LibraryTrack) => {
-    setQueue(q => {
-      const after = currentIndex + 1;
-      const next = [...q];
-      next.splice(after, 0, track);
-      return next;
-    });
-  }, [currentIndex]);
-
-  return {
-    currentTrack, queue, currentIndex,
-    isPlaying: !!status?.playing,
-    currentTime: status?.currentTime ?? 0,
-    duration: status?.duration ?? currentTrack?.duration ?? 0,
-    shuffle, repeatMode,
-    setShuffle, setRepeatMode,
-    playTrack, playTrackAt, addToQueue, togglePlayPause,
-    playNext, playPrev, seekTo, stop,
-  };
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function formatTime(secs: number): string {
+  const s = Math.max(0, Math.floor(secs));
+  const hours = Math.floor(s / 3600);
+  const minutes = Math.floor((s % 3600) / 60);
+  const seconds = s % 60;
+  
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-// ── ProgressBar ───────────────────────────────────────────────────────────────
-function ProgressBar({ progress, onSeek, color = PINK }: { progress: number; onSeek: (r: number) => void; color?: string }) {
+function getInitials(title: string): string {
+  return title
+    .split(' ')
+    .slice(0, 2)
+    .map(word => word[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+// ── Progress Bar Component ──────────────────────────────────────────────────
+const ProgressBar = memo(({ 
+  progress, 
+  onSeek, 
+  color = PINK 
+}: { 
+  progress: number; 
+  onSeek: (value: number) => void; 
+  color?: string;
+}) => {
   const [barWidth, setBarWidth] = useState(1);
-  const clamped = Math.max(0, Math.min(1, progress));
+  const clamped = Math.max(0, Math.min(1, progress || 0));
+
   return (
-    <View style={styles.progressTrack}
-      onLayout={e => setBarWidth(e.nativeEvent.layout.width)}
-      onTouchEnd={e => onSeek(Math.max(0, Math.min(1, e.nativeEvent.locationX / barWidth)))}>
+    <View 
+      style={styles.progressTrack}
+      onLayout={e => setBarWidth(e.nativeEvent.layout.width || 1)}
+      onTouchEnd={e => {
+        const x = e.nativeEvent.locationX;
+        const value = Math.max(0, Math.min(1, x / (barWidth || 1)));
+        onSeek(value);
+      }}
+    >
       <View style={[styles.progressFill, { width: `${clamped * 100}%`, backgroundColor: color }]} />
       <View style={[styles.progressThumb, { left: `${clamped * 100}%`, backgroundColor: color }]} />
     </View>
   );
-}
+});
 
-// ── MiniPlayer ────────────────────────────────────────────────────────────────
-function MiniPlayer({ track, isPlaying, onTogglePlay, onNext, onExpand }: {
-  track: LibraryTrack; isPlaying: boolean;
-  onTogglePlay: () => void; onNext: () => void; onExpand: () => void;
-}) {
-  return (
-    <TouchableOpacity style={styles.miniPlayer} onPress={onExpand} activeOpacity={0.9}>
-      <LinearGradient colors={[PINK, PURPLE]} style={styles.miniArt} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-        <WaveformBars isPlaying={isPlaying} color="#FFF" />
-      </LinearGradient>
-      <View style={styles.miniInfo}>
-        <Text style={styles.miniTitle} numberOfLines={1}>{track.title}</Text>
-        <Text style={styles.miniArtist} numberOfLines={1}>{track.artist}</Text>
-      </View>
-      <TouchableOpacity style={styles.miniBtn} onPress={onTogglePlay}>
-        <Icon name={isPlaying ? 'pause' : 'play'} size={22} color={PINK} />
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.miniBtn} onPress={onNext}>
-        <Icon name="play-skip-forward" size={20} color={PINK} />
-      </TouchableOpacity>
-    </TouchableOpacity>
-  );
-}
+ProgressBar.displayName = 'ProgressBar';
 
-// ── NowPlayingSheet ──────────────────────────────────────────────────────────
-function NowPlayingSheet({ visible, onClose, engine, onDeleteTrack, favourites, onToggleFav }: {
-  visible: boolean; onClose: () => void;
-  engine: ReturnType<typeof useMusicPlayerEngine>;
+// ── Now Playing Sheet ──────────────────────────────────────────────────────
+const NowPlayingSheet = memo(({ 
+  visible, 
+  onClose,
+  player,
+  favorites,
+  onToggleFavorite,
+  onDeleteTrack,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  player: MusicPlayerEngine;
+  favorites: Set<string>;
+  onToggleFavorite: (id: string) => void;
   onDeleteTrack: (id: string) => void;
-  favourites: Set<string>;
-  onToggleFav: (id: string) => void;
-}) {
-  const { currentTrack, isPlaying, currentTime, duration, shuffle, repeatMode,
-    setShuffle, setRepeatMode, togglePlayPause, playNext, playPrev, seekTo, queue, currentIndex } = engine;
-
+}) => {
+  const state = player.getState();
+  const { colors } = useTheme();
   const [activeTab, setActiveTab] = useState<'player' | 'queue' | 'lyrics'>('player');
   const [eqPreset, setEqPreset] = useState('Flat');
-  const [sleepMins, setSleepMins] = useState<number | null>(null);
-  const [sleepTimer, setSleepTimer] = useState<any>(null);
+  const [sleepMinutes, setSleepMinutes] = useState<number | null>(null);
+  const sleepTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  if (!currentTrack) return null;
+  const track = state.currentTrack;
+  if (!track) return null;
 
-  const progress = duration > 0 ? currentTime / duration : 0;
-  const isFav = favourites.has(currentTrack.id);
+  const progress = state.duration > 0 ? state.currentTime / state.duration : 0;
+  const isFavorite = favorites.has(track.id);
 
-  const cycleRepeat = () => setRepeatMode(repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off');
+  const handleSleepTimer = (minutes: number) => {
+    if (sleepTimerRef.current) {
+      clearTimeout(sleepTimerRef.current);
+      sleepTimerRef.current = null;
+    }
+    
+    if (minutes === -1) {
+      // End of current track
+      setSleepMinutes(-1);
+      return;
+    }
 
-  const handleSleepTimer = (mins: number) => {
-    if (sleepTimer) clearTimeout(sleepTimer);
-    if (mins === -1) { setSleepMins(-1); return; }
-    setSleepMins(mins);
-    const t = setTimeout(() => { engine.stop(); setSleepMins(null); }, mins * 60000);
-    setSleepTimer(t);
+    setSleepMinutes(minutes);
+    sleepTimerRef.current = setTimeout(async () => {
+      await player.pause();
+      setSleepMinutes(null);
+    }, minutes * 60000);
   };
 
-  const cancelSleep = () => {
-    if (sleepTimer) clearTimeout(sleepTimer);
-    setSleepMins(null); setSleepTimer(null);
+  const cancelSleepTimer = () => {
+    if (sleepTimerRef.current) {
+      clearTimeout(sleepTimerRef.current);
+      sleepTimerRef.current = null;
+    }
+    setSleepMinutes(null);
   };
 
-  const TABS = [
-    { key: 'player', icon: 'musical-notes', label: 'Player' },
-    { key: 'queue', icon: 'list', label: 'Queue' },
-    { key: 'lyrics', icon: 'text-outline', label: 'Lyrics' },
-  ] as const;
+  const handleSpeedChange = () => {
+    const speeds: PlaybackSpeed[] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+    const currentIndex = speeds.indexOf(state.speed);
+    const nextIndex = (currentIndex + 1) % speeds.length;
+    player.setSpeed(speeds[nextIndex]);
+  };
+
+  const SLEEP_OPTIONS = [
+    { label: '15 min', minutes: 15 },
+    { label: '30 min', minutes: 30 },
+    { label: '1 hour', minutes: 60 },
+    { label: 'End of song', minutes: -1 },
+  ];
+
+  const EQ_PRESETS = [
+    { label: 'Flat', icon: 'remove-outline' },
+    { label: 'Bass Boost', icon: 'pulse-outline' },
+    { label: 'Vocal', icon: 'mic-outline' },
+    { label: 'Electronic', icon: 'radio-outline' },
+    { label: 'Classical', icon: 'musical-notes-outline' },
+  ];
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.nowPlayingOverlay}>
-        <LinearGradient colors={['#1a1a2e', '#2d1b25', '#1a1a2e']}
-          style={styles.nowPlayingSheet} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
-
+        <LinearGradient 
+          colors={['#0A0A0F', '#181820', '#0A0A0F']}
+          style={styles.nowPlayingSheet}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+        >
           <View style={styles.sheetHandle} />
+          
           <TouchableOpacity style={styles.nowPlayingClose} onPress={onClose}>
-            <Icon name="chevron-down" size={26} color="#FFF" />
+            <Icon name="chevron-down" size={24} color="#FFF" />
           </TouchableOpacity>
 
-          {/* Tab strip */}
-          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 24, marginBottom: 16 }}>
-            {TABS.map(t => (
-              <TouchableOpacity key={t.key} onPress={() => setActiveTab(t.key as any)}
-                style={{ alignItems: 'center', opacity: activeTab === t.key ? 1 : 0.4 }}>
-                <Icon name={t.icon as any} size={18} color={PINK} />
-                <Text style={{ fontSize: 10, color: PINK, marginTop: 2 }}>{t.label}</Text>
-                {activeTab === t.key && <View style={{ height: 2, width: 24, backgroundColor: PINK, borderRadius: 1, marginTop: 2 }} />}
+          {/* Tab Navigation */}
+          <View style={styles.nowPlayingTabs}>
+            {['player', 'queue', 'lyrics'].map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                onPress={() => setActiveTab(tab as any)}
+                style={[
+                  styles.nowPlayingTab,
+                  activeTab === tab && styles.nowPlayingTabActive,
+                ]}
+              >
+                <Icon
+                  name={tab === 'player' ? 'musical-notes' : tab === 'queue' ? 'list' : 'text-outline'}
+                  size={18}
+                  color={activeTab === tab ? PINK : '#666'}
+                />
+                <Text style={[
+                  styles.nowPlayingTabText,
+                  activeTab === tab && { color: PINK }
+                ]}>
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* ── PLAYER TAB ── */}
           {activeTab === 'player' && (
             <>
-              <LinearGradient colors={[PINK, PURPLE]} style={styles.nowPlayingArt}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                <WaveformBars isPlaying={isPlaying} color="#FFF" />
-              </LinearGradient>
-
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 8 }}>
-                <Text style={styles.nowPlayingTitle} numberOfLines={1}>{currentTrack.title}</Text>
-                <TouchableOpacity onPress={() => onToggleFav(currentTrack.id)}>
-                  <Icon name={isFav ? 'heart' : 'heart-outline'} size={22} color={isFav ? DANGER : '#888'} />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.nowPlayingArtist} numberOfLines={1}>{currentTrack.artist}</Text>
-              {currentTrack.genre && (
-                <View style={styles.genreTag}><Text style={styles.genreTagText}>{currentTrack.genre}</Text></View>
-              )}
-
-              <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12, justifyContent: 'center' }}>
-                {(currentTrack as any).bpm && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <MCIcon name="metronome" size={13} color="#888" />
-                    <Text style={{ fontSize: 11, color: '#888' }}>{(currentTrack as any).bpm} BPM</Text>
+              {/* Artwork */}
+              <View style={styles.artworkContainer}>
+                {track.artwork ? (
+                  <Image source={{ uri: track.artwork }} style={styles.artworkImage} />
+                ) : (
+                  <LinearGradient
+                    colors={[PINK, PURPLE]}
+                    style={styles.artworkPlaceholder}
+                  >
+                    <Text style={styles.artworkInitials}>
+                      {getInitials(track.title)}
+                    </Text>
+                  </LinearGradient>
+                )}
+                {state.isPlaying && (
+                  <View style={styles.artworkOverlay}>
+                    <WaveformBars isPlaying={state.isPlaying} color="#FFF" />
                   </View>
                 )}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Icon name="time-outline" size={13} color="#888" />
-                  <Text style={{ fontSize: 11, color: '#888' }}>{formatTime(currentTrack.duration ?? 0)}</Text>
-                </View>
               </View>
 
-              <View style={styles.nowPlayingProgressWrap}>
-                <ProgressBar progress={progress} onSeek={r => seekTo(r * duration)} color={PINK} />
+              {/* Track Info */}
+              <View style={styles.nowPlayingInfo}>
+                <View style={styles.nowPlayingTitleRow}>
+                  <Text style={styles.nowPlayingTitle} numberOfLines={1}>
+                    {track.title}
+                  </Text>
+                  <TouchableOpacity onPress={() => onToggleFavorite(track.id)}>
+                    <Icon
+                      name={isFavorite ? 'heart' : 'heart-outline'}
+                      size={24}
+                      color={isFavorite ? DANGER : '#888'}
+                    />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.nowPlayingArtist} numberOfLines={1}>
+                  {track.artist}
+                </Text>
+                {track.album && (
+                  <Text style={styles.nowPlayingAlbum} numberOfLines={1}>
+                    {track.album}
+                  </Text>
+                )}
+              </View>
+
+              {/* Progress */}
+              <View style={styles.nowPlayingProgress}>
+                <ProgressBar progress={progress} onSeek={player.seekTo} color={PINK} />
                 <View style={styles.timeRow}>
-                  <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-                  <Text style={styles.timeText}>{formatTime(duration)}</Text>
+                  <Text style={styles.timeText}>{formatTime(state.currentTime)}</Text>
+                  <Text style={styles.timeText}>{formatTime(state.duration)}</Text>
                 </View>
               </View>
 
-              <View style={styles.transportRow}>
-                <TouchableOpacity onPress={() => setShuffle(!shuffle)}>
-                  <Icon name="shuffle" size={22} color={shuffle ? PINK : '#888'} />
+              {/* Controls */}
+              <View style={styles.controlsRow}>
+                <TouchableOpacity onPress={() => player.setShuffle(!state.shuffle)}>
+                  <Icon
+                    name="shuffle"
+                    size={22}
+                    color={state.shuffle ? PINK : '#666'}
+                  />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={playPrev}>
+
+                <TouchableOpacity onPress={() => player.skipPrevious()} style={styles.controlBtn}>
                   <Icon name="play-skip-back" size={30} color="#FFF" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.playPauseBtn} onPress={togglePlayPause}>
-                  <Icon name={isPlaying ? 'pause' : 'play'} size={32} color="#FFF" />
+
+                <TouchableOpacity
+                  style={[styles.playBtn, { backgroundColor: PINK }]}
+                  onPress={() => player.togglePlayPause()}
+                >
+                  <Icon name={state.isPlaying ? 'pause' : 'play'} size={32} color="#FFF" />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={playNext}>
+
+                <TouchableOpacity onPress={() => player.skipNext()} style={styles.controlBtn}>
                   <Icon name="play-skip-forward" size={30} color="#FFF" />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={cycleRepeat} style={{ position: 'relative' }}>
-                  <Icon name={repeatMode === 'one' ? 'repeat' : 'repeat-outline'} size={22} color={repeatMode !== 'off' ? PINK : '#888'} />
-                  {repeatMode === 'one' && <View style={styles.repeatOneDot} />}
+
+                <TouchableOpacity onPress={() => player.setRepeatMode(
+                  state.repeatMode === 'off' ? 'all' : 
+                  state.repeatMode === 'all' ? 'one' : 'off'
+                )}>
+                  <Icon
+                    name={state.repeatMode === 'one' ? 'repeat' : 'repeat-outline'}
+                    size={22}
+                    color={state.repeatMode !== 'off' ? PINK : '#666'}
+                  />
                 </TouchableOpacity>
               </View>
 
-              <Text style={{ fontSize: 11, color: '#888', textAlign: 'center', marginTop: 20, marginBottom: 8 }}>EQUALIZER</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 8 }}>
-                {EQ_PRESETS.map(eq => (
-                  <TouchableOpacity key={eq.label} onPress={() => setEqPreset(eq.label)}
-                    style={[styles.eqChip, eqPreset === eq.label && { backgroundColor: PINK, borderColor: PINK }]}>
-                    <Icon name={eq.icon as any} size={14} color={eqPreset === eq.label ? '#FFF' : '#888'} />
-                    <Text style={[styles.eqChipTxt, eqPreset === eq.label && { color: '#FFF' }]}>{eq.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              {/* Additional Controls */}
+              <View style={styles.additionalControls}>
+                <TouchableOpacity onPress={handleSpeedChange} style={styles.extraControl}>
+                  <Text style={styles.extraControlText}>{state.speed}x</Text>
+                </TouchableOpacity>
 
-              <Text style={{ fontSize: 11, color: '#888', textAlign: 'center', marginTop: 16, marginBottom: 8 }}>SLEEP TIMER</Text>
-              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
-                {sleepMins !== null && (
-                  <TouchableOpacity onPress={cancelSleep}
-                    style={[styles.sleepChip, { backgroundColor: DANGER + '33', borderColor: DANGER }]}>
-                    <Icon name="timer-off-outline" size={13} color={DANGER} />
-                    <Text style={[styles.sleepChipTxt, { color: DANGER }]}>Cancel</Text>
-                  </TouchableOpacity>
-                )}
-                {SLEEP_OPTIONS.map(s => (
-                  <TouchableOpacity key={s.label} onPress={() => handleSleepTimer(s.minutes)}
-                    style={[styles.sleepChip, sleepMins === s.minutes && { backgroundColor: PURPLE + '33', borderColor: PURPLE }]}>
-                    <Icon name="moon-outline" size={13} color={sleepMins === s.minutes ? PURPLE : '#888'} />
-                    <Text style={[styles.sleepChipTxt, sleepMins === s.minutes && { color: PURPLE }]}>{s.label}</Text>
-                  </TouchableOpacity>
-                ))}
+                <TouchableOpacity onPress={() => player.setVolume(Math.max(0, state.volume - 0.1))} style={styles.extraControl}>
+                  <Icon name="volume-low" size={20} color="#888" />
+                </TouchableOpacity>
+
+                <View style={styles.volumeSlider}>
+                  <View style={[styles.volumeFill, { width: `${state.volume * 100}%`, backgroundColor: PINK }]} />
+                </View>
+
+                <TouchableOpacity onPress={() => player.setVolume(Math.min(1, state.volume + 0.1))} style={styles.extraControl}>
+                  <Icon name="volume-high" size={20} color="#888" />
+                </TouchableOpacity>
               </View>
 
-              <TouchableOpacity style={styles.removeFromLibraryBtn} onPress={() => { onDeleteTrack(currentTrack.id); onClose(); }}>
-                <Icon name="trash-outline" size={16} color={DANGER} />
-                <Text style={styles.removeFromLibraryTxt}>Remove from library</Text>
-              </TouchableOpacity>
+              {/* Sleep Timer */}
+              <View style={styles.sleepTimerSection}>
+                <Text style={styles.sleepTimerLabel}>Sleep Timer</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {SLEEP_OPTIONS.map(option => (
+                    <TouchableOpacity
+                      key={option.label}
+                      onPress={() => handleSleepTimer(option.minutes)}
+                      style={[
+                        styles.sleepTimerOption,
+                        sleepMinutes === option.minutes && styles.sleepTimerOptionActive,
+                      ]}
+                    >
+                      <Icon name="moon-outline" size={14} color={sleepMinutes === option.minutes ? '#FFF' : '#888'} />
+                      <Text style={[
+                        styles.sleepTimerOptionText,
+                        sleepMinutes === option.minutes && { color: '#FFF' }
+                      ]}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                  {sleepMinutes !== null && (
+                    <TouchableOpacity onPress={cancelSleepTimer} style={styles.sleepTimerCancel}>
+                      <Icon name="close-circle" size={20} color={DANGER} />
+                    </TouchableOpacity>
+                  )}
+                </ScrollView>
+              </View>
+
+              {/* EQ Presets */}
+              <View style={styles.eqSection}>
+                <Text style={styles.eqLabel}>Equalizer</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {EQ_PRESETS.map(preset => (
+                    <TouchableOpacity
+                      key={preset.label}
+                      onPress={() => setEqPreset(preset.label)}
+                      style={[
+                        styles.eqOption,
+                        eqPreset === preset.label && styles.eqOptionActive,
+                      ]}
+                    >
+                      <Icon name={preset.icon as any} size={14} color={eqPreset === preset.label ? '#FFF' : '#888'} />
+                      <Text style={[
+                        styles.eqOptionText,
+                        eqPreset === preset.label && { color: '#FFF' }
+                      ]}>
+                        {preset.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
             </>
           )}
 
-          {/* ── QUEUE TAB ── */}
           {activeTab === 'queue' && (
             <FlatList
-              data={queue}
-              keyExtractor={t => t.id}
-              showsVerticalScrollIndicator={false}
-              style={{ maxHeight: 400 }}
-              renderItem={({ item, index }) => (
-                <View style={[styles.queueRow, index === currentIndex && styles.queueRowActive]}>
-                  {index === currentIndex
-                    ? <WaveformBars isPlaying={isPlaying} color={PINK} />
-                    : <Icon name="musical-note" size={16} color="#666" />
-                  }
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[styles.queueTitle, index === currentIndex && { color: PINK }]} numberOfLines={1}>{item.title}</Text>
-                    <Text style={styles.queueArtist} numberOfLines={1}>{item.artist}</Text>
+              data={state.queue}
+              keyExtractor={(item) => item.id}
+              style={styles.queueList}
+              renderItem={({ item, index }) => {
+                const isCurrent = index === state.currentIndex;
+                return (
+                  <View style={[
+                    styles.queueItem,
+                    isCurrent && styles.queueItemCurrent,
+                  ]}>
+                    {isCurrent ? (
+                      <WaveformBars isPlaying={state.isPlaying} color={PINK} />
+                    ) : (
+                      <Icon name="musical-note" size={16} color="#666" />
+                    )}
+                    <View style={styles.queueItemInfo}>
+                      <Text style={[
+                        styles.queueItemTitle,
+                        isCurrent && { color: PINK }
+                      ]} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      <Text style={styles.queueItemArtist} numberOfLines={1}>
+                        {item.artist}
+                      </Text>
+                    </View>
+                    <Text style={styles.queueItemDuration}>
+                      {formatTime(item.duration)}
+                    </Text>
+                    {index !== state.currentIndex && (
+                      <TouchableOpacity onPress={() => player.removeFromQueue(index)}>
+                        <Icon name="close" size={16} color="#666" />
+                      </TouchableOpacity>
+                    )}
                   </View>
-                  <Text style={styles.queueDuration}>{formatTime(item.duration ?? 0)}</Text>
-                </View>
-              )}
+                );
+              }}
             />
           )}
 
-          {/* ── LYRICS TAB ── */}
           {activeTab === 'lyrics' && (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
-              <MCIcon name="text-box-outline" size={48} color="#444" />
-              <Text style={{ color: '#888', fontSize: 15, marginTop: 16, textAlign: 'center' }}>
-                Lyrics not available
+            <View style={styles.lyricsContainer}>
+              <MCIcon name="text-box-outline" size={56} color="#444" />
+              <Text style={styles.lyricsTitle}>Lyrics</Text>
+              <Text style={styles.lyricsSubtext}>
+                {track.title} by {track.artist}
               </Text>
-              <Text style={{ color: '#555', fontSize: 12, marginTop: 8, textAlign: 'center' }}>
-                Lyrics for royalty-free tracks{'\n'}are coming soon
+              <Text style={styles.lyricsPlaceholder}>
+                Lyrics for this track are not available{'\n'}
+                Check back later for updates
               </Text>
             </View>
           )}
@@ -543,680 +1158,1678 @@ function NowPlayingSheet({ visible, onClose, engine, onDeleteTrack, favourites, 
       </View>
     </Modal>
   );
-}
+});
+
+NowPlayingSheet.displayName = 'NowPlayingSheet';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  MAIN SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 export default function MoodMusicScreen() {
-  const engine = useMusicPlayerEngine();
-  const {
-    currentTrack, isPlaying, currentTime, duration,
-    playTrack, addToQueue, togglePlayPause, playNext, stop,
-  } = engine;
-
-  const [library, setLibrary] = useState<LibraryTrack[]>([]);
-  const [selectedMood, setSelectedMood] = useState<string | null>(null);
-  const [todayMood, setTodayMood] = useState<string | null>(null);
-  const [libLoading, setLibLoading] = useState(true);
-  const [libSearch, setLibSearch] = useState('');
+  const { colors, isDark } = useTheme();
+  const playerRef = useRef<MusicPlayerEngine>(MusicPlayerEngine.getInstance());
+  const [playerState, setPlayerState] = useState(playerRef.current.getState());
+  
+  const [library, setLibrary] = useState<Track[]>([]);
+  const [filteredLibrary, setFilteredLibrary] = useState<Track[]>([]);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [recentlyPlayed, setRecentlyPlayed] = useState<Track[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  
+  const [isLoading, setIsLoading] = useState(true);
+  const [isScanning, setIsScanning] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'library' | 'favorites' | 'playlists' | 'recent'>('library');
   const [showNowPlaying, setShowNowPlaying] = useState(false);
-  const [showCatalog, setShowCatalog] = useState(false);
-  const [catalogFilter, setCatalogFilter] = useState('All');
-  const [downloading, setDownloading] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<'library' | 'mood' | 'artists'>('mood');
-  const [favourites, setFavourites] = useState<Set<string>>(new Set());
-  const [recentlyPlayed, setRecentlyPlayed] = useState<LibraryTrack[]>([]);
-  const [isDark] = useState(true);
+  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+  
+  const [refreshing, setRefreshing] = useState(false);
+  const [sortBy, setSortBy] = useState<'title' | 'artist' | 'duration' | 'recent'>('title');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
-  const c = isDark ? COLORS.dark : COLORS.light;
-
-  // ── Load ──────────────────────────────────────────────────────────────────
+  // ── Effects ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    (async () => {
-      try {
-        await FileSystem.makeDirectoryAsync(LOCAL_MUSIC_DIR, { intermediates: true });
-      } catch { /* exists */ }
-      await Promise.all([loadLibrary(), loadMoodHistory(), loadFavourites(), loadRecent()]);
-    })();
+    initializeApp();
+    return () => {
+      playerRef.current.destroy();
+    };
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = playerRef.current.addListener((state) => {
+      setPlayerState(state);
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    filterLibrary();
+  }, [library, searchQuery, sortBy]);
+
+  // ── Initialization ──────────────────────────────────────────────────────
+  const initializeApp = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Load saved data
+      await Promise.all([
+        loadLibrary(),
+        loadFavorites(),
+        loadRecentlyPlayed(),
+        loadPlaylists(),
+      ]);
+
+      // Scan device music if library is empty
+      if (library.length === 0) {
+        await scanDeviceMusic();
+      }
+    } catch (error) {
+      console.error('[MoodMusic] Init error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ── Library Management ──────────────────────────────────────────────────
   const loadLibrary = async () => {
-    setLibLoading(true);
     try {
-      const raw = await AsyncStorage.getItem(LIBRARY_KEY);
-      setLibrary(raw ? JSON.parse(raw) : []);
-    } catch { setLibrary([]); }
-    setLibLoading(false);
+      const data = await AsyncStorage.getItem(STORAGE.LIBRARY);
+      if (data) {
+        const parsed = JSON.parse(data);
+        setLibrary(parsed);
+      }
+    } catch (error) {
+      console.error('[MoodMusic] Load library error:', error);
+    }
   };
 
-  const saveLibrary = async (lib: LibraryTrack[]) => {
-    setLibrary(lib);
-    await AsyncStorage.setItem(LIBRARY_KEY, JSON.stringify(lib));
-  };
-
-  const loadMoodHistory = async () => {
+  const saveLibrary = async (tracks: Track[]) => {
     try {
-      const raw = await AsyncStorage.getItem(MOOD_HISTORY_KEY);
-      if (!raw) return;
-      const moods = JSON.parse(raw);
-      const today = new Date().toDateString();
-      const entry = moods.find((m: any) => new Date(m.timestamp ?? m.date).toDateString() === today);
-      if (entry) setTodayMood(entry.mood ?? entry.label ?? null);
-    } catch { /* ignore */ }
+      await AsyncStorage.setItem(STORAGE.LIBRARY, JSON.stringify(tracks));
+      setLibrary(tracks);
+    } catch (error) {
+      console.error('[MoodMusic] Save library error:', error);
+    }
   };
 
-  const loadFavourites = async () => {
+  const loadFavorites = async () => {
     try {
-      const raw = await AsyncStorage.getItem(FAVOURITES_KEY);
-      setFavourites(raw ? new Set(JSON.parse(raw)) : new Set());
-    } catch { setFavourites(new Set()); }
+      const data = await AsyncStorage.getItem(STORAGE.FAVORITES);
+      if (data) {
+        setFavorites(new Set(JSON.parse(data)));
+      }
+    } catch (error) {
+      console.error('[MoodMusic] Load favorites error:', error);
+    }
   };
 
-  const loadRecent = async () => {
+  const saveFavorites = async (favoritesSet: Set<string>) => {
     try {
-      const raw = await AsyncStorage.getItem(RECENT_KEY);
-      setRecentlyPlayed(raw ? JSON.parse(raw) : []);
-    } catch { setRecentlyPlayed([]); }
+      await AsyncStorage.setItem(STORAGE.FAVORITES, JSON.stringify([...favoritesSet]));
+      setFavorites(favoritesSet);
+    } catch (error) {
+      console.error('[MoodMusic] Save favorites error:', error);
+    }
   };
 
-  const addToRecent = async (track: LibraryTrack) => {
-    setRecentlyPlayed(prev => {
-      const next = [track, ...prev.filter(t => t.id !== track.id)].slice(0, 10);
-      AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next));
-      return next;
-    });
+  const loadRecentlyPlayed = async () => {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE.RECENT);
+      if (data) {
+        setRecentlyPlayed(JSON.parse(data));
+      }
+    } catch (error) {
+      console.error('[MoodMusic] Load recent error:', error);
+    }
   };
 
-  // ── Favourites ─────────────────────────────────────────────────────────────
-  const toggleFav = async (id: string) => {
-    setFavourites(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      AsyncStorage.setItem(FAVOURITES_KEY, JSON.stringify([...next]));
-      return next;
-    });
+  const saveRecentlyPlayed = async (tracks: Track[]) => {
+    try {
+      await AsyncStorage.setItem(STORAGE.RECENT, JSON.stringify(tracks));
+      setRecentlyPlayed(tracks);
+    } catch (error) {
+      console.error('[MoodMusic] Save recent error:', error);
+    }
   };
 
-  // ── Play track ──────────────────────────────────────────────────────────────
-  const handlePlayTrack = (track: LibraryTrack, fromList: LibraryTrack[]) => {
-    playTrack(track, fromList);
-    addToRecent(track);
+  const loadPlaylists = async () => {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE.PLAYLISTS);
+      if (data) {
+        setPlaylists(JSON.parse(data));
+      }
+    } catch (error) {
+      console.error('[MoodMusic] Load playlists error:', error);
+    }
   };
 
-  // ── Mood-to-playlist auto-queue ────────────────────────────────────────────
-  const playMoodQueue = (mood: string) => {
-    setSelectedMood(mood);
-    const moodTracks = library.filter(t => t.mood === mood);
-    if (moodTracks.length === 0) {
-      Alert.alert('No tracks', `No tracks in your library match the "${mood}" mood.\n\nDownload some from the catalog!`);
+  const savePlaylists = async (playlistsData: Playlist[]) => {
+    try {
+      await AsyncStorage.setItem(STORAGE.PLAYLISTS, JSON.stringify(playlistsData));
+      setPlaylists(playlistsData);
+    } catch (error) {
+      console.error('[MoodMusic] Save playlists error:', error);
+    }
+  };
+
+  // ── Scanning ────────────────────────────────────────────────────────────
+  const scanDeviceMusic = async () => {
+    try {
+      setIsScanning(true);
+      const scanner = AudioScanner.getInstance();
+      const tracks = await scanner.scanDeviceMusic();
+      
+      if (tracks.length > 0) {
+        await saveLibrary(tracks);
+        Alert.alert(
+          '✅ Music Scanned',
+          `Found ${tracks.length} songs on your device`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'No Music Found',
+          'Could not find any audio files on your device.\n\nTry importing manually.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        'Scan Error',
+        'Failed to scan device music.\nPlease check permissions and try again.',
+        [{ text: 'OK' }]
+      );
+      console.error('[MoodMusic] Scan error:', error);
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  // ── Track Operations ────────────────────────────────────────────────────
+  const filterLibrary = () => {
+    let filtered = [...library];
+    
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(track =>
+        track.title.toLowerCase().includes(query) ||
+        track.artist.toLowerCase().includes(query) ||
+        (track.album && track.album.toLowerCase().includes(query))
+      );
+    }
+
+    // Sort
+    switch (sortBy) {
+      case 'title':
+        filtered.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case 'artist':
+        filtered.sort((a, b) => a.artist.localeCompare(b.artist));
+        break;
+      case 'duration':
+        filtered.sort((a, b) => a.duration - b.duration);
+        break;
+      case 'recent':
+        filtered.sort((a, b) => {
+          const aTime = a.lastPlayed ? new Date(a.lastPlayed).getTime() : 0;
+          const bTime = b.lastPlayed ? new Date(b.lastPlayed).getTime() : 0;
+          return bTime - aTime;
+        });
+        break;
+    }
+
+    setFilteredLibrary(filtered);
+  };
+
+  const playTrack = async (track: Track, queue?: Track[]) => {
+    try {
+      const trackList = queue || library;
+      const index = trackList.findIndex(t => t.id === track.id);
+      
+      await playerRef.current.playTrack(track, trackList, index);
+      
+      // Update recent
+      const updatedRecent = [
+        track,
+        ...recentlyPlayed.filter(t => t.id !== track.id),
+      ].slice(0, 50);
+      await saveRecentlyPlayed(updatedRecent);
+
+      // Update play count
+      const updatedLibrary = library.map(t => {
+        if (t.id === track.id) {
+          return {
+            ...t,
+            playCount: (t.playCount || 0) + 1,
+            lastPlayed: new Date().toISOString(),
+          };
+        }
+        return t;
+      });
+      await saveLibrary(updatedLibrary);
+
+      setShowNowPlaying(true);
+    } catch (error) {
+      Alert.alert('Play Error', 'Could not play this track');
+      console.error('[MoodMusic] Play error:', error);
+    }
+  };
+
+  const toggleFavorite = async (trackId: string) => {
+    const newFavorites = new Set(favorites);
+    if (newFavorites.has(trackId)) {
+      newFavorites.delete(trackId);
+    } else {
+      newFavorites.add(trackId);
+    }
+    await saveFavorites(newFavorites);
+  };
+
+  const addToQueue = async (track: Track) => {
+    await playerRef.current.addToQueue(track);
+    Alert.alert('Added to Queue', `${track.title} added to queue`);
+  };
+
+  // ── Playlist Operations ────────────────────────────────────────────────
+  const createPlaylist = async () => {
+    if (!newPlaylistName.trim()) {
+      Alert.alert('Error', 'Please enter a playlist name');
       return;
     }
-    handlePlayTrack(moodTracks[0], moodTracks);
-  };
 
-  // ── Import ─────────────────────────────────────────────────────────────────
-  const importTrack = async () => {
-    const result = await DocumentPicker.getDocumentAsync({ type: 'audio/*', copyToCacheDirectory: true });
-    if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
-    const destUri = LOCAL_MUSIC_DIR + asset.name;
-    await FileSystem.copyAsync({ from: asset.uri, to: destUri });
-    const track: LibraryTrack = {
-      id: `local_${Date.now()}`, title: asset.name.replace(/\.[^/.]+$/, ''),
-      artist: 'Local', localUri: destUri,
-      source: 'imported', addedAt: new Date().toISOString(),
+    const playlist: Playlist = {
+      id: `playlist_${Date.now()}`,
+      name: newPlaylistName.trim(),
+      tracks: [],
+      created: new Date().toISOString(),
+      updated: new Date().toISOString(),
     };
-    await saveLibrary([track, ...library]);
-    Alert.alert('Imported', `"${track.title}" added to library`);
+
+    await savePlaylists([...playlists, playlist]);
+    setNewPlaylistName('');
+    setShowPlaylistModal(false);
+    Alert.alert('✅ Playlist Created', `"${playlist.name}" has been created`);
   };
 
-  // ── Download from catalog ──────────────────────────────────────────────────
-  const downloadTrack = async (ct: CatalogTrack) => {
-    if (library.some(t => t.id === ct.id)) { Alert.alert('Already in library'); return; }
-    setDownloading(prev => new Set(prev).add(ct.id));
+  const addToPlaylist = async (playlistId: string, trackId: string) => {
+    const playlist = playlists.find(p => p.id === playlistId);
+    if (!playlist) return;
+
+    if (playlist.tracks.includes(trackId)) {
+      Alert.alert('Already Added', 'This track is already in the playlist');
+      return;
+    }
+
+    const updated = {
+      ...playlist,
+      tracks: [...playlist.tracks, trackId],
+      updated: new Date().toISOString(),
+    };
+
+    await savePlaylists(playlists.map(p => p.id === playlistId ? updated : p));
+    Alert.alert('✅ Added', `Track added to "${playlist.name}"`);
+  };
+
+  const deletePlaylist = async (playlistId: string) => {
+    Alert.alert(
+      'Delete Playlist',
+      'Are you sure you want to delete this playlist?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await savePlaylists(playlists.filter(p => p.id !== playlistId));
+          }
+        }
+      ]
+    );
+  };
+
+  const removeFromPlaylist = async (playlistId: string, trackId: string) => {
+    const playlist = playlists.find(p => p.id === playlistId);
+    if (!playlist) return;
+
+    const updated = {
+      ...playlist,
+      tracks: playlist.tracks.filter(id => id !== trackId),
+      updated: new Date().toISOString(),
+    };
+
+    await savePlaylists(playlists.map(p => p.id === playlistId ? updated : p));
+  };
+
+  // ── Import ──────────────────────────────────────────────────────────────
+  const importTrack = async () => {
     try {
-      const ext = ct.source.split('.').pop()?.split('?')[0] ?? 'mp3';
-      const destUri = `${LOCAL_MUSIC_DIR}${ct.id}.${ext}`;
-      await FileSystem.downloadAsync(ct.source, destUri);
-      const track = catalogToLibrary({ ...ct, source: ct.source });
-      track.localUri = destUri;
-      await saveLibrary([track, ...library]);
-    } catch {
-      Alert.alert('Download failed', 'Check your internet connection');
-    } finally {
-      setDownloading(prev => { const s = new Set(prev); s.delete(ct.id); return s; });
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'audio/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      const asset = result.assets[0];
+      const newTrack: Track = {
+        id: `imported_${Date.now()}`,
+        title: asset.name.replace(/\.[^/.]+$/, ''),
+        artist: 'Imported',
+        duration: 0,
+        uri: asset.uri,
+        addedAt: new Date().toISOString(),
+        source: 'imported',
+        playCount: 0,
+      };
+
+      const updatedLibrary = [newTrack, ...library];
+      await saveLibrary(updatedLibrary);
+      Alert.alert('✅ Imported', `"${newTrack.title}" added to library`);
+    } catch (error) {
+      Alert.alert('Import Error', 'Failed to import file');
+      console.error('[MoodMusic] Import error:', error);
     }
   };
 
-  // ── Delete ─────────────────────────────────────────────────────────────────
-  const deleteTrack = async (id: string) => {
-    const track = library.find(t => t.id === id);
-    if (!track) return;
-    Alert.alert('Remove track', `Remove "${track.title}" from library?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: async () => {
-        if (track.source === 'imported' || track.source === 'downloaded') {
-          await FileSystem.deleteAsync(track.localUri, { idempotent: true });
-        }
-        await saveLibrary(library.filter(t => t.id !== id));
-        if (currentTrack?.id === id) stop();
-      }},
-    ]);
+  // ── Render Helpers ──────────────────────────────────────────────────────
+  const renderTrackGrid = (tracks: Track[]) => {
+    return (
+      <FlatList
+        data={tracks}
+        key="grid"
+        numColumns={2}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.gridContainer}
+        renderItem={({ item }) => {
+          const isCurrent = playerState.currentTrack?.id === item.id;
+          const isFavorite = favorites.has(item.id);
+          return (
+            <TouchableOpacity
+              style={[styles.gridItem, { backgroundColor: colors.card }]}
+              onPress={() => playTrack(item)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.gridArtworkWrapper}>
+                {item.artwork ? (
+                  <Image source={{ uri: item.artwork }} style={styles.gridArtwork} />
+                ) : (
+                  <LinearGradient
+                    colors={[PINK + '44', PURPLE + '44']}
+                    style={styles.gridArtwork}
+                  >
+                    <Text style={styles.gridInitials}>
+                      {getInitials(item.title)}
+                    </Text>
+                  </LinearGradient>
+                )}
+                {isCurrent && playerState.isPlaying && (
+                  <View style={styles.gridPlayingOverlay}>
+                    <WaveformBars isPlaying={true} color="#FFF" />
+                  </View>
+                )}
+              </View>
+              <Text style={[styles.gridTitle, { color: colors.text }]} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text style={[styles.gridArtist, { color: colors.textSecondary }]} numberOfLines={1}>
+                {item.artist}
+              </Text>
+              <TouchableOpacity
+                style={styles.gridFavorite}
+                onPress={() => toggleFavorite(item.id)}
+              >
+                <Icon
+                  name={isFavorite ? 'heart' : 'heart-outline'}
+                  size={16}
+                  color={isFavorite ? DANGER : colors.textTertiary}
+                />
+              </TouchableOpacity>
+            </TouchableOpacity>
+          );
+        }}
+      />
+    );
   };
 
-  // ── Filtered views ────────────────────────────────────────────────────────
-  const filteredLib = useMemo(() =>
-    library.filter(t =>
-      !libSearch.trim() ||
-      t.title.toLowerCase().includes(libSearch.toLowerCase()) ||
-      t.artist.toLowerCase().includes(libSearch.toLowerCase())
-    ),
-    [library, libSearch]
-  );
+  const renderTrackList = (tracks: Track[]) => {
+    return (
+      <FlatList
+        data={tracks}
+        key="list"
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContainer}
+        renderItem={({ item }) => {
+          const isCurrent = playerState.currentTrack?.id === item.id;
+          const isFavorite = favorites.has(item.id);
+          return (
+            <TrackItem
+              track={item}
+              isCurrent={isCurrent}
+              isPlaying={playerState.isPlaying}
+              isFavorite={isFavorite}
+              onPress={() => playTrack(item)}
+              onFavorite={() => toggleFavorite(item.id)}
+              onQueue={() => addToQueue(item)}
+            />
+          );
+        }}
+      />
+    );
+  };
 
-  const catalogFilters = ['All', ...Array.from(new Set(ROYALTY_FREE_CATALOG.map(t => t.genre ?? 'Other')))];
-  const filteredCatalog = useMemo(() =>
-    ROYALTY_FREE_CATALOG.filter(t => catalogFilter === 'All' || t.genre === catalogFilter),
-    [catalogFilter]
-  );
+  // ── Loading State ──────────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: colors.bg }]}>
+        <ActivityIndicator size="large" color={PINK} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+          Loading your music...
+        </Text>
+      </View>
+    );
+  }
 
-  const TABS = [
-    { key: 'mood', icon: 'happy-outline', label: 'Mood' },
-    { key: 'library', icon: 'library-outline', label: 'Library' },
-    { key: 'artists', icon: 'people-outline', label: 'Artists' },
-  ] as const;
-
+  // ── Main Render ────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: c.bg }]} edges={['top']}>
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView style={[styles.root, { backgroundColor: colors.bg }]} edges={['top']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      {/* ── Header ── */}
-      <LinearGradient colors={[PINK, PURPLE]} style={styles.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.hdrBack}>
+      {/* Header */}
+      <LinearGradient colors={[PINK, PURPLE]} style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
           <Icon name="arrow-back" size={24} color="#FFF" />
         </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.hdrTitle}>Mood Music</Text>
-          {todayMood && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-              <Icon name={getMoodConfig(todayMood).icon as any} size={12} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.hdrSub}>Feeling {todayMood} today</Text>
-            </View>
-          )}
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>My Music</Text>
+          <Text style={styles.headerSubtitle}>
+            {library.length} songs • {formatTotalDuration(library)}
+          </Text>
         </View>
-        <TouchableOpacity onPress={() => setShowCatalog(true)} style={styles.hdrBtn}>
-          <Icon name="albums-outline" size={22} color="#FFF" />
+        <TouchableOpacity onPress={scanDeviceMusic} style={styles.headerAction}>
+          <Icon name="scan-outline" size={22} color="#FFF" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={importTrack} style={styles.hdrBtn}>
-          <Icon name="add-circle-outline" size={22} color="#FFF" />
+        <TouchableOpacity onPress={importTrack} style={styles.headerAction}>
+          <Icon name="add-outline" size={24} color="#FFF" />
         </TouchableOpacity>
       </LinearGradient>
 
-      {/* ── Tab strip ── */}
-      <View style={[styles.tabStrip, { backgroundColor: c.card, borderBottomColor: c.border }]}>
-        {TABS.map(t => (
-          <TouchableOpacity key={t.key} onPress={() => setActiveTab(t.key as any)} style={styles.tabBtn}>
-            <Icon name={t.icon as any} size={18} color={activeTab === t.key ? PINK : '#666'} />
-            <Text style={[styles.tabLabel, activeTab === t.key && { color: PINK }]}>{t.label}</Text>
-            {activeTab === t.key && <View style={styles.tabIndicator} />}
+      {/* Search Bar */}
+      <View style={[styles.searchContainer, { backgroundColor: colors.card }]}>
+        <Icon name="search" size={20} color={colors.textTertiary} />
+        <TextInput
+          style={[styles.searchInput, { color: colors.text }]}
+          placeholder="Search songs, artists, albums..."
+          placeholderTextColor={colors.textTertiary}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Icon name="close-circle" size={20} color={colors.textTertiary} />
           </TouchableOpacity>
-        ))}
+        )}
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scroll, { paddingBottom: currentTrack ? 110 : 30 }]}
-        showsVerticalScrollIndicator={false}>
-
-        {/* ── MOOD TAB ── */}
-        {activeTab === 'mood' && (
-          <>
-            {todayMood && (
-              <View style={[styles.todayMoodCard, { backgroundColor: getMoodConfig(todayMood).color + '33' }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Icon name={getMoodConfig(todayMood).icon as any} size={28} color={getMoodConfig(todayMood).color} />
-                  <View>
-                    <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 15 }}>Today you're {todayMood}</Text>
-                    <Text style={{ color: '#FFF', opacity: 0.7, fontSize: 12 }}>Music matched to your vibe</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => playMoodQueue(todayMood)}
-                    style={[styles.playMoodBtn, { backgroundColor: getMoodConfig(todayMood).color }]}>
-                    <Icon name="play" size={16} color="#FFF" />
-                    <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 11 }}>Play</Text>
-                  </TouchableOpacity>
-                </View>
+      {/* Tab Navigation */}
+      <View style={[styles.tabContainer, { borderBottomColor: colors.border }]}>
+        {['library', 'favorites', 'playlists', 'recent'].map((tab) => {
+          const counts = {
+            library: library.length,
+            favorites: favorites.size,
+            playlists: playlists.length,
+            recent: recentlyPlayed.length,
+          };
+          return (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tab, activeTab === tab && styles.tabActive]}
+              onPress={() => setActiveTab(tab as any)}
+            >
+              <Text style={[
+                styles.tabText,
+                activeTab === tab && { color: PINK }
+              ]}>
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </Text>
+              <View style={[
+                styles.tabBadge,
+                activeTab === tab && styles.tabBadgeActive,
+              ]}>
+                <Text style={styles.tabBadgeText}>
+                  {counts[tab as keyof typeof counts]}
+                </Text>
               </View>
-            )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
-            {recentlyPlayed.length > 0 && (
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: c.text }]}>Recently Played</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-                  {recentlyPlayed.slice(0, 8).map(track => (
-                    <TouchableOpacity key={track.id} onPress={() => handlePlayTrack(track, recentlyPlayed)}
-                      style={[styles.recentCard, { backgroundColor: c.card }]}>
-                      <LinearGradient colors={[PINK + '44', PURPLE + '44']} style={styles.recentArt}>
-                        {currentTrack?.id === track.id
-                          ? <WaveformBars isPlaying={isPlaying} color={PINK} />
-                          : <Icon name="musical-notes" size={20} color={PINK} />
-                        }
-                      </LinearGradient>
-                      <Text style={[styles.recentTitle, { color: c.text }]} numberOfLines={1}>{track.title}</Text>
-                      <Text style={[styles.recentArtist, { color: c.textSecondary }]} numberOfLines={1}>{track.artist}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
+      {/* Sort & View Controls */}
+      <View style={[styles.controlsRow, { backgroundColor: colors.card }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {['title', 'artist', 'duration', 'recent'].map((sort) => (
+            <TouchableOpacity
+              key={sort}
+              onPress={() => setSortBy(sort as any)}
+              style={[
+                styles.sortChip,
+                sortBy === sort && { backgroundColor: PINK },
+              ]}
+            >
+              <Text style={[
+                styles.sortChipText,
+                sortBy === sort && { color: '#FFF' }
+              ]}>
+                {sort.charAt(0).toUpperCase() + sort.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        <TouchableOpacity
+          onPress={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+          style={styles.viewToggle}
+        >
+          <Icon
+            name={viewMode === 'list' ? 'grid-outline' : 'list-outline'}
+            size={22}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+      </View>
 
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: c.text }]}>Pick a Mood</Text>
-              <View style={styles.moodGrid}>
-                {MOODS.map(m => {
-                  const count = library.filter(t => t.mood === m.label).length;
-                  const active = selectedMood === m.label || todayMood === m.label;
-                  return (
-                    <TouchableOpacity key={m.label} onPress={() => playMoodQueue(m.label)}
-                      style={[styles.moodCard, { backgroundColor: active ? m.color : c.card, borderColor: active ? m.color : c.border }]}>
-                      <Icon name={m.icon as any} size={26} color={active ? '#FFF' : m.color} />
-                      <Text style={[styles.moodLabel, { color: active ? '#FFF' : c.text }]}>{m.label}</Text>
-                      <Text style={[styles.moodCount, { color: active ? 'rgba(255,255,255,0.7)' : c.textTertiary }]}>
-                        {count} track{count !== 1 ? 's' : ''}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: c.text }]}>Our Song 💕</Text>
-              <TouchableOpacity style={[styles.ourSongCard, { backgroundColor: c.card }]}
-                onPress={() => Linking.openURL(OUR_SONG.uri).catch(() => Alert.alert('Spotify required'))}>
-                <LinearGradient colors={[PINK, PURPLE]} style={styles.ourSongArt}>
-                  <Icon name="rose" size={32} color="#FFF" />
-                </LinearGradient>
-                <View style={{ flex: 1 }}>
-                  <Text style={[{ fontSize: 16, fontWeight: '700' }, { color: c.text }]}>{OUR_SONG.title}</Text>
-                  <Text style={[{ fontSize: 13 }, { color: c.textSecondary }]}>{OUR_SONG.artist}</Text>
-                </View>
-                <Icon name="musical-notes" size={24} color={PINK} />
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-
-        {/* ── LIBRARY TAB ── */}
+      {/* Content */}
+      <View style={styles.content}>
         {activeTab === 'library' && (
-          <>
-            <View style={styles.searchWrap}>
-              <Icon name="search" size={18} color="#666" style={styles.searchIcon} />
-              <TextInput
-                style={[styles.searchInput, { backgroundColor: c.input, color: c.text }]}
-                placeholder="Search your library..."
-                placeholderTextColor={c.textTertiary}
-                value={libSearch}
-                onChangeText={setLibSearch}
-              />
-            </View>
-
-            {libLoading ? (
-              <ActivityIndicator size="large" color={PINK} style={{ marginTop: 40 }} />
-            ) : filteredLib.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Icon name="library-outline" size={56} color="#444" />
-                <Text style={[styles.emptyTitle, { color: c.text }]}>
-                  {libSearch ? 'No results' : 'Your library is empty'}
-                </Text>
-                <Text style={[styles.emptySub, { color: c.textSecondary }]}>
-                  {libSearch ? 'Try a different search' : 'Import or download some music'}
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.libraryList}>
-                {filteredLib.map(track => {
-                  const isFav = favourites.has(track.id);
-                  const isCurrent = currentTrack?.id === track.id;
-                  return (
-                    <View key={track.id} style={[styles.libraryItem, { backgroundColor: c.card }]}>
-                      <TouchableOpacity style={styles.libraryItemContent}
-                        onPress={() => handlePlayTrack(track, library)}>
-                        <LinearGradient colors={[PINK + '44', PURPLE + '44']} style={styles.libraryArt}>
-                          {isCurrent && isPlaying
-                            ? <WaveformBars isPlaying={isPlaying} color={PINK} />
-                            : <Icon name={isCurrent ? 'pause' : 'musical-note'} size={20} color={isCurrent ? PINK : '#666'} />
-                          }
-                        </LinearGradient>
-                        <View style={{ flex: 1, marginLeft: 12 }}>
-                          <Text style={[styles.libraryTitle, { color: c.text }]} numberOfLines={1}>{track.title}</Text>
-                          <Text style={[styles.libraryArtist, { color: c.textSecondary }]} numberOfLines={1}>{track.artist}</Text>
-                          {track.genre && (
-                            <Text style={[styles.libraryGenre, { color: c.textTertiary }]}>{track.genre}</Text>
-                          )}
-                        </View>
-                        <TouchableOpacity onPress={() => toggleFav(track.id)} style={styles.favBtn}>
-                          <Icon name={isFav ? 'heart' : 'heart-outline'} size={18} color={isFav ? DANGER : '#666'} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => addToQueue(track)} style={styles.queueBtn}>
-                          <Icon name="add-circle-outline" size={18} color="#666" />
-                        </TouchableOpacity>
-                      </TouchableOpacity>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-          </>
+          filteredLibrary.length === 0 ? (
+            <EmptyState
+              icon="musical-notes-outline"
+              title={searchQuery ? 'No results found' : 'Your library is empty'}
+              subtitle={searchQuery ? 'Try a different search' : 'Scan your device or import music'}
+              action={searchQuery ? undefined : scanDeviceMusic}
+              actionLabel={searchQuery ? undefined : 'Scan Device'}
+            />
+          ) : viewMode === 'grid' ? (
+            renderTrackGrid(filteredLibrary)
+          ) : (
+            renderTrackList(filteredLibrary)
+          )
         )}
 
-        {/* ── ARTISTS TAB ── */}
-        {activeTab === 'artists' && (
-          <>
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: c.text }]}>Featured Artists</Text>
-              <View style={styles.artistGrid}>
-                {CURATED_ARTIST_CATALOG.map((artist, i) => (
-                  <TouchableOpacity key={i} style={[styles.artistCard, { backgroundColor: c.card }]}
-                    onPress={() => Linking.openURL(artist.uri).catch(() => Alert.alert('Spotify required'))}>
-                    <LinearGradient colors={[PINK + '66', PURPLE + '66']} style={styles.artistArt}>
-                      <Icon name="person" size={32} color="#FFF" />
+        {activeTab === 'favorites' && (
+          favorites.size === 0 ? (
+            <EmptyState
+              icon="heart-outline"
+              title="No favorites yet"
+              subtitle="Like songs to see them here"
+            />
+          ) : viewMode === 'grid' ? (
+            renderTrackGrid(library.filter(t => favorites.has(t.id)))
+          ) : (
+            renderTrackList(library.filter(t => favorites.has(t.id)))
+          )
+        )}
+
+        {activeTab === 'playlists' && (
+          playlists.length === 0 ? (
+            <EmptyState
+              icon="albums-outline"
+              title="No playlists"
+              subtitle="Create your first playlist"
+              action={() => setShowPlaylistModal(true)}
+              actionLabel="Create Playlist"
+            />
+          ) : (
+            <FlatList
+              data={playlists}
+              keyExtractor={(item) => item.id}
+              numColumns={2}
+              contentContainerStyle={styles.playlistGrid}
+              renderItem={({ item }) => {
+                const tracks = item.tracks.map(id => library.find(t => t.id === id)).filter(Boolean) as Track[];
+                return (
+                  <TouchableOpacity
+                    style={[styles.playlistCard, { backgroundColor: colors.card }]}
+                    onPress={() => setSelectedPlaylist(item)}
+                  >
+                    <LinearGradient
+                      colors={[PINK + '44', PURPLE + '44']}
+                      style={styles.playlistArt}
+                    >
+                      <Icon name="musical-notes" size={32} color={PINK} />
+                      <Text style={styles.playlistTrackCount}>
+                        {tracks.length} tracks
+                      </Text>
                     </LinearGradient>
-                    <Text style={[styles.artistName, { color: c.text }]} numberOfLines={1}>{artist.title}</Text>
-                    <Text style={[styles.artistSub, { color: c.textSecondary }]} numberOfLines={1}>{artist.artist}</Text>
+                    <Text style={[styles.playlistName, { color: colors.text }]} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text style={[styles.playlistUpdated, { color: colors.textTertiary }]}>
+                      Updated {formatDate(item.updated)}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.playlistDelete}
+                      onPress={() => deletePlaylist(item.id)}
+                    >
+                      <Icon name="trash-outline" size={16} color={DANGER} />
+                    </TouchableOpacity>
                   </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          </>
+                );
+              }}
+            />
+          )
         )}
-      </ScrollView>
 
-      {/* ── Mini Player ── */}
-      {currentTrack && (
+        {activeTab === 'recent' && (
+          recentlyPlayed.length === 0 ? (
+            <EmptyState
+              icon="time-outline"
+              title="No recent songs"
+              subtitle="Songs you play will appear here"
+            />
+          ) : viewMode === 'grid' ? (
+            renderTrackGrid(recentlyPlayed)
+          ) : (
+            renderTrackList(recentlyPlayed)
+          )
+        )}
+      </View>
+
+      {/* Mini Player */}
+      {playerState.currentTrack && (
         <MiniPlayer
-          track={currentTrack}
-          isPlaying={isPlaying}
-          onTogglePlay={togglePlayPause}
-          onNext={playNext}
+          track={playerState.currentTrack}
+          isPlaying={playerState.isPlaying}
+          onTogglePlay={() => playerRef.current.togglePlayPause()}
+          onNext={() => playerRef.current.skipNext()}
+          onPrev={() => playerRef.current.skipPrevious()}
           onExpand={() => setShowNowPlaying(true)}
+          colors={colors}
         />
       )}
 
-      {/* ── Now Playing Sheet ── */}
+      {/* Now Playing Sheet */}
       <NowPlayingSheet
         visible={showNowPlaying}
         onClose={() => setShowNowPlaying(false)}
-        engine={engine}
-        onDeleteTrack={deleteTrack}
-        favourites={favourites}
-        onToggleFav={toggleFav}
+        player={playerRef.current}
+        favorites={favorites}
+        onToggleFavorite={toggleFavorite}
+        onDeleteTrack={(id) => {
+          const updated = library.filter(t => t.id !== id);
+          saveLibrary(updated);
+          if (playerState.currentTrack?.id === id) {
+            playerRef.current.pause();
+          }
+        }}
       />
 
-      {/* ── Catalog Modal ── */}
-      <Modal visible={showCatalog} animationType="slide" onRequestClose={() => setShowCatalog(false)}>
-        <SafeAreaView style={[styles.catalogModal, { backgroundColor: c.bg }]}>
-          <View style={styles.catalogHeader}>
-            <Text style={[styles.catalogTitle, { color: c.text }]}>Music Catalog</Text>
-            <TouchableOpacity onPress={() => setShowCatalog(false)} style={styles.catalogClose}>
-              <Icon name="close" size={24} color="#FFF" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catalogFilters}>
-            {catalogFilters.map(f => (
-              <TouchableOpacity key={f} onPress={() => setCatalogFilter(f)}
-                style={[styles.catalogFilterChip, catalogFilter === f && { backgroundColor: PINK }]}>
-                <Text style={[styles.catalogFilterText, catalogFilter === f && { color: '#FFF' }]}>{f}</Text>
+      {/* Create Playlist Modal */}
+      <Modal visible={showPlaylistModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              Create Playlist
+            </Text>
+            <TextInput
+              style={[styles.modalInput, { 
+                backgroundColor: colors.input,
+                color: colors.text,
+                borderColor: colors.border,
+              }]}
+              placeholder="Playlist name"
+              placeholderTextColor={colors.textTertiary}
+              value={newPlaylistName}
+              onChangeText={setNewPlaylistName}
+              autoFocus
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancel]}
+                onPress={() => setShowPlaylistModal(false)}
+              >
+                <Text style={styles.modalButtonText}>Cancel</Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: PINK }]}
+                onPress={createPlaylist}
+              >
+                <Text style={styles.modalButtonText}>Create</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
-          <FlatList
-            data={filteredCatalog}
-            keyExtractor={t => t.id}
-            contentContainerStyle={styles.catalogList}
-            renderItem={({ item }) => {
-              const inLibrary = library.some(t => t.id === item.id);
-              const isDownloading = downloading.has(item.id);
-              return (
-                <View style={[styles.catalogItem, { backgroundColor: c.card }]}>
-                  <LinearGradient colors={[PINK + '44', PURPLE + '44']} style={styles.catalogArt}>
-                    <Icon name="musical-notes" size={24} color={PINK} />
-                  </LinearGradient>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[styles.catalogItemTitle, { color: c.text }]} numberOfLines={1}>{item.title}</Text>
-                    <Text style={[styles.catalogItemArtist, { color: c.textSecondary }]} numberOfLines={1}>{item.artist}</Text>
-                    <View style={{ flexDirection: 'row', gap: 12, marginTop: 2 }}>
-                      {item.genre && <Text style={[styles.catalogItemMeta, { color: c.textTertiary }]}>{item.genre}</Text>}
-                      {item.bpm && <Text style={[styles.catalogItemMeta, { color: c.textTertiary }]}>{item.bpm} BPM</Text>}
-                      <Text style={[styles.catalogItemMeta, { color: c.textTertiary }]}>{formatTime(item.duration)}</Text>
-                    </View>
-                  </View>
-                  {inLibrary ? (
-                    <View style={[styles.catalogBadge, { backgroundColor: SUCCESS + '22' }]}>
-                      <Icon name="checkmark-circle" size={16} color={SUCCESS} />
-                      <Text style={[styles.catalogBadgeText, { color: SUCCESS }]}>Added</Text>
-                    </View>
-                  ) : isDownloading ? (
-                    <ActivityIndicator size="small" color={PINK} />
-                  ) : (
-                    <TouchableOpacity style={[styles.catalogDownloadBtn, { backgroundColor: PINK }]}
-                      onPress={() => downloadTrack(item)}>
-                      <Icon name="cloud-download-outline" size={16} color="#FFF" />
-                      <Text style={styles.catalogDownloadText}>Download</Text>
-                    </TouchableOpacity>
-                  )}
+      {/* Playlist Detail Modal */}
+      <Modal visible={!!selectedPlaylist} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card, maxHeight: '80%' }]}>
+            <View style={styles.playlistDetailHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                {selectedPlaylist?.name}
+              </Text>
+              <TouchableOpacity onPress={() => setSelectedPlaylist(null)}>
+                <Icon name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={selectedPlaylist?.tracks.map(id => library.find(t => t.id === id)).filter(Boolean) as Track[] || []}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View style={styles.playlistTrackItem}>
+                  <TouchableOpacity
+                    style={styles.playlistTrackContent}
+                    onPress={() => playTrack(item)}
+                  >
+                    <Text style={[styles.playlistTrackTitle, { color: colors.text }]}>
+                      {item.title}
+                    </Text>
+                    <Text style={[styles.playlistTrackArtist, { color: colors.textSecondary }]}>
+                      {item.artist}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (selectedPlaylist) {
+                        removeFromPlaylist(selectedPlaylist.id, item.id);
+                        setSelectedPlaylist({
+                          ...selectedPlaylist,
+                          tracks: selectedPlaylist.tracks.filter(id => id !== item.id),
+                        });
+                      }
+                    }}
+                  >
+                    <Icon name="close" size={20} color={colors.textTertiary} />
+                  </TouchableOpacity>
                 </View>
-              );
-            }}
-          />
-        </SafeAreaView>
+              )}
+            />
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────────────
+// ── Mini Player Component ──────────────────────────────────────────────────
+const MiniPlayer = memo(({ 
+  track, 
+  isPlaying, 
+  onTogglePlay, 
+  onNext, 
+  onPrev, 
+  onExpand,
+  colors,
+}: {
+  track: Track;
+  isPlaying: boolean;
+  onTogglePlay: () => void;
+  onNext: () => void;
+  onPrev: () => void;
+  onExpand: () => void;
+  colors: any;
+}) => {
+  return (
+    <TouchableOpacity
+      style={[styles.miniPlayer, { backgroundColor: colors.card }]}
+      onPress={onExpand}
+      activeOpacity={0.9}
+    >
+      <View style={styles.miniPlayerContent}>
+        <View style={styles.miniArtworkWrapper}>
+          {track.artwork ? (
+            <Image source={{ uri: track.artwork }} style={styles.miniArtwork} />
+          ) : (
+            <LinearGradient
+              colors={[PINK + '44', PURPLE + '44']}
+              style={styles.miniArtwork}
+            >
+              <Text style={styles.miniInitials}>
+                {getInitials(track.title)}
+              </Text>
+            </LinearGradient>
+          )}
+          {isPlaying && (
+            <View style={styles.miniPlayingIndicator}>
+              <WaveformBars isPlaying={isPlaying} color="#FFF" />
+            </View>
+          )}
+        </View>
+
+        <View style={styles.miniInfo}>
+          <Text style={[styles.miniTitle, { color: colors.text }]} numberOfLines={1}>
+            {track.title}
+          </Text>
+          <Text style={[styles.miniArtist, { color: colors.textSecondary }]} numberOfLines={1}>
+            {track.artist}
+          </Text>
+        </View>
+
+        <View style={styles.miniControls}>
+          <TouchableOpacity onPress={onPrev} style={styles.miniControlBtn}>
+            <Icon name="play-skip-back" size={20} color={colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onTogglePlay}
+            style={[styles.miniPlayBtn, { backgroundColor: PINK }]}
+          >
+            <Icon name={isPlaying ? 'pause' : 'play'} size={20} color="#FFF" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onNext} style={styles.miniControlBtn}>
+            <Icon name="play-skip-forward" size={20} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+MiniPlayer.displayName = 'MiniPlayer';
+
+// ── Empty State Component ──────────────────────────────────────────────────
+const EmptyState = memo(({ 
+  icon, 
+  title, 
+  subtitle, 
+  action, 
+  actionLabel 
+}: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  action?: () => void;
+  actionLabel?: string;
+}) => {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.emptyState}>
+      <Icon name={icon} size={64} color={colors.textTertiary} />
+      <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
+      <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
+      {action && actionLabel && (
+        <TouchableOpacity
+          style={[styles.emptyAction, { backgroundColor: PINK }]}
+          onPress={action}
+        >
+          <Text style={styles.emptyActionText}>{actionLabel}</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+});
+
+EmptyState.displayName = 'EmptyState';
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function formatTotalDuration(tracks: Track[]): string {
+  const total = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
+
+function formatDate(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
+  if (days < 365) return `${Math.floor(days / 30)} months ago`;
+  return `${Math.floor(days / 365)} years ago`;
+}
+
+// ── Styles ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  
+  // Loading
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 14,
+  },
+
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
     paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
-    gap: 10,
+    gap: 8,
   },
-  hdrBack: { padding: 4 },
-  hdrTitle: { fontSize: 20, fontWeight: '700', color: '#FFF' },
-  hdrSub: { fontSize: 12, color: 'rgba(255,255,255,0.8)' },
-  hdrBtn: { padding: 6 },
-  tabStrip: {
+  headerBack: {
+    padding: 4,
+  },
+  headerCenter: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  headerAction: {
+    padding: 6,
+  },
+
+  // Search
+  searchContainer: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    paddingVertical: 4,
+  },
+
+  // Tabs
+  tabContainer: {
+    flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 8,
+    borderBottomWidth: 1,
+    gap: 16,
   },
-  tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, position: 'relative', gap: 4 },
-  tabLabel: { fontSize: 12, color: '#666', fontWeight: '500' },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: -1,
-    height: 2,
-    width: 24,
-    backgroundColor: PINK,
-    borderRadius: 1,
-  },
-  scroll: { paddingHorizontal: 16, paddingTop: 16 },
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12 },
-  todayMoodCard: { borderRadius: 16, padding: 16, marginBottom: 24 },
-  playMoodBtn: {
+  tab: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginLeft: 'auto',
+    paddingVertical: 4,
   },
-  recentCard: {
-    width: 100,
-    borderRadius: 12,
-    padding: 8,
+  tabActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: PINK,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#888',
+  },
+  tabBadge: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  tabBadgeActive: {
+    backgroundColor: PINK + '33',
+  },
+  tabBadgeText: {
+    fontSize: 10,
+    color: '#888',
+  },
+
+  // Controls
+  controlsRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 8,
   },
-  recentArt: { width: 84, height: 84, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  recentTitle: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
-  recentArtist: { fontSize: 10, textAlign: 'center' },
-  moodGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  moodCard: {
-    width: (W - 48) / 4 - 6,
+  sortChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 6,
+  },
+  sortChipText: {
+    fontSize: 12,
+    color: '#888',
+  },
+  viewToggle: {
+    padding: 6,
+  },
+
+  // Content
+  content: {
+    flex: 1,
+  },
+
+  // List
+  listContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 100,
+  },
+  trackItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 4,
+    gap: 10,
+  },
+  trackArtWrapper: {
+    position: 'relative',
+  },
+  trackArt: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playingIndicator: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: PINK,
+    borderRadius: 10,
+    padding: 2,
+  },
+  trackInfo: {
+    flex: 1,
+    gap: 1,
+  },
+  trackTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  trackArtist: {
+    fontSize: 12,
+  },
+  trackAlbum: {
+    fontSize: 11,
+  },
+  trackActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  trackActionBtn: {
+    padding: 4,
+  },
+  trackDuration: {
+    fontSize: 12,
+    minWidth: 40,
+    textAlign: 'right',
+  },
+
+  // Grid
+  gridContainer: {
+    paddingHorizontal: 12,
+    paddingBottom: 100,
+  },
+  gridItem: {
+    flex: 1,
+    margin: 4,
     padding: 10,
     borderRadius: 12,
     alignItems: 'center',
-    borderWidth: 1,
-    gap: 2,
+    maxWidth: (W - 48) / 2,
   },
-  moodLabel: { fontSize: 11, fontWeight: '600' },
-  moodCount: { fontSize: 9 },
-  ourSongCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+  gridArtworkWrapper: {
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 1,
   },
-  ourSongArt: { width: 56, height: 56, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 12,
+  gridArtwork: {
+    width: '100%',
+    height: '100%',
     borderRadius: 10,
-    backgroundColor: '#1E1E1E',
-    borderWidth: 1,
-    borderColor: '#2A2A2A',
-  },
-  searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, height: 44, fontSize: 14, paddingVertical: 8 },
-  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 8 },
-  emptyTitle: { fontSize: 18, fontWeight: '600' },
-  emptySub: { fontSize: 14 },
-  libraryList: { gap: 10 },
-  libraryItem: { borderRadius: 12, overflow: 'hidden' },
-  libraryItemContent: { flexDirection: 'row', alignItems: 'center', padding: 10 },
-  libraryArt: { width: 48, height: 48, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  libraryTitle: { fontSize: 14, fontWeight: '600' },
-  libraryArtist: { fontSize: 12 },
-  libraryGenre: { fontSize: 10, marginTop: 2 },
-  favBtn: { padding: 6 },
-  queueBtn: { padding: 6 },
-  artistGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  artistCard: {
-    width: (W - 48) / 2 - 4,
-    padding: 12,
-    borderRadius: 12,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    gap: 4,
+    justifyContent: 'center',
   },
-  artistArt: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  artistName: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
-  artistSub: { fontSize: 12, textAlign: 'center' },
-  miniPlayer:{
-    flexDirection: 'row',
-    paddingTop: 12,
+  gridInitials: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  gridPlayingOverlay: {
     position: 'absolute',
-    paddingBottom: 8,
-    borderTopWidth: 0,
-    bottom: 70,
+    top: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#1E1E1E',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 30,
-    zIndex: 999,
-    paddingHorizontal: 16,
-    // ✅ Curved top edges
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    overflow: 'hidden',
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    borderTopColor: '#2A2A2A',
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  miniArt: { width: 44, height: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  miniInfo: { flex: 1, marginLeft: 12 },
-  miniTitle: { color: '#FFF', fontWeight: '600', fontSize: 13 },
-  miniArtist: { color: '#888', fontSize: 11 },
-  miniBtn: { padding: 8 },
-  nowPlayingOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
+  gridTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  gridArtist: {
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 1,
+  },
+  gridFavorite: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 4,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 12,
+  },
+
+  // Playlists
+  playlistGrid: {
+    paddingHorizontal: 12,
+    paddingBottom: 100,
+  },
+  playlistCard: {
+    flex: 1,
+    margin: 4,
+    padding: 10,
+    borderRadius: 12,
+    maxWidth: (W - 48) / 2,
+    position: 'relative',
+  },
+  playlistArt: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  playlistTrackCount: {
+    fontSize: 11,
+    color: '#FFF',
+    fontWeight: '500',
+  },
+  playlistName: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 6,
+  },
+  playlistUpdated: {
+    fontSize: 10,
+    marginTop: 1,
+  },
+  playlistDelete: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    padding: 4,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 12,
+  },
+  playlistDetailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  playlistTrackItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  playlistTrackContent: {
+    flex: 1,
+  },
+  playlistTrackTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  playlistTrackArtist: {
+    fontSize: 12,
+  },
+
+  // Empty State
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    gap: 12,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  emptyAction: {
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginTop: 8,
+  },
+  emptyActionText: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+
+  // Mini Player
+  miniPlayer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 12,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+  },
+  miniPlayerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  miniArtworkWrapper: {
+    position: 'relative',
+  },
+  miniArtwork: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniInitials: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  miniPlayingIndicator: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    backgroundColor: PINK,
+    borderRadius: 8,
+    padding: 2,
+  },
+  miniInfo: {
+    flex: 1,
+    gap: 1,
+  },
+  miniTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  miniArtist: {
+    fontSize: 11,
+  },
+  miniControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  miniControlBtn: {
+    padding: 4,
+  },
+  miniPlayBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Now Playing Sheet
+  nowPlayingOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
   nowPlayingSheet: {
-    height: '85%',
+    height: Platform.OS === 'ios' ? '90%' : '95%',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 40,
   },
-  sheetHandle: { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 2, alignSelf: 'center', marginBottom: 12 },
-  nowPlayingClose: { alignSelf: 'flex-end', padding: 4 },
-  nowPlayingArt: { width: 200, height: 200, borderRadius: 100, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  nowPlayingTitle: { fontSize: 20, fontWeight: '700', color: '#FFF' },
-  nowPlayingArtist: { fontSize: 14, color: '#AAA', textAlign: 'center' },
-  genreTag: { backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, alignSelf: 'center', marginTop: 6 },
-  genreTagText: { color: '#AAA', fontSize: 11 },
-  nowPlayingProgressWrap: { marginBottom: 12 },
-  progressTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, position: 'relative' },
-  progressFill: { height: 4, borderRadius: 2 },
-  progressThumb: { position: 'absolute', top: -4, width: 12, height: 12, borderRadius: 6, transform: [{ translateX: -6 }] },
-  timeRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  timeText: { color: '#888', fontSize: 11 },
-  transportRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 20 },
-  playPauseBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: PINK, alignItems: 'center', justifyContent: 'center' },
-  repeatOneDot: { position: 'absolute', top: 2, right: 2, width: 6, height: 6, borderRadius: 3, backgroundColor: PINK },
-  eqChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#333' },
-  eqChipTxt: { fontSize: 11, color: '#888' },
-  sleepChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#333' },
-  sleepChipTxt: { fontSize: 11, color: '#888' },
-  removeFromLibraryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, marginTop: 20 },
-  removeFromLibraryTxt: { color: DANGER, fontSize: 13 },
-  queueRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
-  queueRowActive: { backgroundColor: 'rgba(255,107,157,0.1)', borderRadius: 8 },
-  queueTitle: { color: '#FFF', fontSize: 14 },
-  queueArtist: { color: '#888', fontSize: 12 },
-  queueDuration: { color: '#666', fontSize: 12 },
-  catalogModal: { flex: 1, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12 },
-  catalogHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12 },
-  catalogTitle: { fontSize: 20, fontWeight: '700' },
-  catalogClose: { padding: 4 },
-  catalogFilters: { paddingHorizontal: 16, paddingBottom: 12 },
-  catalogFilterChip: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16, backgroundColor: '#2A2A2A', marginRight: 8 },
-  catalogFilterText: { color: '#888', fontSize: 13 },
-  catalogList: { paddingHorizontal: 16, paddingBottom: 20, gap: 10 },
-  catalogItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12 },
-  catalogArt: { width: 48, height: 48, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  catalogItemTitle: { fontSize: 14, fontWeight: '600' },
-  catalogItemArtist: { fontSize: 12 },
-  catalogItemMeta: { fontSize: 10 },
-  catalogBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  catalogBadgeText: { fontSize: 11, fontWeight: '500' },
-  catalogDownloadBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  catalogDownloadText: { color: '#FFF', fontSize: 11, fontWeight: '600' },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  nowPlayingClose: {
+    alignSelf: 'flex-end',
+    padding: 4,
+  },
+  nowPlayingTabs: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 24,
+    marginBottom: 16,
+  },
+  nowPlayingTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  nowPlayingTabActive: {
+    backgroundColor: 'rgba(255,107,157,0.2)',
+  },
+  nowPlayingTabText: {
+    fontSize: 12,
+    color: '#888',
+    fontWeight: '500',
+  },
+  artworkContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  artworkImage: {
+    width: 240,
+    height: 240,
+    borderRadius: 16,
+  },
+  artworkPlaceholder: {
+    width: 240,
+    height: 240,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  artworkInitials: {
+    fontSize: 64,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  artworkOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nowPlayingInfo: {
+    marginBottom: 16,
+    gap: 2,
+  },
+  nowPlayingTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  nowPlayingTitle: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  nowPlayingArtist: {
+    fontSize: 15,
+    color: '#AAA',
+  },
+  nowPlayingAlbum: {
+    fontSize: 13,
+    color: '#666',
+  },
+  nowPlayingProgress: {
+    marginBottom: 16,
+    gap: 4,
+  },
+  progressTrack: {
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 2,
+    position: 'relative',
+  },
+  progressFill: {
+    height: 4,
+    borderRadius: 2,
+  },
+  progressThumb: {
+    position: 'absolute',
+    top: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    transform: [{ translateX: -6 }],
+  },
+  timeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  timeText: {
+    color: '#888',
+    fontSize: 11,
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
+  controlBtn: {
+    padding: 4,
+  },
+  playBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  additionalControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 20,
+  },
+  extraControl: {
+    padding: 4,
+  },
+  extraControlText: {
+    color: '#888',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  volumeSlider: {
+    flex: 1,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  volumeFill: {
+    height: 4,
+    borderRadius: 2,
+  },
+  sleepTimerSection: {
+    marginBottom: 16,
+    gap: 6,
+  },
+  sleepTimerLabel: {
+    color: '#888',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  sleepTimerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  sleepTimerOptionActive: {
+    backgroundColor: PURPLE,
+    borderColor: PURPLE,
+  },
+  sleepTimerOptionText: {
+    color: '#888',
+    fontSize: 11,
+  },
+  sleepTimerCancel: {
+    padding: 4,
+  },
+  eqSection: {
+    gap: 6,
+  },
+  eqLabel: {
+    color: '#888',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  eqOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  eqOptionActive: {
+    backgroundColor: PINK,
+    borderColor: PINK,
+  },
+  eqOptionText: {
+    color: '#888',
+    fontSize: 11,
+  },
+
+  // Queue
+  queueList: {
+    flex: 1,
+    marginTop: 8,
+  },
+  queueItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 2,
+  },
+  queueItemCurrent: {
+    backgroundColor: 'rgba(255,107,157,0.1)',
+  },
+  queueItemInfo: {
+    flex: 1,
+    gap: 1,
+  },
+  queueItemTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#FFF',
+  },
+  queueItemArtist: {
+    fontSize: 12,
+    color: '#888',
+  },
+  queueItemDuration: {
+    fontSize: 12,
+    color: '#666',
+  },
+
+  // Lyrics
+  lyricsContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  lyricsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  lyricsSubtext: {
+    fontSize: 14,
+    color: '#888',
+  },
+  lyricsPlaceholder: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    borderRadius: 20,
+    padding: 20,
+    gap: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  modalInput: {
+    fontSize: 16,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalCancel: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  modalButtonText: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
 });
