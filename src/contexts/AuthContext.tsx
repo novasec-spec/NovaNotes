@@ -43,8 +43,8 @@ const loadUser = async () => {
         setLoading(false);
       }
 
-      router.replace("/(tabs)/chat/login"); // or your correct login route
-      return;
+      router.replace("/(tabs)/chat/welcome"); // or your correct login route
+       return;
     }
 
     const {

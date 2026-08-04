@@ -1,0 +1,6 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "packages": ["com.novasec.notes.musicnotification.MusicNotificationPackage"]
+  }
+}

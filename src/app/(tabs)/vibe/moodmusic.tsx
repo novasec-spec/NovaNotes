@@ -26,7 +26,6 @@ import {
   StatusBar,
   AppState,
   RefreshControl,
-  PermissionsAndroid,
   Linking,
   Image,
 } from 'react-native';
@@ -36,12 +35,8 @@ import MCIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router } from 'expo-router';
-import {
-  useAudioPlayer,
-  useAudioPlayerStatus,
-  setAudioModeAsync,
-} from 'expo-audio';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import MusicNotificationBridge from '../../../../modules/expo-music-notification';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as MediaLibrary from 'expo-media-library';
 import * as Notifications from 'expo-notifications';
@@ -172,23 +167,38 @@ class AudioScanner {
         first: 1000,
       });
 
-      // Process tracks
+      // Build an albumId -> artwork map ONCE up front. The previous version
+      // called MediaLibrary.getAlbumsAsync() (which lists every album on the
+      // device) separately for EACH track that had an albumId — for a
+      // library of a few hundred songs that's hundreds of redundant, slow
+      // native calls, which is what made scanning look like it hung forever.
+      this.notifyProgress?.(0, media.assets.length);
+      const albumArtworkMap = await this.buildAlbumArtworkMap();
+
+      // Process tracks in small batches so we can report progress and avoid
+      // hammering the native bridge with hundreds of concurrent calls at once.
       const tracks: Track[] = [];
-      const batchSize = 50;
+      const batchSize = 25;
 
       for (let i = 0; i < media.assets.length; i += batchSize) {
         const batch = media.assets.slice(i, i + batchSize);
         const batchTracks = await Promise.all(
           batch.map(async (asset) => {
-            const info = await MediaLibrary.getAssetInfoAsync(asset);
+            let info: MediaLibrary.AssetInfo | null = null;
+            try {
+              info = await MediaLibrary.getAssetInfoAsync(asset);
+            } catch (e) {
+              // A single unreadable file shouldn't abort the whole scan.
+              console.warn('[AudioScanner] Could not read asset info for', asset.filename, e);
+            }
             return {
               id: asset.id,
               title: asset.filename?.replace(/\.[^/.]+$/, '') || 'Unknown Track',
               artist: this.extractMetadata(info, 'artist') || 'Unknown Artist',
               album: this.extractMetadata(info, 'album') || '',
               duration: asset.duration || 0,
-              uri: info.localUri || asset.uri,
-              artwork: asset.albumId ? await this.getAlbumArtwork(asset.albumId) : undefined,
+              uri: info?.localUri || asset.uri,
+              artwork: asset.albumId ? albumArtworkMap.get(asset.albumId) : undefined,
               genre: this.extractMetadata(info, 'genre') || '',
               year: this.extractMetadata(info, 'year') || '',
               addedAt: new Date().toISOString(),
@@ -198,6 +208,7 @@ class AudioScanner {
           })
         );
         tracks.push(...batchTracks);
+        this.notifyProgress?.(Math.min(i + batchSize, media.assets.length), media.assets.length);
       }
 
       // Cache results
@@ -212,25 +223,58 @@ class AudioScanner {
     }
   }
 
+  notifyProgress: ((done: number, total: number) => void) | null = null;
+
+  private async buildAlbumArtworkMap(): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    try {
+      const albums = await MediaLibrary.getAlbumsAsync({ includeSmartAlbums: true });
+      await Promise.all(
+        albums.map(async (album) => {
+          if (!album.assetCount || album.assetCount === 0) return;
+          try {
+            const assets = await MediaLibrary.getAssetsAsync({ album, first: 1 });
+            if (assets.assets.length > 0) {
+              map.set(album.id, assets.assets[0].uri);
+            }
+          } catch {
+            // Skip artwork for this album, non-fatal.
+          }
+        })
+      );
+    } catch (error) {
+      console.warn('[AudioScanner] Could not load album artwork:', error);
+    }
+    return map;
+  }
+
   private async requestMediaPermissions(): Promise<boolean> {
     try {
-      if (Platform.OS === 'android') {
-        const permission = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-          {
-            title: 'Music Access',
-            message: 'Allow access to your music library to play your songs',
-            buttonNeutral: 'Ask Me Later',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
-          }
+      // Use expo-media-library's own permission request on both platforms.
+      // On Android 13+ (API 33) READ_EXTERNAL_STORAGE no longer grants media
+      // access — the correct runtime permission is READ_MEDIA_AUDIO, which
+      // MediaLibrary.requestPermissionsAsync() already requests internally.
+      // Manually asking PermissionsAndroid for READ_EXTERNAL_STORAGE (as this
+      // previously did) silently fails on modern Android, which is why the
+      // scan never found anything and the screen looked stuck loading.
+      const { status, canAskAgain } = await MediaLibrary.requestPermissionsAsync();
+
+      if (status === 'granted') return true;
+
+      if (!canAskAgain) {
+        Alert.alert(
+          'Permission Needed',
+          'Music access was previously denied. Enable it in your device Settings to scan your library.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
         );
-        return permission === PermissionsAndroid.RESULTS.GRANTED;
       }
-      
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      return status === 'granted';
-    } catch {
+
+      return false;
+    } catch (error) {
+      console.error('[AudioScanner] Permission error:', error);
       return false;
     }
   }
@@ -251,25 +295,6 @@ class AudioScanner {
       return null;
     } catch {
       return null;
-    }
-  }
-
-  private async getAlbumArtwork(albumId: string): Promise<string | undefined> {
-    try {
-      const albums = await MediaLibrary.getAlbumsAsync({ includeSmartAlbums: true });
-      const album = albums.find(a => a.id === albumId);
-      if (album?.assetCount && album.assetCount > 0) {
-        const assets = await MediaLibrary.getAssetsAsync({
-          album: album,
-          first: 1,
-        });
-        if (assets.assets.length > 0) {
-          return assets.assets[0].uri;
-        }
-      }
-      return undefined;
-    } catch {
-      return undefined;
     }
   }
 
@@ -317,6 +342,8 @@ class MusicPlayerEngine {
   private listeners: Set<(state: PlayerState) => void> = new Set();
   private progressInterval: NodeJS.Timeout | null = null;
   private isInitialized = false;
+  private notifiedTrackId: string | null = null;
+  private notificationSubs: { remove: () => void }[] = [];
 
   static getInstance() {
     if (!MusicPlayerEngine.instance) {
@@ -327,6 +354,56 @@ class MusicPlayerEngine {
 
   private constructor() {
     this.initAudioMode();
+    this.setupNotificationListeners();
+  }
+
+  // Wires the MediaStyle notification's Play/Pause/Next/Previous buttons
+  // (plus lock screen, headset button, and Bluetooth controls — all funneled
+  // through the same MediaSessionCallback on the native side) back into the
+  // exact same engine methods the in-app UI uses.
+  private setupNotificationListeners() {
+    if (!MusicNotificationBridge.isAvailable) return;
+    this.notificationSubs.push(
+      MusicNotificationBridge.onPlay(() => this.play()),
+      MusicNotificationBridge.onPause(() => this.pause()),
+      MusicNotificationBridge.onNext(() => this.skipNext()),
+      MusicNotificationBridge.onPrevious(() => this.skipPrevious()),
+      MusicNotificationBridge.onSeek(({ positionSeconds }) => this.seekTo(positionSeconds)),
+      MusicNotificationBridge.onStop(() => this.pause())
+    );
+  }
+
+  // Keeps the native notification in sync with every state change. Only
+  // sends the (heavier) full track payload when the track actually changes;
+  // routine progress ticks just update play/pause + position.
+  private syncNotification() {
+    if (!MusicNotificationBridge.isAvailable) return;
+    const { currentTrack, isPlaying, currentTime, duration } = this.state;
+
+    if (!currentTrack) {
+      if (this.notifiedTrackId !== null) {
+        MusicNotificationBridge.hideNotification();
+        this.notifiedTrackId = null;
+      }
+      return;
+    }
+
+    if (currentTrack.id !== this.notifiedTrackId) {
+      this.notifiedTrackId = currentTrack.id;
+      MusicNotificationBridge.showNotification(
+        {
+          id: currentTrack.id,
+          title: currentTrack.title,
+          artist: currentTrack.artist,
+          album: currentTrack.album,
+          artworkUri: currentTrack.artwork,
+          duration: duration || currentTrack.duration || 0,
+        },
+        isPlaying
+      );
+    } else {
+      MusicNotificationBridge.updatePlaybackState(isPlaying, currentTime, duration);
+    }
   }
 
   private async initAudioMode() {
@@ -616,6 +693,7 @@ class MusicPlayerEngine {
   private notifyListeners() {
     const state = { ...this.state };
     this.listeners.forEach(listener => listener(state));
+    this.syncNotification();
   }
 
   getState(): PlayerState {
@@ -1178,6 +1256,8 @@ export default function MoodMusicScreen() {
   
   const [isLoading, setIsLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState({ done: 0, total: 0 });
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'library' | 'favorites' | 'playlists' | 'recent'>('library');
   const [showNowPlaying, setShowNowPlaying] = useState(false);
@@ -1192,9 +1272,13 @@ export default function MoodMusicScreen() {
   // ── Effects ──────────────────────────────────────────────────────────────
   useEffect(() => {
     initializeApp();
-    return () => {
-      playerRef.current.destroy();
-    };
+    // Deliberately NOT calling playerRef.current.destroy() here.
+    // MusicPlayerEngine is a singleton — destroying it on unmount would
+    // stop playback and tear down the notification the instant the user
+    // navigates away from this screen, which defeats the entire point of
+    // a background-capable MediaSession/notification. Playback should
+    // keep running (with working notification controls) until the user
+    // explicitly stops it or the queue naturally ends.
   }, []);
 
   useEffect(() => {
@@ -1212,36 +1296,66 @@ export default function MoodMusicScreen() {
   const initializeApp = async () => {
     try {
       setIsLoading(true);
-      
-      // Load saved data
-      await Promise.all([
-        loadLibrary(),
-        loadFavorites(),
-        loadRecentlyPlayed(),
-        loadPlaylists(),
-      ]);
+      setLoadError(null);
 
-      // Scan device music if library is empty
-      if (library.length === 0) {
-        await scanDeviceMusic();
+      // Load saved data. loadLibrary() returns the tracks it found so we can
+      // decide whether to scan without reading `library` state right after —
+      // React state updates are async, so the old code always saw `library`
+      // as the initial empty array here and re-scanned on every launch.
+      // A hard timeout guarantees we never leave the user staring at a
+      // spinner forever if a native call (permissions, media scan) hangs.
+      const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> =>
+        Promise.race([
+          promise,
+          new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Loading timed out')), ms)),
+        ]);
+
+      const [savedLibrary] = await withTimeout(
+        Promise.all([
+          loadLibrary(),
+          loadFavorites(),
+          loadRecentlyPlayed(),
+          loadPlaylists(),
+        ]),
+        15000
+      );
+
+      if (savedLibrary && savedLibrary.length > 0) {
+        // We already have a library — show it immediately, then quietly
+        // refresh from the device in the background instead of blocking
+        // the UI behind another full scan.
+        scanDeviceMusic({ silent: true }).catch(() => {});
+      } else {
+        // Nothing saved yet: check the scanner's short-lived cache before
+        // doing a full device scan (which is the slow path).
+        const cached = await AudioScanner.getInstance().getCachedTracks();
+        if (cached && cached.length > 0) {
+          await saveLibrary(cached);
+        } else {
+          await withTimeout(scanDeviceMusic(), 60000);
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[MoodMusic] Init error:', error);
+      setLoadError(error?.message || 'Something went wrong while loading your music.');
     } finally {
       setIsLoading(false);
     }
   };
 
   // ── Library Management ──────────────────────────────────────────────────
-  const loadLibrary = async () => {
+  const loadLibrary = async (): Promise<Track[]> => {
     try {
       const data = await AsyncStorage.getItem(STORAGE.LIBRARY);
       if (data) {
         const parsed = JSON.parse(data);
         setLibrary(parsed);
+        return parsed;
       }
+      return [];
     } catch (error) {
       console.error('[MoodMusic] Load library error:', error);
+      return [];
     }
   };
 
@@ -1315,34 +1429,41 @@ export default function MoodMusicScreen() {
   };
 
   // ── Scanning ────────────────────────────────────────────────────────────
-  const scanDeviceMusic = async () => {
+  const scanDeviceMusic = async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
+    const scanner = AudioScanner.getInstance();
+
+    if (isScanning) return; // a scan is already running, don't stack another
+
     try {
       setIsScanning(true);
-      const scanner = AudioScanner.getInstance();
+      setScanProgress({ done: 0, total: 0 });
+      scanner.notifyProgress = (done, total) => setScanProgress({ done, total });
+
       const tracks = await scanner.scanDeviceMusic();
-      
+
       if (tracks.length > 0) {
         await saveLibrary(tracks);
-        Alert.alert(
-          '✅ Music Scanned',
-          `Found ${tracks.length} songs on your device`,
-          [{ text: 'OK' }]
-        );
-      } else {
+        if (!silent) {
+          Alert.alert('✅ Music Scanned', `Found ${tracks.length} songs on your device`, [{ text: 'OK' }]);
+        }
+      } else if (!silent) {
         Alert.alert(
           'No Music Found',
           'Could not find any audio files on your device.\n\nTry importing manually.',
           [{ text: 'OK' }]
         );
       }
-    } catch (error) {
-      Alert.alert(
-        'Scan Error',
-        'Failed to scan device music.\nPlease check permissions and try again.',
-        [{ text: 'OK' }]
-      );
+    } catch (error: any) {
+      if (!silent) {
+        const message = error?.message === 'Media library permission required'
+          ? 'Music access permission is required to scan your device.\nYou can also import songs manually.'
+          : 'Failed to scan device music.\nPlease check permissions and try again.';
+        Alert.alert('Scan Error', message, [{ text: 'OK' }]);
+      }
       console.error('[MoodMusic] Scan error:', error);
     } finally {
+      scanner.notifyProgress = null;
       setIsScanning(false);
     }
   };
@@ -1533,6 +1654,16 @@ export default function MoodMusicScreen() {
     }
   };
 
+  // ── Pull to refresh ──────────────────────────────────────────────────────
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await scanDeviceMusic({ silent: true });
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
   // ── Render Helpers ──────────────────────────────────────────────────────
   const renderTrackGrid = (tracks: Track[]) => {
     return (
@@ -1542,6 +1673,9 @@ export default function MoodMusicScreen() {
         numColumns={2}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.gridContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={PINK} colors={[PINK]} />
+        }
         renderItem={({ item }) => {
           const isCurrent = playerState.currentTrack?.id === item.id;
           const isFavorite = favorites.has(item.id);
@@ -1600,6 +1734,9 @@ export default function MoodMusicScreen() {
         key="list"
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={PINK} colors={[PINK]} />
+        }
         renderItem={({ item }) => {
           const isCurrent = playerState.currentTrack?.id === item.id;
           const isFavorite = favorites.has(item.id);
@@ -1625,8 +1762,30 @@ export default function MoodMusicScreen() {
       <View style={[styles.loadingContainer, { backgroundColor: colors.bg }]}>
         <ActivityIndicator size="large" color={PINK} />
         <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-          Loading your music...
+          {scanProgress.total > 0
+            ? `Scanning your music… ${scanProgress.done}/${scanProgress.total}`
+            : 'Loading your music...'}
         </Text>
+      </View>
+    );
+  }
+
+  if (loadError && library.length === 0) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: colors.bg }]}>
+        <Icon name="alert-circle-outline" size={40} color={colors.textTertiary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{loadError}</Text>
+        <TouchableOpacity
+          onPress={() => { setLoadError(null); initializeApp(); }}
+          style={{ marginTop: 16, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, backgroundColor: PINK }}
+        >
+          <Text style={{ color: '#FFF', fontWeight: '600' }}>Try Again</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={importTrack} style={{ marginTop: 12 }}>
+          <Text style={{ color: colors.textSecondary, textDecorationLine: 'underline' }}>
+            Import a song manually instead
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -1707,7 +1866,7 @@ export default function MoodMusicScreen() {
       </View>
 
       {/* Sort & View Controls */}
-      <View style={[styles.controlsRow, { backgroundColor: colors.card }]}>
+      <View style={[styles.filterControlsRow, { backgroundColor: colors.card }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {['title', 'artist', 'duration', 'recent'].map((sort) => (
             <TouchableOpacity
@@ -2107,7 +2266,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: -10,
     paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
     gap: 8,
   },
@@ -2185,7 +2344,7 @@ const styles = StyleSheet.create({
   },
 
   // Controls
-  controlsRow: {
+  filterControlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -2434,14 +2593,21 @@ const styles = StyleSheet.create({
   // Mini Player
   miniPlayer: {
     position: 'absolute',
-    bottom: 0,
+    bottom: 73,
     left: 0,
     right: 0,
     padding: 12,
     paddingBottom: Platform.OS === 'ios' ? 20 : 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.05)',
-  },
+    // ✅ Curved top edges
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    overflow: 'hidden',  
+    // ✅ Curved top edges
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+},
   miniPlayerContent: {
     flexDirection: 'row',
     alignItems: 'center',

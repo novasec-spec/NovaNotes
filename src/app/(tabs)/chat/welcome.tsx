@@ -19,7 +19,7 @@ export default function WelcomeScreen() {
 
   const handleGuest = async () => {
     await enterAsGuest();
-    router.replace((redirect as string) || '/faith');
+    router.replace((redirect as string) || '/notes');
   };
 
   const goLogin = () => {

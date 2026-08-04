@@ -255,6 +255,9 @@ tabBarContainer: {
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     overflow: 'hidden',
+    // ✅ Curved top edges
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
   glassLayer: {
     position: 'absolute',

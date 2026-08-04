@@ -47,6 +47,7 @@
         "NOTIFICATIONS",
         "VIBRATE",
         "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.READ_MEDIA_AUDIO",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.ACCESS_NETWORK_STATE",
@@ -77,6 +78,16 @@
       ],
       "@react-native-community/datetimepicker",
       "expo-secure-store",
+      [
+        "expo-media-library",
+        {
+          "granularPermissions": [
+            "audio",
+            "photo",
+            "video"
+          ]
+        }
+      ],
       "expo-web-browser",
         [
       "expo-splash-screen",

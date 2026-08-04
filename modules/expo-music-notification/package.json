@@ -1,0 +1,11 @@
+{
+  "name": "expo-music-notification",
+  "version": "1.0.0",
+  "description": "MediaStyle notification + MediaSession bridge for the NovaNotes music player",
+  "main": "index.ts",
+  "types": "index.ts",
+  "license": "UNLICENSED",
+  "peerDependencies": {
+    "react-native": "*"
+  }
+}
