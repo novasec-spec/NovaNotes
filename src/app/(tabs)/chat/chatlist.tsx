@@ -393,7 +393,7 @@ export default function ChatList({ user, onSelectUser }: Props) {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [presenceChannel, setPresenceChannel] = useState<any>(null);
+  const presenceChannelRef = useRef<any>(null);
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const typingSubscription = useRef<any>(null);
@@ -405,13 +405,19 @@ export default function ChatList({ user, onSelectUser }: Props) {
   useEffect(() => {
     setupPresenceTracking();
     return () => {
-      if (presenceChannel) {
-        supabase.removeChannel(presenceChannel);
+      if (presenceChannelRef.current) {
+        supabase.removeChannel(presenceChannelRef.current);
+        presenceChannelRef.current = null;
       }
     };
   }, [user.id]);
 
   const setupPresenceTracking = async () => {
+    // Prevent double-subscription (e.g. React StrictMode double-invocation)
+    if (presenceChannelRef.current) {
+      return;
+    }
+
     // Create a presence channel
     const channel = supabase.channel(`presence:${user.id}`, {
       config: {
@@ -475,7 +481,7 @@ export default function ChatList({ user, onSelectUser }: Props) {
         }
       });
 
-    setPresenceChannel(channel);
+    presenceChannelRef.current = channel;
   };
 
   // ─── Initialisation ──────────────────────────────────────────────────────
