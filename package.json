@@ -43,6 +43,7 @@
     "expo-linking": "~8.0.12",
     "expo-location": "~19.0.8",
     "expo-media-library": "~18.2.1",
+    "expo-music-notification": "file:./modules/expo-music-notification",
     "expo-notifications": "~0.32.17",
     "expo-router": "~6.0.23",
     "expo-secure-store": "~15.0.8",
@@ -68,8 +69,7 @@
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.5.1",
     "rn-offline-cache": "^0.1.0",
-    "rn-themed-alert": "^0.1.0",
-    "expo-music-notification": "file:./modules/expo-music-notification"
+    "rn-themed-alert": "^0.2.0"
   },
   "expo": {
     "doctor": {

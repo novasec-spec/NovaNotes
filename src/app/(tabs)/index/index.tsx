@@ -59,7 +59,8 @@ import { useRouter, router } from 'expo-router';
 import { useDailyGreeting } from '../../../hooks/useDailyGreeting';
 import { useMoodNotifications } from '../../../hooks/useMoodNotifications';
 import { syncBubblesWidget } from '../../../widgets/syncBubblesWidget';
-import { useAlert } from 'rn-themed-alert';
+import { Toast } from 'rn-themed-alert';
+
 
 const { width: W } = Dimensions.get('window');
 
@@ -293,7 +294,7 @@ const displayName =
     { label: string; color: string; badge: string } | null
   >(null); // ✅ NEW
 
-const { alert } = useAlert();
+// const { Toast } = Toast();
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -458,11 +459,7 @@ const { alert } = useAlert();
     const q = QUOTES[quoteIndex];
     await Clipboard.setStringAsync(`"${q.text}" — ${q.author}`);
     trackEvent('quote_copied', { quoteAuthor: q.author });
-      await alert({
-      title: 'Copied! 💕',
-      message: 'Quote copied to clipboard',
-      buttonText: 'Got it!',
-    }); 
+      Toast.info('Saved!');
  };
 
   const currentQuote = QUOTES[quoteIndex];

@@ -574,12 +574,6 @@ export default function SecretVaultScreen() {
             <Text style={styles.unlockText}>Unlock</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.iconBtn, { marginTop: 16, backgroundColor: 'transparent', elevation: 0, shadowOpacity: 0 }]}
-            onPress={() => router.push('/tokenmanager')}
-          >
-            <Icon name="settings-outline" size={16} color={SOFT} />
-          </TouchableOpacity>
         </Animated.View>
       </View>
     );
