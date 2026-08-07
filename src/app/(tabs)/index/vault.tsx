@@ -586,7 +586,7 @@ export default function SecretVaultScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>Secret Vault</Text>
+          <Text style={styles.headerTitle}>Secret </Text>
           <Text style={styles.headerSub}>{secretMessages.length} private notes</Text>
         </View>
         <View style={styles.headerActions}>
