@@ -87,7 +87,7 @@ jobs:
             -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
             -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
         env:
-          ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a,arm64-v8a,x86,x86_64
+          ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
