@@ -1,16 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-  <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION"/>
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
   <uses-permission android:name="android.permission.BLUETOOTH"/>
   <uses-permission android:name="android.permission.CAMERA"/>
-  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
   <uses-permission android:name="android.permission.INTERNET"/>
   <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
   <uses-permission android:name="android.permission.NOTIFICATIONS"/>
-  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion"/>
   <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
   <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
   <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
@@ -21,7 +18,7 @@
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
   <uses-permission android:name="android.permission.VIBRATE"/>
   <uses-permission android:name="android.permission.WAKE_LOCK"/>
-  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion"/>
   <queries>
     <intent>
       <action android:name="android.intent.action.VIEW"/>
@@ -35,19 +32,13 @@
     <meta-data android:name="expo.modules.notifications.default_notification_color" android:resource="@color/notification_icon_color"/>
     <meta-data android:name="expo.modules.notifications.default_notification_icon" android:resource="@drawable/notification_icon"/>
     <meta-data android:name="expo.modules.updates.ENABLED" android:value="true"/>
+    <meta-data android:name="expo.modules.updates.ENABLE_BSDIFF_PATCH_SUPPORT" android:value="true"/>
     <meta-data android:name="expo.modules.updates.EXPO_RUNTIME_VERSION" android:value="@string/expo_runtime_version"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATE_URL" android:value="https://u.expo.dev/2199333a-0782-4612-9b1a-3fb29cfae0d2"/>
     <service android:name="com.reactnativeandroidwidget.RNWidgetCollectionService" android:permission="android.permission.BIND_REMOTEVIEWS"/>
-    <service android:name=".QuickNoteTileService" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE" android:exported="true" android:label="Take Note" android:icon="@drawable/ic_note_tile">
-      <intent-filter>
-        <action android:name="android.service.quicksettings.action.QS_TILE"/>
-      </intent-filter>
-      <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true"/>
-    </service>
-    <service android:name=".MusicPlaybackService" android:enabled="true" android:exported="false" android:foregroundServiceType="mediaPlayback"/>
-    <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
+    <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode|smallestScreenSize" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>
         <category android:name="android.intent.category.LAUNCHER"/>
@@ -57,11 +48,7 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="novanote"/>
-        <data android:scheme="novanote" android:host="note"/>
-        <data android:scheme="novanote" android:host="recording"/>
-        <data android:scheme="novanote" android:host="share"/>
       </intent-filter>
-      <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts"/>
     </activity>
     <receiver android:name=".widget.Bubbles" android:exported="false" android:label="Bubbles — Quote &amp; Mood">
       <intent-filter>

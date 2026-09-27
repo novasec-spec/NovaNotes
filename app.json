@@ -3,7 +3,7 @@
     "name": "NovaNote",
     "slug": "novasec",
     "version": "1.0.0",
-    "sdkVersion": "54.0.0",
+    "sdkVersion": "57.0.0",
     "updates": {
       "url": "https://u.expo.dev/2199333a-0782-4612-9b1a-3fb29cfae0d2"
     },
