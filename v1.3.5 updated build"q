@@ -1,0 +1,11 @@
+[33mtag v1.5.0[m
+Tagger: novasec-spec <technologiesnovasec@gmail.com>
+Date:   Mon Sep 28 01:03:50 2026 +0300
+
+NovaNotes v1.5.0
+
+[33mcommit cbb9bea6d40859ca364d1c34ba3963e52b16b5bd[m[33m ([m[1;33mtag: [m[1;33mv1.5.0[m[33m)[m
+Author: novasec-spec <technologiesnovasec@gmail.com>
+Date:   Mon Sep 28 00:48:44 2026 +0300
+
+    updated to expo sdk 57
