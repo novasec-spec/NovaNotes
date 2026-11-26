@@ -1,10 +1,9 @@
-🌟 Nova — Your Digital Life, Organized
+# 🌟 NovaNotes: Your Digital Life, Organized
 
-https://img.shields.io/badge/Expo-54.0.34-000.svg?style=flat&logo=expo
-https://img.shields.io/badge/React%20Native-0.81.5-61DAFB.svg?style=flat&logo=react
-https://img.shields.io/badge/TypeScript-5.9.2-3178C6.svg?style=flat&logo=typescript
-https://img.shields.io/badge/Supabase-2.107.0-3ECF8E.svg?style=flat&logo=supabase
-https://img.shields.io/badge/License-MIT-green.svg
+![Expo](https://img.shields.io/badge/Expo-54.0.34-000.svg?style=flat&logo=expo)
+![React Native](https://img.shields.io/badge/React%20Native-0.81.5-61DAFB.svg?style=flat&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9.2-3178C6.svg?style=flat&logo=typescript)
+![Supabase](https://img.shields.io/badge/Supabase-2.107.0-3ECF8E.svg?style=flat&logo=supabase)
 
 ---
 
@@ -12,7 +11,7 @@ Nova is a complete personal ecosystem for your digital life. Not just a notes ap
 
 ---
 
-📱 About
+## 📱 About
 
 Nova is a modern, feature-rich React Native application designed to be your personal digital companion. It brings together everything that matters in one beautiful, dark-themed app with real-time synchronization, offline-first architecture, and AI-powered features.
 
@@ -20,140 +19,140 @@ Nova is a modern, feature-rich React Native application designed to be your pers
 
 ---
 
-✨ Key Features
+## ✨ Key Features
 
-🏠 Home Dashboard
+### 🏠 Home Dashboard
 
-· Personalized Greeting — Dynamic morning/afternoon/evening welcome
-· Streak Tracking — Daily usage with milestone celebrations (7, 30, 100 days) 🎉
-· Daily Love Reason — Rotating reasons why you're loved
-· Mood Tracker — 8 moods with emoji icons and colors
-· Quick Access — 8 action tiles for instant navigation
-· Love Quotes — Daily rotating quotes with tap-to-copy
-· Notification Bell — Real-time unread count badge
+- Personalized Greeting — Dynamic morning/afternoon/evening welcome
+- Streak Tracking — Daily usage with milestone celebrations (7, 30, 100 days) 🎉
+- Daily Love Reason — Rotating reasons why you're loved
+- Mood Tracker — 8 moods with emoji icons and colors
+- Quick Access — 8 action tiles for instant navigation
+- Love Quotes — Daily rotating quotes with tap-to-copy
+- Notification Bell — Real-time unread count badge
 
-📝 Smart Notes
+### 📝 Smart Notes
 
-· Rich Text Editor — Full-screen editing experience
-· Voice Notes — Record and playback voice memos 🎙️
-· Photo Attachments — Add images to your notes
-· Doodle Canvas — Draw and save sketches 🎨
-· Tags & Categories — Organize with custom tags
-· Favorite & Pin — Priority sorting for important notes
-· Archive — Hide notes without deleting
-· Undo Delete — 5-second safety net
-· Search & Filter — Find notes instantly
-· Cloud Backup — Automatic Supabase sync ☁️
+- Rich Text Editor — Full-screen editing experience
+- Voice Notes — Record and playback voice memos 🎙️
+- Photo Attachments — Add images to your notes
+- Doodle Canvas — Draw and save sketches 🎨
+- Tags & Categories — Organize with custom tags
+- Favorite & Pin — Priority sorting for important notes
+- Archive — Hide notes without deleting
+- Undo Delete — 5-second safety net
+- Search & Filter — Find notes instantly
+- Cloud Backup — Automatic Supabase sync ☁️
 
-💬 Real-time Chat
+### 💬 Real-time Chat
 
-· Instant Messaging — Powered by Supabase Realtime
-· User List — See all registered users
-· Online Status — Presence tracking with green dot 🟢
-· Typing Indicators — See when someone is typing ✏️
-· Read Receipts — ✓ (delivered) and ✓✓ (read)
-· Media Sharing — Images, videos, voice notes, files 📎
-· Push Notifications — Incoming message alerts 🔔
-· Unread Badge — Tab badge with unread count
-· Swipe Actions — Pin, Mute, Archive, Delete
-· Search Conversations — Find messages quickly
+- Instant Messaging — Powered by Supabase Realtime
+- User List — See all registered users
+- Online Status — Presence tracking with green dot 🟢
+- Typing Indicators — See when someone is typing ✏️
+- Read Receipts — ✓ (delivered) and ✓✓ (read)
+- Media Sharing — Images, videos, voice notes, files 📎
+- Push Notifications — Incoming message alerts 🔔
+- Unread Badge — Tab badge with unread count
+- Swipe Actions — Pin, Mute, Archive, Delete
+- Search Conversations — Find messages quickly
 
-🎵 Vibe & Mood Tracking
+### 🎵 Vibe & Mood Tracking
 
-· 30+ Moods — Across 5 categories (Feelings, Energy, Wellness, Social, Spirit)
-· Mood-Based Quotes — Encouraging quotes for each mood
-· Mood-Based Music — Song suggestions that match your vibe 🎵
-· Weekly Mood Chart — Visual mood tracking
-· Journal Entries — Daily diary with ratings
-· Daily Affirmation — Inspirational messages ✨
-· Mood Statistics — Total logs, weekly averages
-· Mood Summary — Weekly breakdown modal
+- 30+ Moods — Across 5 categories (Feelings, Energy, Wellness, Social, Spirit)
+- Mood-Based Quotes — Encouraging quotes for each mood
+- Mood-Based Music — Song suggestions that match your vibe 🎵
+- Weekly Mood Chart — Visual mood tracking
+- Journal Entries — Daily diary with ratings
+- Daily Affirmation — Inspirational messages ✨
+- Mood Statistics — Total logs, weekly averages
+- Mood Summary — Weekly breakdown modal
 
-📖 Faith & Prayer
+### 📖 Faith & Prayer
 
-· Verse of the Day — Daily Bible verses 📖
-· Prayer Journal — Track prayer requests and answers 🙏
-· Sermon Notes — Take notes during sermons
-· Praise Reports — Share testimonies
-· Prayer Reminder — Daily prayer notification
-· Faith Stats — Track your spiritual journey
+- Verse of the Day — Daily Bible verses 📖
+- Prayer Journal — Track prayer requests and answers 🙏
+- Sermon Notes — Take notes during sermons
+- Praise Reports — Share testimonies
+- Prayer Reminder — Daily prayer notification
+- Faith Stats — Track your spiritual journey
 
-✅ Tasks
+### ✅ Tasks
 
-· Task Management — Create, edit, delete tasks
-· Priority Levels — Low, Medium, High
-· Task Categories — Organize by category
-· Task Sharing — Share tasks with other users
-· Task Filters — All, Active, Completed
-· Task Stats — Total, active, completed counts
-· Real-time Sync — Tasks sync across devices
+- Task Management — Create, edit, delete tasks
+- Priority Levels — Low, Medium, High
+- Task Categories — Organize by category
+- Task Sharing — Share tasks with other users
+- Task Filters — All, Active, Completed
+- Task Stats — Total, active, completed counts
+- Real-time Sync — Tasks sync across devices
 
-🤖 AI Companion (MUNGA)
+### 🤖 AI Companion (MUNGA)
 
-· Gemini AI Integration — Powered by Google Gemini 🤖
-· 15+ Functions — Advice, motivation, jokes, prayer, and more
-· Quick Actions — Pre-built action buttons
-· Chat History — Persistent conversation storage
-· Typing Indicator — AI typing simulation
-· Dark/Light Theme — Follows app theme
+- Gemini AI Integration — Powered by Google Gemini 🤖
+- 15+ Functions — Advice, motivation, jokes, prayer, and more
+- Quick Actions — Pre-built action buttons
+- Chat History — Persistent conversation storage
+- Typing Indicator — AI typing simulation
+- Dark/Light Theme — Follows app theme
 
-🔐 Secret Vault
+### 🔐 Secret Vault
 
-· PIN Lock — 4-digit PIN protection 🔒
-· Secret Messages — Private notes only you can see
-· Hidden Photos — Secure photo storage
-· Device ID Tracking — Unique device identification
+- PIN Lock — 4-digit PIN protection 🔒
+- Secret Messages — Private notes only you can see
+- Hidden Photos — Secure photo storage
+- Device ID Tracking — Unique device identification
 
-📸 Memories
+### 📸 Memories
 
-· Photo Gallery — Upload and view images
-· Captions & Dates — Add context to memories
-· Sort by Date — Chronological timeline
-· Cloud Backup — Photos synced to Supabase ☁️
+- Photo Gallery — Upload and view images
+- Captions & Dates — Add context to memories
+- Sort by Date — Chronological timeline
+- Cloud Backup — Photos synced to Supabase ☁️
 
-🔔 Smart Notifications
+### 🔔 Smart Notifications
 
-· Notification Center — Full inbox-style notifications 📬
-· Push Notifications — Real-time alerts
-· Read/Unread Status — Mark notifications as read
-· Swipe Actions — Delete or mark read
-· Filter by Type — All, Unread, Archived
-· Notification Badge — Unread count on tab icon
+- Notification Center — Full inbox-style notifications 📬
+- Push Notifications — Real-time alerts
+- Read/Unread Status — Mark notifications as read
+- Swipe Actions — Delete or mark read
+- Filter by Type — All, Unread, Archived
+- Notification Badge — Unread count on tab icon
 
-📱 Android Widgets
+### 📱 Android Widgets
 
-· Bubbles Widget — Home screen widget showing:
-  · Today's quote
-  · Streak count
-  · Mood emoji
-  · Love note
-  · Quick actions (Note, Chat)
-  · Unread count badge 🎯
+- Bubbles Widget — Home screen widget showing:
+  - Today's quote
+  - Streak count
+  - Mood emoji
+  - Love note
+  - Quick actions (Note, Chat)
+  - Unread count badge 🎯
 
-🔔 Quick Settings Tile
+### 🔔 Quick Settings Tile
 
-· Custom Tile — Quick access from notification shade
-· Unread Count Display — Shows badge on tile
-· One-Tap Open — Opens app instantly
+- Custom Tile — Quick access from notification shade
+- Unread Count Display — Shows badge on tile
+- One-Tap Open — Opens app instantly
 
-🔐 Security & Privacy
+### 🔐 Security & Privacy
 
-· Secure Storage — Sensitive data encrypted
-· PIN Protection — Vault access control
-· Environment Variables — Configurable API keys
-· Row Level Security — Supabase RLS policies
+- Secure Storage — Sensitive data encrypted
+- PIN Protection — Vault access control
+- Environment Variables — Configurable API keys
+- Row Level Security — Supabase RLS policies
 
-🎨 Dark Theme
+### 🎨 Dark Theme
 
-· Full Dark Mode — Beautiful dark interface
-· Consistent Colors — Brand colors throughout
-· Eye Comfort — Optimized for night use
+- Full Dark Mode — Beautiful dark interface
+- Consistent Colors — Brand colors throughout
+- Eye Comfort — Optimized for night use
 
 ---
 
-🏗️ Tech Stack
+## 🏗️ Tech Stack
 
-Core Technologies
+### Core Technologies
 
 Technology Version Purpose
 React Native 0.81.5 Mobile framework
@@ -161,13 +160,13 @@ Expo ~54.0.34 Development platform
 TypeScript ~5.9.2 Type safety
 React Navigation ^7.x Navigation
 
-Backend & Database
+### Backend & Database
 
 Technology Version Purpose
 Supabase ^2.107.0 Database, Auth, Real-time
 Firebase 9.23.0 Push notifications (FCM)
 
-UI & Styling
+### UI & Styling
 
 Technology Version Purpose
 React Native Reanimated ~4.1.1 Animations
@@ -175,20 +174,20 @@ React Native Gesture Handler ~2.28.0 Swipe gestures
 React Native Vector Icons ^10.3.0 Icons
 Date-fns Latest Date formatting
 
-AI & Chat
+### AI & Chat
 
 Technology Version Purpose
 Gemini AI Latest AI Companion
 LiveKit Latest Video/Audio calls
 
-Notifications & Widgets
+### Notifications & Widgets
 
 Technology Version Purpose
 Expo Notifications ~0.32.17 Push notifications
 Expo Task Manager ~14.0.9 Background tasks
 React Native Android Widget Latest Home screen widgets
 
-Media & Storage
+### Media & Storage
 
 Technology Version Purpose
 Expo AV Latest Audio recording/playback
@@ -198,7 +197,7 @@ Expo Secure Store ~15.0.8 Secure storage
 
 ---
 
-📁 Project Structure
+## 📁 Project Structure
 
 ```
 src/
@@ -239,24 +238,24 @@ src/
 
 ---
 
-🚀 Installation
+## 🚀 Installation
 
-Prerequisites
+### Prerequisites
 
-· Node.js (v18 or later)
-· npm or yarn
-· Expo CLI
-· Android Studio (for Android builds)
-· Xcode (for iOS builds)
+- Node.js (v18 or later)
+- npm or yarn
+- Expo CLI
+- Android Studio (for Android builds)
+- Xcode (for iOS builds)
 
-Step 1: Clone the Repository
+#### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/nova.git
-cd nova
+git clone https://github.com/novasec-spec/NovaNotes.git
+cd NovaNotes
 ```
 
-Step 2: Install Dependencies
+#### Step 2: Install Dependencies
 
 ```bash
 npm install
@@ -264,7 +263,7 @@ npm install
 yarn install
 ```
 
-Step 3: Environment Variables
+#### Step 3: Environment Variables
 
 Create a .env file in the root directory:
 
@@ -285,18 +284,11 @@ EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=your_android_client_id
 EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=your_web_client_id
 ```
 
-Step 4: Supabase Setup
+#### Step 4: Supabase Setup
 
-Run the SQL scripts in the supabase/ folder:
+Create a Supabase project, then in the SQL Editor create the tables listed under [Database Schema](#-database-schema) below and enable Row Level Security on each one. Copy the project URL and anon key into your `.env`.
 
-1. Go to your Supabase dashboard
-2. Open SQL Editor
-3. Copy and run the SQL files in order:
-   · tables.sql — Create all tables
-   · policies.sql — Row Level Security policies
-   · functions.sql — Edge Functions
-
-Step 5: Run the App
+#### Step 5: Run the App
 
 ```bash
 # Start Expo development server
@@ -317,79 +309,79 @@ eas build --platform ios --profile preview
 
 ---
 
-📱 Key Features Walkthrough
+## 📱 Key Features Walkthrough
 
 1. Authentication
 
-· Email/Password sign-up and sign-in
-· Google Sign-In integration
-· Persistent sessions with AsyncStorage
-· Secure password reset flow
+- Email/Password sign-up and sign-in
+- Google Sign-In integration
+- Persistent sessions with AsyncStorage
+- Secure password reset flow
 
 2. Real-time Chat
 
-· Powered by Supabase Realtime
-· Instant message delivery
-· Typing indicators
-· Online/offline presence
-· Read receipts
-· Media sharing (images, videos, voice notes)
+- Powered by Supabase Realtime
+- Instant message delivery
+- Typing indicators
+- Online/offline presence
+- Read receipts
+- Media sharing (images, videos, voice notes)
 
 3. AI Companion (MUNGA)
 
-· Powered by Google Gemini AI
-· 15+ built-in functions
-· Quick action buttons
-· Persistent conversation history
-· Natural language processing
+- Powered by Google Gemini AI
+- 15+ built-in functions
+- Quick action buttons
+- Persistent conversation history
+- Natural language processing
 
 4. Mood Tracking
 
-· 30+ moods across 5 categories
-· Mood-based quotes and music
-· Weekly mood charts
-· Mood statistics and trends
-· Journal entries with ratings
+- 30+ moods across 5 categories
+- Mood-based quotes and music
+- Weekly mood charts
+- Mood statistics and trends
+- Journal entries with ratings
 
 5. Notes System
 
-· Rich text editing
-· Voice notes recording
-· Photo attachments
-· Doodle canvas
-· Tags and categories
-· Favorite and pin
-· Archive functionality
-· Undo delete
-· Cloud backup
+- Rich text editing
+- Voice notes recording
+- Photo attachments
+- Doodle canvas
+- Tags and categories
+- Favorite and pin
+- Archive functionality
+- Undo delete
+- Cloud backup
 
 6. Task Management
 
-· Create, edit, delete tasks
-· Priority levels
-· Task categories
-· Task sharing with other users
-· Filters and sorting
+- Create, edit, delete tasks
+- Priority levels
+- Task categories
+- Task sharing with other users
+- Filters and sorting
 
 7. Faith Features
 
-· Verse of the day
-· Prayer journal
-· Sermon notes
-· Praise reports
-· Daily prayer reminders
+- Verse of the day
+- Prayer journal
+- Sermon notes
+- Praise reports
+- Daily prayer reminders
 
 ---
 
-🛠️ Development
+## 🛠️ Development
 
-Code Style
+### Code Style
 
-· ESLint for linting
-· TypeScript for type safety
-· Prettier for formatting
+- ESLint for linting
+- TypeScript for type safety
+- Prettier for formatting
 
-Scripts
+### Scripts
 
 ```bash
 # Start development
@@ -414,7 +406,7 @@ npm run type-check
 npm run build
 ```
 
-Testing
+### Testing
 
 ```bash
 # Run tests
@@ -426,9 +418,9 @@ npm test -- --coverage
 
 ---
 
-📊 Database Schema
+## 📊 Database Schema
 
-Users Table
+### Users Table
 
 ```sql
 users (
@@ -442,7 +434,7 @@ users (
 )
 ```
 
-Messages Table
+### Messages Table
 
 ```sql
 messages (
@@ -460,7 +452,7 @@ messages (
 )
 ```
 
-Notifications Table
+### Notifications Table
 
 ```sql
 notifications (
@@ -476,7 +468,7 @@ notifications (
 
 ---
 
-🤝 Contributing
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create your feature branch (git checkout -b feature/AmazingFeature)
@@ -486,36 +478,35 @@ notifications (
 
 ---
 
-📄 License
+## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-
-🙏 Acknowledgments
-
-· Expo — For the amazing development platform
-· Supabase — For the open-source Firebase alternative
-· React Native — For cross-platform mobile development
-· Google Gemini — For AI capabilities
-· All Contributors — For making this project possible
+No license has been chosen yet, so all rights are reserved by the author. Open an issue if you would like to use the code.
 
 ---
 
-📞 Support
+## 🙏 Acknowledgments
 
-· 📧 Email: support@novanotes.com
-· 🐛 Issues: GitHub Issues
-· 💬 Discord: Join Discord
-
----
-
-🌟 Star History
-
-https://api.star-history.com/svg?repos=novasec-spec/nova&type=Date
+- Expo — For the amazing development platform
+- Supabase — For the open-source Firebase alternative
+- React Native — For cross-platform mobile development
+- Google Gemini — For AI capabilities
+- All Contributors — For making this project possible
 
 ---
 
-Made with ❤️ by the Nova Team
+## 📞 Support
+
+- 🐛 Bugs and feature requests: [open an issue](https://github.com/novasec-spec/NovaNotes/issues)
+- 👤 Author: [@novasec-spec](https://github.com/novasec-spec)
+
+---
+
+## 🌟 Star History
+
+[![Star History](https://api.star-history.com/svg?repos=novasec-spec/NovaNotes&type=Date)](https://star-history.com/#novasec-spec/NovaNotes&Date)
+
+---
+
+Made with ❤️ by [John Munga](https://github.com/novasec-spec)
 
 ---
