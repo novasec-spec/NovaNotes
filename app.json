@@ -3,7 +3,6 @@
     "name": "NovaNote",
     "slug": "novasec",
     "version": "1.0.0",
-    "sdkVersion": "57.0.0",
     "updates": {
       "url": "https://u.expo.dev/2199333a-0782-4612-9b1a-3fb29cfae0d2"
     },
@@ -11,10 +10,8 @@
     "icon": "./assets/images/icon.png",
     "scheme": "novanote",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "jsEngine": "jsc",
       "bundleIdentifier": "com.novasec.notes",
       "infoPlist": {
         "UIBackgroundModes": [
@@ -35,10 +32,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "jsEngine": "hermes",
       "googleServicesFile": "./google-services.json",
       "package": "com.novasec.notes",
-      "edgeToEdgeEnabled": true,
       "softwareKeyboardLayoutMode": "resize",
       "predictiveBackGestureEnabled": true,
       "permissions": [
@@ -56,12 +51,6 @@
         "android.permission.WAKE_LOCK",
         "android.permission.BLUETOOTH"
       ]
-    },
-    "notification": {
-      "icon": "./assets/images/notification-icon.png",
-      "color": "#FF6B9D",
-      "androidMode": "default",
-      "androidCollapsedTitle": "New Update"
     },
     "web": {
       "output": "static",
@@ -88,29 +77,28 @@
           ]
         }
       ],
-      "expo-web-browser",
-        [
-      "expo-splash-screen",
-      {                                                                               
-        "image": "./assets/images/splash-icon.png",                                            
-        "imageWidth": 200,                                                              
-        "resizeMode": "contain",
-        "backgroundColor": "#111827",                                                  
-         "android": {
-          "animation": {
-           " type": "slide",    
-            "direction": "up"                         
-           }
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#111827",
+          "android": {
+            "animation": {
+              " type": "slide",
+              "direction": "up"
+            }
+          }
         }
-      }
-    ],
+      ],
       [
         "react-native-android-widget",
         {
           "widgets": [
             {
               "name": "Bubbles",
-              "label": "Bubbles — Quote & Mood",
+              "label": "Bubbles \u2014 Quote & Mood",
               "description": "Daily quote, mood, streak & love note",
               "minWidth": "250dp",
               "minHeight": "110dp",
@@ -159,7 +147,13 @@
             "useFrameworks": "static"
           }
         }
-      ]
+      ],
+      "@sentry/react-native",
+      "expo-font",
+      "expo-sharing",
+      "expo-status-bar",
+      "expo-web-browser",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

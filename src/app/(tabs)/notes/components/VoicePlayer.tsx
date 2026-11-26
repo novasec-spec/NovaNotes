@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Audio } from 'expo-av';
+import { Audio } from '../../../../utils/avCompat';
 import { VoiceNote } from '../types';
 import { formatDuration } from '../utils/helpers';
 

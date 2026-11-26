@@ -48,7 +48,7 @@ const EditorBackground: React.FC<{ bgPhotoUri: string | null; colors: any; child
   if (bgPhotoUri) {
     return (
       <ImageBackground source={{ uri: bgPhotoUri }} style={{ flex: 1 }} imageStyle={{ opacity: 0.28 }}>
-        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.background + 'CC' }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background + 'CC' }]} />
         {children}
       </ImageBackground>
     );
@@ -344,7 +344,7 @@ const handleAddWeather = async () => {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <Animated.View
         style={[
-          StyleSheet.absoluteFillObject,
+          StyleSheet.absoluteFill,
           styles.editorScreen,
           { transform: [{ translateY: slideAnim }] },
         ]}>

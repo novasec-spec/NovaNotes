@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import MCIcon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { Audio } from 'expo-av';
+import { Audio } from '../../../utils/avCompat';
 import {
   PINK, WHITE, SUCCESS, REACTIONS, ChatMessage, User,
   fmtDur, haptic, isUrl, getInitials, avatarColor,
@@ -551,7 +551,7 @@ const bc = StyleSheet.create({
     marginBottom: 6,
   },
   imageOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: 14,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',

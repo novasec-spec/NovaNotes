@@ -8,7 +8,8 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { useEvent } from 'expo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -122,14 +123,15 @@ function FadeCard({ index, children }: { index: number; children: React.ReactNod
 
 // ── Video thumbnail with play button ─────────────────────────────────────────
 function VideoThumb({ uri, style }: { uri: string; style: any }) {
+  const player = useVideoPlayer({ uri }, p => { p.muted = true; });
   return (
     <View style={[style, { backgroundColor: '#111', overflow: 'hidden' }]}>
-      <Video
-        source={{ uri }}
+      <VideoView
+        player={player}
         style={StyleSheet.absoluteFill}
-        resizeMode={ResizeMode.COVER}
-        isMuted
-        shouldPlay={false}
+        contentFit="cover"
+        nativeControls={false}
+        pointerEvents="none"
       />
       <View style={videoThumbStyles.overlay}>
         <Icon name="play-circle" size={36} color="rgba(255,255,255,0.9)" />
@@ -140,7 +142,7 @@ function VideoThumb({ uri, style }: { uri: string; style: any }) {
 
 const videoThumbStyles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.28)',
@@ -149,30 +151,24 @@ const videoThumbStyles = StyleSheet.create({
 
 // ── Full-screen video player ──────────────────────────────────────────────────
 function VideoPlayer({ uri, onClose }: { uri: string; onClose: () => void }) {
-  const [status, setStatus] = useState<AVPlaybackStatus | null>(null);
-  const videoRef = useRef<Video>(null);
+  const player = useVideoPlayer({ uri }, p => {
+    p.loop = true;
+    p.play();
+  });
+  const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
 
-  const isPlaying = status?.isLoaded ? status.isPlaying : false;
-
-  const togglePlay = async () => {
-    if (!videoRef.current) return;
-    if (isPlaying) {
-      await videoRef.current.pauseAsync();
-    } else {
-      await videoRef.current.playAsync();
-    }
+  const togglePlay = () => {
+    if (isPlaying) player.pause();
+    else player.play();
   };
 
   return (
     <View style={vpStyles.container}>
-      <Video
-        ref={videoRef}
-        source={{ uri }}
+      <VideoView
+        player={player}
         style={vpStyles.video}
-        resizeMode={ResizeMode.CONTAIN}
-        shouldPlay
-        isLooping
-        onPlaybackStatusUpdate={s => setStatus(s)}
+        contentFit="contain"
+        nativeControls={false}
       />
       <TouchableOpacity style={vpStyles.playOverlay} onPress={togglePlay} activeOpacity={0.85}>
         {!isPlaying && <Icon name="play-circle" size={64} color="rgba(255,255,255,0.9)" />}
@@ -187,7 +183,7 @@ function VideoPlayer({ uri, onClose }: { uri: string; onClose: () => void }) {
 const vpStyles = StyleSheet.create({
   container:   { flex: 1, backgroundColor: '#000', justifyContent: 'center' },
   video:       { width: W, height: W * (9 / 16) },
-  playOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
+  playOverlay: { ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center' },
   close:       { position: 'absolute', top: 50, right: 20 },
 });
 

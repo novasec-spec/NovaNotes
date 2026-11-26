@@ -38,9 +38,9 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MusicNotificationBridge from '../../../../modules/expo-music-notification';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as MediaLibrary from 'expo-media-library';
+import * as MediaLibrary from 'expo-media-library/legacy';
 import * as Notifications from 'expo-notifications';
-import { Audio } from 'expo-av';
+import { Audio } from '../../../utils/avCompat';
 
 const { width: W, height: H } = Dimensions.get('window');
 

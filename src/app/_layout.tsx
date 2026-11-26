@@ -1,7 +1,7 @@
 // app/_layout.tsx - FIXED
 import { initializeCallingRuntime } from '../lib/callAvailability';
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, InteractionManager } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import * as Updates from 'expo-updates';
 import * as Sentry from '@sentry/react-native';
@@ -71,8 +71,8 @@ function InnerLayout() {
   // compete with the initial screen for the first frame.
   const [mungaReady, setMungaReady] = useState(false);
   useEffect(() => {
-    const handle = InteractionManager.runAfterInteractions(() => setMungaReady(true));
-    return () => handle.cancel();
+    const handle = requestIdleCallback(() => setMungaReady(true), { timeout: 1000 });
+    return () => cancelIdleCallback(handle);
   }, []);
   
 const auth = useAuth();

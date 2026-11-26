@@ -105,8 +105,8 @@ export const useEnhancedNotificationHandler = () => {
     });
 
     return () => {
-      Notifications.removeNotificationSubscription(foregroundListener);
-      Notifications.removeNotificationSubscription(responseListener);
+      foregroundListener.remove();
+      responseListener.remove();
     };
   };
 

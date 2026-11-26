@@ -89,16 +89,16 @@ export function NoteReadView({ note, onClose, onEdit, onShare, colors }: NoteRea
 
   if (note.bgPhotoUri) {
     return (
-      <View style={StyleSheet.absoluteFillObject}>
+      <View style={StyleSheet.absoluteFill}>
         <ImageBackground source={{ uri: note.bgPhotoUri }} style={{ flex: 1 }} imageStyle={{ opacity: 0.3 }}>
-          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.background + 'CC' }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background + 'CC' }]} />
           {Content}
         </ImageBackground>
       </View>
     );
   }
 
-  return <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.background }]}>{Content}</View>;
+  return <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}>{Content}</View>;
 }
 
 const styles = StyleSheet.create({

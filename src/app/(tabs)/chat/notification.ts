@@ -76,7 +76,8 @@ export const InAppNotificationEmitter = new InAppNotificationEmitterImpl();
 // 'received' listener below for richer in-app UI.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
@@ -499,8 +500,8 @@ export const addNotificationListeners = (
   );
 
   return () => {
-    Notifications.removeNotificationSubscription(notificationListener);
-    Notifications.removeNotificationSubscription(responseListener);
+    notificationListener.remove();
+    responseListener.remove();
   };
 };
 

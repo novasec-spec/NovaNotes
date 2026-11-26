@@ -16,7 +16,8 @@ export class NotificationHandler {
       handleNotification: async (notification) => {
         const isCall = notification.request.content.data?.type === 'incoming_call';
         return {
-          shouldShowAlert: true,
+          shouldShowBanner: true,
+          shouldShowList: true,
           shouldPlaySound: true,
           shouldSetBadge: true,
           priority: isCall ? Notifications.AndroidNotificationPriority.MAX : Notifications.AndroidNotificationPriority.DEFAULT,

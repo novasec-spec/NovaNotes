@@ -45,3 +45,10 @@ app-example
 taptap-377d9-firebase-adminsdk-fbsvc-fa08ecb002.json
 .env
 .env.local
+
+# Native module build output
+modules/*/android/build/
+android/app/build/
+android/.gradle/
+*.keystore
+curl_response

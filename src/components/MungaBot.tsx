@@ -28,8 +28,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import * as MediaLibrary from 'expo-media-library';
-import { Audio } from 'expo-av';
+import * as MediaLibrary from 'expo-media-library/legacy';
+import { Audio } from '../utils/avCompat';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../config/supabase';
 import { useTheme } from '../contexts/ThemeContext';
@@ -1892,7 +1892,7 @@ export const MungaBot: React.FC<MungaBotProps> = ({ userId, isVisible, onToggle 
         statusBarTranslucent
       >
         <Animated.View style={[styles.fullScreenModal, { opacity: fadeAnim }]}>
-          <StatusBar barStyle="light-content" backgroundColor="transparent" />
+          <StatusBar barStyle="light-content" />
           
           <LinearGradient
             colors={getWallpaperGradient() as string[]}

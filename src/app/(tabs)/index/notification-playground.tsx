@@ -765,7 +765,7 @@ export default function NotificationPlayground() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : insets.top + 60}
     >
-      <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
+      <StatusBar barStyle="dark-content" />
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>

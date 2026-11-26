@@ -8,6 +8,7 @@ const config = getSentryExpoConfig(__dirname);
 const { getDefaultConfig } = require("expo/metro-config");
 const resolveFrom = require("resolve-from");
 
+
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (
     moduleName.startsWith('event-target-shim') &&

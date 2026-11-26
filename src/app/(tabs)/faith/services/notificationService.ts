@@ -72,7 +72,8 @@ export class FaithNotificationService {
 
       Notifications.setNotificationHandler({
         handleNotification: async (notification) => ({
-          shouldShowAlert: true,
+          shouldShowBanner: true,
+          shouldShowList: true,
           shouldPlaySound: true,
           shouldSetBadge: true,
         }),
@@ -130,10 +131,10 @@ export class FaithNotificationService {
   // ─── Setup Notification Listeners ──────────────────────────────────────
   private setupNotificationListeners() {
     if (this.notificationListener) {
-      Notifications.removeNotificationSubscription(this.notificationListener);
+      this.notificationListener.remove();
     }
     if (this.responseListener) {
-      Notifications.removeNotificationSubscription(this.responseListener);
+      this.responseListener.remove();
     }
 
     this.notificationListener = Notifications.addNotificationReceivedListener(
@@ -466,10 +467,10 @@ export class FaithNotificationService {
   // ─── Cleanup ────────────────────────────────────────────────────────────
   cleanup() {
     if (this.notificationListener) {
-      Notifications.removeNotificationSubscription(this.notificationListener);
+      this.notificationListener.remove();
     }
     if (this.responseListener) {
-      Notifications.removeNotificationSubscription(this.responseListener);
+      this.responseListener.remove();
     }
   }
 }

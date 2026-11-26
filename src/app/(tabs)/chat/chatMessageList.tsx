@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Swipeable } from 'react-native-gesture-handler';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { ChatAvatar, DateSep, BubbleContent } from './chatWidgets';
 import {
   ChatMessage, User, GRADIENT, PINK, WHITE, SUCCESS, DANGER, GREY,

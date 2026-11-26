@@ -33,7 +33,7 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { User, Chat } from './types';
 import * as Haptics from 'expo-haptics';
-import { Swipeable } from 'react-native-gesture-handler';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ReAnimated,  {
   FadeIn, FadeOut, SlideInRight, SlideOutLeft,
@@ -399,7 +399,7 @@ export default function ChatList({ user, onSelectUser }: Props) {
   const typingSubscription = useRef<any>(null);
   const messageSubscription = useRef<any>(null);
   const userSubscription = useRef<any>(null);
-  const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
+  const swipeableRefs = useRef<Map<string, SwipeableMethods>>(new Map());
 
   // ─── Presence Tracking ──────────────────────────────────────────────────
   useEffect(() => {

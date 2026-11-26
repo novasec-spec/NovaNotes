@@ -126,7 +126,7 @@ export function DoodlePanel({
   };
 
   return (
-    <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.background }]}>
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}>
       <View style={styles.overlay}>
         <View style={styles.topBar}>
           <TouchableOpacity onPress={onClose}>
@@ -203,7 +203,7 @@ export function DoodlePanel({
 }
 
 const styles = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, padding: 20, paddingBottom: 100 },
+  overlay: { ...StyleSheet.absoluteFill, padding: 20, paddingBottom: 100 },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   title: { fontSize: 18, fontWeight: '800' },
   canvas: { flex: 1, borderRadius: 20, borderWidth: 1.5, marginBottom: 16, overflow: 'hidden', minHeight: 220, position: 'relative' },

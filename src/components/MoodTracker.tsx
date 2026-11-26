@@ -310,7 +310,7 @@ export default function MoodTracker({
       {/* ─── MOOD PICKER MODAL ─── */}
       <Modal visible={showPicker} transparent animationType="none" onRequestClose={closePicker}>
         <View style={styles.modalOverlay}>
-          <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={closePicker} />
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={closePicker} />
           <Animated.View style={[
             styles.modalSheet,
             { backgroundColor: colors.card, transform: [{ translateY: slideAnim }] },

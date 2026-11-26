@@ -183,7 +183,7 @@ export default function IncomingCallScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1A1A2E', alignItems: 'center', justifyContent: 'center' },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)' },
+  overlay: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.35)' },
   avatarContainer: { marginBottom: 20 },
   avatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: '#FF6B9D' },
   avatarFallback: { width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center' },

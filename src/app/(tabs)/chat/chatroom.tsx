@@ -14,14 +14,14 @@ import { supabase } from '../../../config/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
-import { Audio } from 'expo-av';
+import { Audio } from '../../../utils/avCompat';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendChatNotification, registerPushToken } from './notification';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ChatSettings from './ChatSettings';
 import { useLocalSearchParams } from 'expo-router';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useBottomTabBarHeight } from 'expo-router/tabs';
   
 import { ChatMessage, User, msgReducer, uploadToStorage, TYPING_TIMEOUT_MS, 
   NEAR_BOTTOM_THRESHOLD, MESSAGES_PER_PAGE, EDIT_WINDOW_MS, TAB_BAR_HEIGHT, 
